@@ -18,7 +18,7 @@ import android.widget.TextView;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Full-screen laptop keyboard + trackpad for Ubuntu. */
+/** Full-screen laptop keyboard + trackpad for the Linux desktop. */
 public class TrackpadActivity extends Activity implements TrackpadView.TypingListener, HostLink.Listener {
     private static final int BG = 0xFF1C1C1E;
     private static final int PAD = 0xFF2C2C2E;
@@ -122,7 +122,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
     @Override
     public void onStatus(boolean connected, String host) {
         status.setText(connected ? "● Connected to " + host + " over USB"
-                : "○ Not connected — plug in USB-C and run host/connect.sh on Ubuntu");
+                : "○ Not connected — plug in USB-C and run host/connect.sh on Fedora");
         status.setTextColor(connected ? 0xFF30D158 : 0xFFFF6961);
     }
 
@@ -150,7 +150,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         clearMods();
     }
 
-    /** A Bluetooth / USB keyboard attached to the tablet types straight into Ubuntu. */
+    /** A Bluetooth / USB keyboard attached to the tablet types straight into Linux. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent ev) {
         InputDevice dev = ev.getDevice();

@@ -20,7 +20,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Connection to the Ubuntu host daemon. The tablet dials 127.0.0.1:7777, which
+ * Connection to the Linux host daemon. The tablet dials 127.0.0.1:7777, which
  * `adb reverse` tunnels over the USB-C cable to the laptop. Reconnects forever.
  */
 public final class HostLink {
@@ -42,8 +42,8 @@ public final class HostLink {
     private final LinkedBlockingQueue<String> queue = new LinkedBlockingQueue<>(1024);
     private boolean started;
     private volatile boolean connected;
-    private volatile String host = "Ubuntu";
-    private volatile String app = "Ubuntu";
+    private volatile String host = "Fedora";
+    private volatile String app = "Fedora";
 
     private HostLink() {
     }
@@ -178,12 +178,12 @@ public final class HostLink {
                 JSONObject msg = new JSONObject(line);
                 String t = msg.optString("t");
                 if ("hello".equals(t)) {
-                    host = msg.optString("host", "Ubuntu");
+                    host = msg.optString("host", "Fedora");
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected
                     setConnected(true);
                 } else if ("app".equals(t)) {
-                    String name = msg.optString("name", "Ubuntu");
+                    String name = msg.optString("name", "Fedora");
                     app = name;
                     main.post(() -> {
                         for (Listener l : listeners) l.onApp(name);

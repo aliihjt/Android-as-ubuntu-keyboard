@@ -16,7 +16,7 @@ import android.widget.TextView;
 
 /**
  * MacBook-style Touch Bar along the bottom edge: Esc, buttons that change with
- * the focused Ubuntu app, an Fn layer with F1-F12, and media / brightness keys.
+ * the focused desktop app, an Fn layer with F1-F12, and media / brightness keys.
  */
 final class TouchBar implements HostLink.Listener {
     private static final int KEY_BG = 0xFF3A3A3C;
@@ -35,7 +35,7 @@ final class TouchBar implements HostLink.Listener {
             "◀|alt+left", "▶|alt+right", "↑ Up|alt+up", "📁 New Folder|ctrl+shift+n",
             "Rename|f2", "Hidden|ctrl+h", "🔍|ctrl+f"};
     private static final String[] DESKTOP = {
-            "Activities|super", "Apps|super+a", "📁 Files|cmd:files", "⌨ Terminal|ctrl+alt+t",
+            "Activities|super", "Apps|super+a", "📁 Files|cmd:files", "⌨ Terminal|cmd:terminal",
             "📷 Screenshot|print", "⚙ Settings|cmd:settings", "Undo|ctrl+z",
             "Copy|ctrl+c", "Paste|ctrl+v"};
     private static final String[] CONTROLS = {
@@ -169,9 +169,10 @@ final class TouchBar implements HostLink.Listener {
         String a = app.toLowerCase();
         if (a.contains("firefox") || a.contains("chrom") || a.contains("brave")
                 || a.contains("edge") || a.contains("browser") || a.contains("opera")) return BROWSER;
-        if (a.contains("terminal") || a.contains("console") || a.contains("tilix")) return TERMINAL;
+        if (a.contains("terminal") || a.contains("console") || a.contains("tilix")
+                || a.contains("ptyxis") || a.contains("konsole")) return TERMINAL;
         if (a.contains("code") || a.contains("studio") || a.contains("idea")) return CODE;
-        if (a.equals("files") || a.contains("nautilus")) return FILES;
+        if (a.equals("files") || a.contains("nautilus") || a.contains("dolphin")) return FILES;
         return DESKTOP;
     }
 

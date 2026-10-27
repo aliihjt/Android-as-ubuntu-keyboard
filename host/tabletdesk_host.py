@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TabletDesk host daemon for Ubuntu.
+"""TabletDesk host daemon for Linux (Fedora / Ubuntu, GNOME).
 
 Listens on 127.0.0.1 (reached from the tablet through `adb reverse`) and turns
 JSON-line messages from the Android app into real keyboard / mouse events via
@@ -17,7 +17,7 @@ Tablet -> host messages (one JSON object per line):
 
 Host -> tablet messages:
   {"t":"hello","host":"my-laptop","session":"x11"}
-  {"t":"app","name":"Firefox"}             focused application (X11 only)
+  {"t":"app","name":"Firefox"}             focused application
 """
 
 import argparse
@@ -38,13 +38,13 @@ except ImportError:  # allows --dry-run on machines without python3-evdev
     e = None
 
 # Whitelisted commands the tablet's menu bar may trigger. Nothing else runs.
+# A list of lists means "first one that is installed".
 COMMANDS = {
     "settings": ["gnome-control-center"],
     "files": ["nautilus"],
-    "terminal": ["gnome-terminal"],
-    "browser": ["xdg-open", "https://ubuntu.com"],
-    "monitor": ["gnome-system-monitor"],
-    "about": ["gnome-control-center", "info-overview"],
+    "terminal": [["ptyxis", "--new-window"], ["gnome-terminal"], ["konsole"]],
+    "monitor": [["gnome-system-monitor"], ["flatpak", "run", "org.gnome.SystemMonitor"]],
+    "about": [["gnome-control-center", "system"], ["gnome-control-center", "info-overview"]],
     "lock": ["loginctl", "lock-session"],
     "suspend": ["systemctl", "suspend"],
     "logout": ["gnome-session-quit", "--logout"],
@@ -56,7 +56,7 @@ KEY_ALIASES = {
     "ctrl": "KEY_LEFTCTRL", "control": "KEY_LEFTCTRL",
     "shift": "KEY_LEFTSHIFT", "alt": "KEY_LEFTALT", "option": "KEY_LEFTALT",
     "super": "KEY_LEFTMETA", "meta": "KEY_LEFTMETA", "win": "KEY_LEFTMETA",
-    "cmd": "KEY_LEFTCTRL",  # macOS Cmd shortcuts map to Ctrl on Ubuntu
+    "cmd": "KEY_LEFTCTRL",  # macOS Cmd shortcuts map to Ctrl on Linux
     "altgr": "KEY_RIGHTALT",
     "esc": "KEY_ESC", "escape": "KEY_ESC", "enter": "KEY_ENTER", "return": "KEY_ENTER",
     "backspace": "KEY_BACKSPACE", "bksp": "KEY_BACKSPACE", "del": "KEY_DELETE",
@@ -233,8 +233,12 @@ class Injector:
 
 
 def active_app_name():
-    """Focused window's application name. Works on Xorg; None on Wayland."""
-    if not os.environ.get("DISPLAY") or not shutil.which("xprop"):
+    """Focused application's name, via the GNOME extension or xprop (Xorg)."""
+    name = gnome_focused_app()
+    if name:
+        return name
+    if os.environ.get("XDG_SESSION_TYPE") == "wayland" \
+            or not os.environ.get("DISPLAY") or not shutil.which("xprop"):
         return None
     try:
         out = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
@@ -252,6 +256,23 @@ def active_app_name():
         return None
 
 
+def gnome_focused_app():
+    """Asks host/gnome-extension (works on Wayland). None if not installed."""
+    try:
+        out = subprocess.run(
+            ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
+             "--object-path", "/io/github/aliihjt/TabletDesk",
+             "--method", "io.github.aliihjt.TabletDesk.FocusedApp"],
+            capture_output=True, text=True, timeout=1)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    # output looks like: ('Firefox',)
+    out = out.stdout.strip()
+    if not out.startswith("('"):
+        return None
+    return out[2:out.rfind("'")] or None
+
+
 def pretty_app(name):
     if not name:
         return None
@@ -259,6 +280,7 @@ def pretty_app(name):
              "org.gnome.nautilus": "Files", "code": "VS Code",
              "google-chrome": "Chrome", "chromium": "Chromium",
              "org.gnome.texteditor": "Text Editor", "gedit": "Text Editor",
+             "org.gnome.ptyxis": "Terminal", "org.mozilla.firefox": "Firefox",
              "libreoffice": "LibreOffice"}
     low = name.lower()
     for key, pretty in known.items():
@@ -307,6 +329,8 @@ def run_command(name):
     argv = COMMANDS.get(name)
     if not argv:
         return
+    if isinstance(argv[0], list):
+        argv = next((a for a in argv if shutil.which(a[0])), argv[-1])
     try:
         subprocess.Popen(argv, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
@@ -375,7 +399,7 @@ def main():
     try:
         inj = Injector(dry_run=args.dry_run)
     except (OSError, PermissionError) as err:
-        sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup-ubuntu.sh "
+        sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()

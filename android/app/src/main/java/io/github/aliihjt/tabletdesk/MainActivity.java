@@ -16,12 +16,13 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-/** Home screen: start the Mac bars, open the trackpad, open the Ubuntu screen. */
+/** Home screen: start the Mac bars, open the trackpad, open the desktop screen. */
 public class MainActivity extends Activity implements HostLink.Listener {
     private static final int FG = 0xFF1D1D1F;
     private static final int MUTED = 0xFF6E6E73;
     private static final String AVNC = "com.gaurav.avnc";
-    private static final String RDP = "com.microsoft.rdc.androidx";
+    /** RDP clients, best first: Microsoft "Windows App", then aFreeRDP. */
+    private static final String[] RDP = {"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"};
 
     private TextView status;
     private TextView barsButton;
@@ -46,7 +47,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.setPadding(m, Ui.dp(this, 48), m, m);
 
         col.addView(Ui.label(this, "TabletDesk", 30, FG, true));
-        TextView sub = Ui.label(this, "Your tablet as Ubuntu's screen, keyboard, trackpad & Touch Bar — over one USB-C cable",
+        TextView sub = Ui.label(this, "Your tablet as Fedora's screen, keyboard, trackpad & Touch Bar — over one USB-C cable",
                 15, MUTED, false);
         sub.setSingleLine(false);
         col.addView(sub);
@@ -58,8 +59,8 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(barsButton);
         col.addView(button("⌨  Keyboard & Trackpad",
                 v -> startActivity(new Intent(this, TrackpadActivity.class))));
-        col.addView(button("🖥  Open Ubuntu screen (VNC, Xorg session)", v -> openVnc()));
-        col.addView(button("🖥  Open Ubuntu screen (RDP, Wayland session)", v -> openApp(RDP)));
+        col.addView(button("🖥  Open desktop screen (RDP — Fedora / Wayland)", v -> openRdp()));
+        col.addView(button("🖥  Open desktop screen (VNC — Xorg session)", v -> openVnc()));
 
         col.addView(section("Options"));
         col.addView(check("Show macOS menu bar (top)", "menubar"));
@@ -90,10 +91,10 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(section("Setup (once)"));
         TextView help = Ui.label(this,
                 "1. Tablet: Settings › About › tap Build number 7×, then Developer options › USB debugging ON.\n"
-                        + "2. Ubuntu: run host/setup-ubuntu.sh, log out/in and pick “Ubuntu on Xorg”.\n"
+                        + "2. Fedora: run host/setup.sh, then log out and back in.\n"
                         + "3. Connect the USB-C cable (it charges the tablet and carries all data). Accept “Allow USB debugging”.\n"
-                        + "4. Ubuntu: host/connect.sh extend   (or mirror / input).\n"
-                        + "5. Install AVNC on the tablet to see the Ubuntu screen.",
+                        + "4. Fedora: host/connect.sh extend   (or mirror / input).\n"
+                        + "5. Install “Windows App” (or aFreeRDP) and add PC 127.0.0.1 with the user/password setup.sh printed.",
                 14, MUTED, false);
         help.setSingleLine(false);
         help.setLineSpacing(0, 1.25f);
@@ -125,7 +126,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
     @Override
     public void onStatus(boolean connected, String host) {
         status.setText(connected ? "● Connected to " + host + " (USB-C)"
-                : "○ Waiting for Ubuntu — plug in the cable and run host/connect.sh");
+                : "○ Waiting for Fedora — plug in the cable and run host/connect.sh");
         status.setTextColor(connected ? 0xFF1E8E3E : 0xFFC5221F);
     }
 
@@ -162,10 +163,15 @@ public class MainActivity extends Activity implements HostLink.Listener {
         }
     }
 
-    private void openApp(String pkg) {
-        Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
-        if (i != null) startActivity(i);
-        else openStore(pkg);
+    private void openRdp() {
+        for (String pkg : RDP) {
+            Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i != null) {
+                startActivity(i);
+                return;
+            }
+        }
+        openStore(RDP[0]);
     }
 
     private void openStore(String pkg) {

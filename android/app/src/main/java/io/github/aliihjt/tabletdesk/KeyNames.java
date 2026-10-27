@@ -5,7 +5,7 @@ import android.view.KeyEvent;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Android key codes -> key names understood by the Ubuntu host (evdev KEY_* without prefix). */
+/** Android key codes -> key names understood by the Linux host (evdev KEY_* without prefix). */
 final class KeyNames {
     private static final Map<Integer, String> SPECIAL = new HashMap<>();
 

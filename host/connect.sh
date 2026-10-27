@@ -3,7 +3,7 @@
 #
 #   ./host/connect.sh [extend|mirror|input] [--watch]
 #
-#   extend  tablet becomes a second screen right of your main one (Xorg)
+#   extend  tablet becomes a second screen right of your main one
 #   mirror  tablet shows the same picture as your main screen
 #   input   no screen, tablet is only keyboard / trackpad / Touch Bar
 #   --watch keep running and reconnect every time the tablet is plugged in
@@ -25,12 +25,14 @@ for arg in "$@"; do
   esac
 done
 
-HOST_PID=""; VNC_PID=""; VIRT_OUT=""
+RDP_PORT=3389
+RDP_APPS="com.microsoft.rdc.androidx com.freerdp.afreerdp"
+HOST_PID=""; VNC_PID=""; VIRT_OUT=""; VIEWER=""
 log() { echo "[tabletdesk] $*"; }
 
 cleanup_screen() {
   [ -n "$VNC_PID" ] && kill "$VNC_PID" 2>/dev/null
-  VNC_PID=""
+  VNC_PID=""; VIEWER=""
   if [ -n "$VIRT_OUT" ]; then
     xrandr --output "$VIRT_OUT" --off 2>/dev/null
     VIRT_OUT=""
@@ -79,14 +81,28 @@ enable_virtual_output() {
   xrandr | awk -v o="$out" '$1==o{for(i=2;i<=NF;i++) if($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/){print o, $i; exit}}'
 }
 
+# Wayland (Fedora default): GNOME Remote Desktop serves the screen over RDP.
+# In "extend" mode GNOME creates a real virtual monitor sized to the tablet.
+start_rdp() {
+  if [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]] && command -v grdctl >/dev/null; then
+    local share=mirror-primary
+    [ "$MODE" = "extend" ] && share=extend
+    gsettings set org.gnome.desktop.remote-desktop.rdp screen-share-mode "$share" 2>/dev/null
+    grdctl rdp enable >/dev/null 2>&1
+    systemctl --user restart gnome-remote-desktop.service 2>/dev/null
+    log "GNOME Remote Desktop ($share) on 127.0.0.1:$RDP_PORT via USB"
+  else
+    log "Non-GNOME Wayland: turn on Remote Desktop in your desktop's settings"
+    log "  (KDE: System Settings > Remote Desktop). Mirror only."
+  fi
+  adb reverse tcp:$RDP_PORT tcp:$RDP_PORT >/dev/null
+  VIEWER=rdp
+}
+
 start_screen() {
   local session="${XDG_SESSION_TYPE:-x11}" clip=""
   if [ "$session" = "wayland" ]; then
-    adb reverse tcp:3389 tcp:3389 >/dev/null
-    log "Wayland session: x11vnc cannot capture it."
-    log "  Option A (best): log in with 'Ubuntu on Xorg' for extend/mirror."
-    log "  Option B: Settings > Sharing > Remote Desktop ON, then in the tablet"
-    log "            app tap 'Open Ubuntu screen (RDP)' -> server 127.0.0.1"
+    start_rdp
     return
   fi
   if [ "$MODE" = "extend" ]; then
@@ -105,13 +121,25 @@ start_screen() {
     ${clip:+-clip "$clip"} >/dev/null 2>&1 &
   VNC_PID=$!
   adb reverse tcp:$VNC_PORT tcp:$VNC_PORT >/dev/null
+  VIEWER=vnc
 }
 
 open_viewer() {
-  [ -z "$VNC_PID" ] && return
   sleep 1
-  adb shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$VNC_PORT" 2>&1 \
-    | grep -q Error && log "Install AVNC (Play Store / F-Droid) on the tablet to view the screen."
+  if [ "$VIEWER" = vnc ]; then
+    adb shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$VNC_PORT" 2>&1 \
+      | grep -q Error && log "Install AVNC (Play Store / F-Droid) on the tablet to view the screen."
+  elif [ "$VIEWER" = rdp ]; then
+    local app
+    for app in $RDP_APPS; do
+      if adb shell pm path "$app" 2>/dev/null | grep -q package:; then
+        adb shell monkey -p "$app" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+        log "Opened RDP app $app -> connect to PC 127.0.0.1"
+        return
+      fi
+    done
+    log "Install 'Windows App' (Microsoft Remote Desktop) or aFreeRDP on the tablet."
+  fi
 }
 
 session_once() {
@@ -123,7 +151,7 @@ session_once() {
   adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow 2>/dev/null # menu bar + Touch Bar overlays
   start_host
   [ "$MODE" != "input" ] && start_screen
-  # start the menu bar + Touch Bar overlays, then put the Ubuntu screen under them
+  # start the menu bar + Touch Bar overlays, then put the desktop screen under them
   adb shell am start -n "$PKG/.MainActivity" --ez autostart true 2>&1 \
     | grep -q Error && log "TabletDesk app not installed: adb install TabletDesk.apk"
   open_viewer

@@ -44,5 +44,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check host scripts
         run: |
-          bash -n host/connect.sh host/setup-ubuntu.sh
+          bash -n host/connect.sh host/setup.sh
           python3 -m py_compile host/tabletdesk_host.py

@@ -31,7 +31,7 @@ final class MenuBar implements HostLink.Listener {
     private static final String[] SYSTEM_MENU = {
             "◆",
             "About This Computer|cmd:about", "System Settings…|cmd:settings", "-",
-            "Files|cmd:files", "Terminal|ctrl+alt+t|Ctrl+Alt+T", "System Monitor|cmd:monitor", "-",
+            "Files|cmd:files", "Terminal|cmd:terminal", "System Monitor|cmd:monitor", "-",
             "Lock Screen|super+l|Super+L", "Suspend|cmd:suspend", "Log Out…|cmd:logout",
             "Restart…|cmd:restart", "Shut Down…|cmd:poweroff",
     };
@@ -54,7 +54,7 @@ final class MenuBar implements HostLink.Listener {
                     "Tile Left|super+left|Super+←", "Tile Right|super+right|Super+→", "-",
                     "Switch Windows|alt+tab|Alt+Tab", "Show All Windows|super|Super",
                     "Show Applications|super+a|Super+A", "Move to Other Display|super+shift+right|Shift+Super+→"},
-            {"Help", "Ubuntu Help|f1|F1", "Keyboard Shortcuts|cmd:settings"},
+            {"Help", "Help|f1|F1", "Keyboard Shortcuts|cmd:settings"},
     };
 
     private final Context ctx;
@@ -84,7 +84,7 @@ final class MenuBar implements HostLink.Listener {
         root.setPadding(Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10), 0);
 
         root.addView(menuTitle(SYSTEM_MENU[0], true, SYSTEM_MENU));
-        appName = menuTitle("Ubuntu", true, null);
+        appName = menuTitle("Fedora", true, null);
         appName.setOnClickListener(v -> {
             String[] items = APP_MENU.clone();
             items[0] = HostLink.get().app();

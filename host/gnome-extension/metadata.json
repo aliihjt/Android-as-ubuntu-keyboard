@@ -1,0 +1,7 @@
+{
+  "uuid": "tabletdesk@aliihjt.github.io",
+  "name": "TabletDesk",
+  "description": "Tells the TabletDesk tablet app which application is focused, for its macOS-style menu bar and Touch Bar.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "url": "https://github.com/aliihjt/Android-as-ubuntu-keyboard"
+}

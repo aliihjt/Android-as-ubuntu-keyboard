@@ -61,7 +61,23 @@ The first time, add a PC in the RDP app with these settings:
 - **User and password:** the ones `setup.sh` printed (also saved in `~/.config/tabletdesk/rdp-password`).
 - Accept the certificate warning. The certificate is the one `setup.sh` created.
 
-After that, each plug-in opens the menu bar, the Touch Bar and the RDP app automatically.
+### 4. Automatic from then on ⚡
+Once set up, just **log in to Fedora and plug in the cable**. The background service does the rest:
+
+1. Detects the tablet and shows a "connected" pop-up on Fedora.
+2. Wakes the tablet screen and keeps it on while charging.
+3. Opens the menu bar and Touch Bar on the tablet.
+4. Turns on the second screen (extend or mirror).
+5. Opens the RDP app and connects it to `127.0.0.1`.
+
+When you unplug the tablet, it cleans up and waits for the next plug-in.
+
+For a fully hands-free connection:
+- On the tablet's **"Allow USB debugging"** prompt, tick **"Always allow from this computer"**.
+- In the RDP app, **save the password** for the `127.0.0.1` PC.
+- **Unlock Fedora.** If it's locked, a pop-up asks you to unlock it, and the screen connects right after.
+
+To watch what the service is doing: `journalctl --user -u tabletdesk -f`.
 
 To change the default mode, edit `Environment=TABLETDESK_MODE=` in `~/.config/systemd/user/tabletdesk.service`.
 

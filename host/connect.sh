@@ -29,6 +29,24 @@ RDP_PORT=3389
 RDP_APPS="com.microsoft.rdc.androidx com.freerdp.afreerdp"
 HOST_PID=""; VNC_PID=""; VIRT_OUT=""; VIEWER=""
 log() { echo "[tabletdesk] $*"; }
+# desktop pop-up (and log line) so you can see what happened without a terminal
+notify() {
+  log "$*"
+  command -v notify-send >/dev/null && notify-send -a TabletDesk -i video-display "TabletDesk" "$*" 2>/dev/null
+  return 0
+}
+
+# true while the Fedora screen is locked (GNOME only shares an unlocked session)
+screen_locked() {
+  gdbus call --session --dest org.gnome.ScreenSaver --object-path /org/gnome/ScreenSaver \
+    --method org.gnome.ScreenSaver.GetActive 2>/dev/null | grep -q true
+}
+
+# turn the tablet screen on and remove a swipe-only lock screen
+wake_tablet() {
+  adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
+  adb shell wm dismiss-keyguard >/dev/null 2>&1
+}
 
 cleanup_screen() {
   [ -n "$VNC_PID" ] && kill "$VNC_PID" 2>/dev/null
@@ -130,22 +148,34 @@ open_viewer() {
     adb shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$VNC_PORT" 2>&1 \
       | grep -q Error && log "Install AVNC (Play Store / F-Droid) on the tablet to view the screen."
   elif [ "$VIEWER" = rdp ]; then
-    local app
+    if screen_locked; then
+      notify "Unlock Fedora to show the screen on the tablet."
+      while screen_locked; do sleep 2; [ "$(adb get-state 2>/dev/null)" = device ] || return; done
+    fi
+    local app uri
+    # Remote Desktop URI: opens the connection directly (password is saved in the app)
+    uri="rdp://full%20address=s:127.0.0.1:$RDP_PORT&username=s:$USER"
     for app in $RDP_APPS; do
-      if adb shell pm path "$app" 2>/dev/null | grep -q package:; then
+      adb shell pm path "$app" 2>/dev/null | grep -q package: || continue
+      if adb shell "am start -a android.intent.action.VIEW -d '$uri' $app" 2>&1 | grep -q Error; then
         adb shell monkey -p "$app" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
-        log "Opened RDP app $app -> connect to PC 127.0.0.1"
-        return
+        log "Opened $app -> tap the 127.0.0.1 PC"
+      else
+        log "Connecting $app to 127.0.0.1"
       fi
+      return
     done
-    log "Install 'Windows App' (Microsoft Remote Desktop) or aFreeRDP on the tablet."
+    notify "Install 'Windows App' (Microsoft Remote Desktop) or aFreeRDP on the tablet."
   fi
 }
 
 session_once() {
   log "Waiting for tablet on USB (enable USB debugging, accept the prompt)..."
   adb wait-for-usb-device
-  log "Tablet connected: $(adb shell getprop ro.product.model | tr -d '\r')"
+  local model
+  model=$(adb shell getprop ro.product.model | tr -d '\r')
+  notify "$model connected ($MODE mode)."
+  wake_tablet
   adb reverse tcp:"$PORT" tcp:"$PORT" >/dev/null
   adb shell svc power stayon usb                                   # screen stays on while charging
   adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow 2>/dev/null # menu bar + Touch Bar overlays
@@ -156,7 +186,7 @@ session_once() {
     | grep -q Error && log "TabletDesk app not installed: adb install TabletDesk.apk"
   open_viewer
   while [ "$(adb get-state 2>/dev/null)" = "device" ]; do sleep 2; done
-  log "Tablet unplugged."
+  notify "Tablet unplugged."
   cleanup_screen
 }
 

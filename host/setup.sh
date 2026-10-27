@@ -61,6 +61,8 @@ mkdir -p "$HOME/.config/systemd/user"
 sed "s|@HERE@|$HERE|g" "$HERE/tabletdesk.service" >"$HOME/.config/systemd/user/tabletdesk.service"
 systemctl --user daemon-reload
 systemctl --user enable tabletdesk.service
+# start now too if /dev/uinput is already usable; otherwise it starts at next login
+if [ -w /dev/uinput ]; then systemctl --user restart tabletdesk.service; fi
 
 cat <<EOF2
 
@@ -70,9 +72,11 @@ Done. Next steps:
   2. On the tablet: Settings > About > tap "Build number" 7x,
      then Developer options > enable "USB debugging".
      Install "Windows App" (Microsoft Remote Desktop) or "aFreeRDP".
-  3. Plug the tablet in with USB-C, accept the "Allow USB debugging" prompt.
-  4. Start it:  systemctl --user start tabletdesk   (or ./host/connect.sh)
-  5. In the RDP app add a PC:  127.0.0.1
+  3. Plug the tablet in with USB-C. On the "Allow USB debugging" prompt tick
+     "Always allow from this computer" so it never asks again.
+  4. From now on it starts by itself every time you log in and plug in.
+     (Manual run: ./host/connect.sh   Logs: journalctl --user -u tabletdesk -f)
+  5. First time only, in the RDP app add a PC:  127.0.0.1  and tick "Remember"/save password
        user:     $USER
        password: $(cat "$CONF/rdp-password" 2>/dev/null || echo "(see Settings > System > Remote Desktop)")
 EOF2

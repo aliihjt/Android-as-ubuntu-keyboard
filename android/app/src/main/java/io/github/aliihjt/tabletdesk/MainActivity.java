@@ -1,0 +1,212 @@
+package io.github.aliihjt.tabletdesk;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.view.View;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.TextView;
+
+/** Home screen: start the Mac bars, open the trackpad, open the Ubuntu screen. */
+public class MainActivity extends Activity implements HostLink.Listener {
+    private static final int FG = 0xFF1D1D1F;
+    private static final int MUTED = 0xFF6E6E73;
+    private static final String AVNC = "com.gaurav.avnc";
+    private static final String RDP = "com.microsoft.rdc.androidx";
+
+    private TextView status;
+    private TextView barsButton;
+    private SharedPreferences prefs;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        HostLink.get().start();
+
+        // Launched by host/connect.sh when the cable is plugged in.
+        if (getIntent().getBooleanExtra("autostart", false) && Settings.canDrawOverlays(this)) {
+            OverlayService.start(this);
+            finish();
+            return;
+        }
+
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        int m = Ui.dp(this, 24);
+        col.setPadding(m, Ui.dp(this, 48), m, m);
+
+        col.addView(Ui.label(this, "TabletDesk", 30, FG, true));
+        TextView sub = Ui.label(this, "Your tablet as Ubuntu's screen, keyboard, trackpad & Touch Bar — over one USB-C cable",
+                15, MUTED, false);
+        sub.setSingleLine(false);
+        col.addView(sub);
+        status = Ui.label(this, "", 15, FG, true);
+        status.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 8));
+        col.addView(status);
+
+        barsButton = button("", v -> toggleBars());
+        col.addView(barsButton);
+        col.addView(button("⌨  Keyboard & Trackpad",
+                v -> startActivity(new Intent(this, TrackpadActivity.class))));
+        col.addView(button("🖥  Open Ubuntu screen (VNC, Xorg session)", v -> openVnc()));
+        col.addView(button("🖥  Open Ubuntu screen (RDP, Wayland session)", v -> openApp(RDP)));
+
+        col.addView(section("Options"));
+        col.addView(check("Show macOS menu bar (top)", "menubar"));
+        col.addView(check("Show Touch Bar (bottom)", "touchbar"));
+        TextView speedLabel = Ui.label(this, "", 15, FG, false);
+        col.addView(speedLabel);
+        SeekBar speed = new SeekBar(this);
+        speed.setMax(250);
+        speed.setProgress(prefs.getInt("speed", 100) - 50);
+        speedLabel.setText("Trackpad speed: " + prefs.getInt("speed", 100) + "%");
+        speed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar s, int p, boolean user) {
+                prefs.edit().putInt("speed", p + 50).apply();
+                speedLabel.setText("Trackpad speed: " + (p + 50) + "%");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar s) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar s) {
+            }
+        });
+        col.addView(speed);
+
+        col.addView(section("Setup (once)"));
+        TextView help = Ui.label(this,
+                "1. Tablet: Settings › About › tap Build number 7×, then Developer options › USB debugging ON.\n"
+                        + "2. Ubuntu: run host/setup-ubuntu.sh, log out/in and pick “Ubuntu on Xorg”.\n"
+                        + "3. Connect the USB-C cable (it charges the tablet and carries all data). Accept “Allow USB debugging”.\n"
+                        + "4. Ubuntu: host/connect.sh extend   (or mirror / input).\n"
+                        + "5. Install AVNC on the tablet to see the Ubuntu screen.",
+                14, MUTED, false);
+        help.setSingleLine(false);
+        help.setLineSpacing(0, 1.25f);
+        col.addView(help);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(0xFFF5F5F7);
+        scroll.addView(col);
+        setContentView(scroll);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        HostLink.get().addListener(this);
+        refreshBarsButton();
+    }
+
+    @Override
+    protected void onPause() {
+        HostLink.get().removeListener(this);
+        super.onPause();
+    }
+
+    @Override
+    public void onStatus(boolean connected, String host) {
+        status.setText(connected ? "● Connected to " + host + " (USB-C)"
+                : "○ Waiting for Ubuntu — plug in the cable and run host/connect.sh");
+        status.setTextColor(connected ? 0xFF1E8E3E : 0xFFC5221F);
+    }
+
+    @Override
+    public void onApp(String name) {
+    }
+
+    private void toggleBars() {
+        if (OverlayService.running) {
+            OverlayService.stop(this);
+            barsButton.postDelayed(this::refreshBarsButton, 300);
+            return;
+        }
+        if (!Settings.canDrawOverlays(this)) {
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName())));
+            return;
+        }
+        OverlayService.start(this);
+        barsButton.postDelayed(this::refreshBarsButton, 300);
+    }
+
+    private void refreshBarsButton() {
+        barsButton.setText(OverlayService.running
+                ? "■  Hide menu bar & Touch Bar"
+                : "▶  Show macOS menu bar & Touch Bar");
+    }
+
+    private void openVnc() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("vnc://127.0.0.1:5900")));
+        } catch (ActivityNotFoundException e) {
+            openStore(AVNC);
+        }
+    }
+
+    private void openApp(String pkg) {
+        Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (i != null) startActivity(i);
+        else openStore(pkg);
+    }
+
+    private void openStore(String pkg) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)));
+        } catch (ActivityNotFoundException e) {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)));
+        }
+    }
+
+    private TextView button(String text, View.OnClickListener l) {
+        TextView b = Ui.label(this, text, 16, FG, false);
+        int p = Ui.dp(this, 16);
+        b.setPadding(p, p, p, p);
+        b.setBackground(Ui.pressable(0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
+        b.setElevation(Ui.dp(this, 1));
+        b.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private TextView section(String title) {
+        TextView t = Ui.label(this, title, 18, FG, true);
+        t.setPadding(0, Ui.dp(this, 24), 0, Ui.dp(this, 8));
+        return t;
+    }
+
+    private CheckBox check(String text, String key) {
+        CheckBox c = new CheckBox(this);
+        c.setText(text);
+        c.setTextSize(15);
+        c.setTextColor(FG);
+        c.setChecked(prefs.getBoolean(key, true));
+        c.setOnCheckedChangeListener((v, on) -> {
+            prefs.edit().putBoolean(key, on).apply();
+            if (OverlayService.running) OverlayService.start(this);  // re-apply
+        });
+        return c;
+    }
+}

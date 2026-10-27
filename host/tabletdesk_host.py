@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""TabletDesk host daemon for Ubuntu.
+
+Listens on 127.0.0.1 (reached from the tablet through `adb reverse`) and turns
+JSON-line messages from the Android app into real keyboard / mouse events via
+/dev/uinput, so it works on both Xorg and Wayland sessions.
+
+Tablet -> host messages (one JSON object per line):
+  {"t":"move","dx":3.5,"dy":-1}            relative pointer motion
+  {"t":"btn","b":"left|right|middle","s":"click|down|up"}
+  {"t":"scroll","dx":0,"dy":12}            pixels; converted to wheel notches
+  {"t":"combo","keys":"ctrl+shift+z"}      press keys together, then release
+  {"t":"key","k":"ctrl","s":"down|up"}     hold / release a single key
+  {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
+  {"t":"cmd","name":"settings"}            run a whitelisted desktop command
+  {"t":"ping"}
+
+Host -> tablet messages:
+  {"t":"hello","host":"my-laptop","session":"x11"}
+  {"t":"app","name":"Firefox"}             focused application (X11 only)
+"""
+
+import argparse
+import json
+import os
+import shutil
+import socket
+import socketserver
+import subprocess
+import sys
+import threading
+import time
+
+try:
+    from evdev import UInput, ecodes as e
+except ImportError:  # allows --dry-run on machines without python3-evdev
+    UInput = None
+    e = None
+
+# Whitelisted commands the tablet's menu bar may trigger. Nothing else runs.
+COMMANDS = {
+    "settings": ["gnome-control-center"],
+    "files": ["nautilus"],
+    "terminal": ["gnome-terminal"],
+    "browser": ["xdg-open", "https://ubuntu.com"],
+    "monitor": ["gnome-system-monitor"],
+    "about": ["gnome-control-center", "info-overview"],
+    "lock": ["loginctl", "lock-session"],
+    "suspend": ["systemctl", "suspend"],
+    "logout": ["gnome-session-quit", "--logout"],
+    "poweroff": ["gnome-session-quit", "--power-off"],
+    "restart": ["gnome-session-quit", "--reboot"],
+}
+
+KEY_ALIASES = {
+    "ctrl": "KEY_LEFTCTRL", "control": "KEY_LEFTCTRL",
+    "shift": "KEY_LEFTSHIFT", "alt": "KEY_LEFTALT", "option": "KEY_LEFTALT",
+    "super": "KEY_LEFTMETA", "meta": "KEY_LEFTMETA", "win": "KEY_LEFTMETA",
+    "cmd": "KEY_LEFTCTRL",  # macOS Cmd shortcuts map to Ctrl on Ubuntu
+    "altgr": "KEY_RIGHTALT",
+    "esc": "KEY_ESC", "escape": "KEY_ESC", "enter": "KEY_ENTER", "return": "KEY_ENTER",
+    "backspace": "KEY_BACKSPACE", "bksp": "KEY_BACKSPACE", "del": "KEY_DELETE",
+    "delete": "KEY_DELETE", "ins": "KEY_INSERT", "insert": "KEY_INSERT",
+    "tab": "KEY_TAB", "space": "KEY_SPACE",
+    "pgup": "KEY_PAGEUP", "pageup": "KEY_PAGEUP",
+    "pgdn": "KEY_PAGEDOWN", "pagedown": "KEY_PAGEDOWN",
+    "print": "KEY_SYSRQ", "printscreen": "KEY_SYSRQ",
+    "plus": "KEY_EQUAL", "equal": "KEY_EQUAL", "minus": "KEY_MINUS",
+    "volup": "KEY_VOLUMEUP", "voldown": "KEY_VOLUMEDOWN",
+    "mute": "KEY_MUTE", "playpause": "KEY_PLAYPAUSE",
+    "next": "KEY_NEXTSONG", "prev": "KEY_PREVIOUSSONG",
+    "brightup": "KEY_BRIGHTNESSUP", "brightdown": "KEY_BRIGHTNESSDOWN",
+}
+
+# US keyboard layout: character -> (key name, needs shift)
+_US_UNSHIFTED = "`1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./"
+_US_SHIFTED = "~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?"
+_US_NAMES = ["GRAVE", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "MINUS",
+             "EQUAL", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P",
+             "LEFTBRACE", "RIGHTBRACE", "BACKSLASH", "A", "S", "D", "F", "G",
+             "H", "J", "K", "L", "SEMICOLON", "APOSTROPHE", "Z", "X", "C", "V",
+             "B", "N", "M", "COMMA", "DOT", "SLASH"]
+CHAR_MAP = {" ": ("KEY_SPACE", False), "\n": ("KEY_ENTER", False),
+            "\t": ("KEY_TAB", False)}
+for _u, _s, _n in zip(_US_UNSHIFTED, _US_SHIFTED, _US_NAMES):
+    CHAR_MAP[_u] = ("KEY_" + _n, False)
+    CHAR_MAP[_s] = ("KEY_" + _n, True)
+
+
+def key_name(name):
+    """Turn 'ctrl', 'f5', 'a' or 'KEY_A' into an evdev KEY_* name."""
+    n = name.strip()
+    low = n.lower()
+    if low in KEY_ALIASES:
+        return KEY_ALIASES[low]
+    if n.upper().startswith("KEY_"):
+        return n.upper()
+    if len(n) == 1 and n in CHAR_MAP:
+        return CHAR_MAP[n][0]
+    return "KEY_" + n.upper()
+
+
+class Injector:
+    """Writes input events to two uinput devices (keyboard + mouse)."""
+
+    def __init__(self, dry_run=False):
+        self.dry_run = dry_run or UInput is None
+        self.lock = threading.Lock()
+        self.scroll_acc = [0.0, 0.0]
+        self.move_acc = [0.0, 0.0]
+        if self.dry_run:
+            self.kbd = self.mouse = None
+            return
+        keys = [v for k, v in e.ecodes.items()
+                if k.startswith("KEY_") and isinstance(v, int) and v < 0x2ff]
+        self.kbd = UInput({e.EV_KEY: sorted(set(keys))},
+                          name="TabletDesk Keyboard")
+        self.mouse = UInput({
+            e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE],
+            e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL, e.REL_HWHEEL],
+        }, name="TabletDesk Trackpad")
+
+    def _code(self, name):
+        if self.dry_run:
+            return name
+        code = e.ecodes.get(name)
+        if code is None:
+            raise ValueError("unknown key " + name)
+        return code
+
+    def _key(self, name, value):
+        if self.dry_run:
+            print("key", name, value)
+            return
+        self.kbd.write(e.EV_KEY, self._code(name), value)
+        self.kbd.syn()
+
+    def key(self, name, state):
+        k = key_name(name)
+        with self.lock:
+            if state in ("down", "click"):
+                self._key(k, 1)
+            if state in ("up", "click"):
+                self._key(k, 0)
+
+    def combo(self, spec):
+        parts = [key_name(p) for p in spec.split("+") if p.strip()]
+        with self.lock:
+            for k in parts:
+                self._key(k, 1)
+            for k in reversed(parts):
+                self._key(k, 0)
+
+    def text(self, s):
+        with self.lock:
+            for ch in s:
+                if ch in CHAR_MAP:
+                    k, shift = CHAR_MAP[ch]
+                    if shift:
+                        self._key("KEY_LEFTSHIFT", 1)
+                    self._key(k, 1)
+                    self._key(k, 0)
+                    if shift:
+                        self._key("KEY_LEFTSHIFT", 0)
+                else:
+                    self._unicode(ch)
+
+    def _unicode(self, ch):
+        # GTK / IBus unicode entry: Ctrl+Shift+U, hex code, Space
+        self._key("KEY_LEFTCTRL", 1)
+        self._key("KEY_LEFTSHIFT", 1)
+        self._key("KEY_U", 1)
+        self._key("KEY_U", 0)
+        self._key("KEY_LEFTSHIFT", 0)
+        self._key("KEY_LEFTCTRL", 0)
+        for digit in format(ord(ch), "x"):
+            k = "KEY_" + digit.upper()
+            self._key(k, 1)
+            self._key(k, 0)
+        self._key("KEY_SPACE", 1)
+        self._key("KEY_SPACE", 0)
+
+    def move(self, dx, dy):
+        # keep sub-pixel remainders so slow finger motion is not lost
+        self.move_acc[0] += dx
+        self.move_acc[1] += dy
+        ix, iy = int(self.move_acc[0]), int(self.move_acc[1])
+        self.move_acc[0] -= ix
+        self.move_acc[1] -= iy
+        if not ix and not iy:
+            return
+        with self.lock:
+            if self.dry_run:
+                print("move", ix, iy)
+                return
+            if ix:
+                self.mouse.write(e.EV_REL, e.REL_X, ix)
+            if iy:
+                self.mouse.write(e.EV_REL, e.REL_Y, iy)
+            self.mouse.syn()
+
+    def button(self, b, state):
+        name = {"left": "BTN_LEFT", "right": "BTN_RIGHT",
+                "middle": "BTN_MIDDLE"}.get(b, "BTN_LEFT")
+        with self.lock:
+            for value in ((1, 0) if state == "click" else
+                          (1,) if state == "down" else (0,)):
+                if self.dry_run:
+                    print("btn", name, value)
+                    continue
+                self.mouse.write(e.EV_KEY, self._code(name), value)
+                self.mouse.syn()
+
+    def scroll(self, dx, dy, step=40.0):
+        self.scroll_acc[0] += dx
+        self.scroll_acc[1] += dy
+        nx = int(self.scroll_acc[0] / step)
+        ny = int(self.scroll_acc[1] / step)
+        self.scroll_acc[0] -= nx * step
+        self.scroll_acc[1] -= ny * step
+        if not nx and not ny:
+            return
+        with self.lock:
+            if self.dry_run:
+                print("scroll", nx, ny)
+                return
+            # natural scrolling: finger up -> content up (wheel down)
+            if ny:
+                self.mouse.write(e.EV_REL, e.REL_WHEEL, -ny)
+            if nx:
+                self.mouse.write(e.EV_REL, e.REL_HWHEEL, nx)
+            self.mouse.syn()
+
+
+def active_app_name():
+    """Focused window's application name. Works on Xorg; None on Wayland."""
+    if not os.environ.get("DISPLAY") or not shutil.which("xprop"):
+        return None
+    try:
+        out = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+                             capture_output=True, text=True, timeout=1).stdout
+        wid = out.strip().split()[-1]
+        if wid in ("0x0", "0"):
+            return "Desktop"
+        out = subprocess.run(["xprop", "-id", wid, "WM_CLASS"],
+                             capture_output=True, text=True, timeout=1).stdout
+        # WM_CLASS(STRING) = "instance", "Class"
+        names = [p.strip().strip('"') for p in out.split("=", 1)[1].split(",")]
+        name = names[-1] if names else None
+        return pretty_app(name)
+    except (subprocess.SubprocessError, IndexError, OSError):
+        return None
+
+
+def pretty_app(name):
+    if not name:
+        return None
+    known = {"firefox": "Firefox", "gnome-terminal-server": "Terminal",
+             "org.gnome.nautilus": "Files", "code": "VS Code",
+             "google-chrome": "Chrome", "chromium": "Chromium",
+             "org.gnome.texteditor": "Text Editor", "gedit": "Text Editor",
+             "libreoffice": "LibreOffice"}
+    low = name.lower()
+    for key, pretty in known.items():
+        if low.startswith(key):
+            return pretty
+    return name.split(".")[-1].replace("-", " ").title()
+
+
+class Clients:
+    """Connected tablets, so focus changes can be pushed to all of them."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.files = set()
+        self.last_app = None
+
+    def add(self, f):
+        with self.lock:
+            self.files.add(f)
+
+    def remove(self, f):
+        with self.lock:
+            self.files.discard(f)
+
+    def broadcast(self, msg):
+        data = (json.dumps(msg) + "\n").encode()
+        with self.lock:
+            for f in list(self.files):
+                try:
+                    f.write(data)
+                    f.flush()
+                except OSError:
+                    self.files.discard(f)
+
+
+def watch_focus(clients, interval=0.7):
+    while True:
+        name = active_app_name()
+        if name and name != clients.last_app:
+            clients.last_app = name
+            clients.broadcast({"t": "app", "name": name})
+        time.sleep(interval)
+
+
+def run_command(name):
+    argv = COMMANDS.get(name)
+    if not argv:
+        return
+    try:
+        subprocess.Popen(argv, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as err:
+        print("command failed:", name, err, file=sys.stderr)
+
+
+def handle(inj, msg):
+    t = msg.get("t")
+    if t == "move":
+        inj.move(float(msg.get("dx", 0)), float(msg.get("dy", 0)))
+    elif t == "btn":
+        inj.button(msg.get("b", "left"), msg.get("s", "click"))
+    elif t == "scroll":
+        inj.scroll(float(msg.get("dx", 0)), float(msg.get("dy", 0)))
+    elif t == "combo":
+        inj.combo(str(msg.get("keys", "")))
+    elif t == "key":
+        inj.key(str(msg.get("k", "")), msg.get("s", "click"))
+    elif t == "text":
+        inj.text(str(msg.get("s", "")))
+    elif t == "cmd":
+        run_command(str(msg.get("name", "")))
+
+
+def make_handler(inj, clients):
+    class Handler(socketserver.StreamRequestHandler):
+        def handle(self):
+            self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            clients.add(self.wfile)
+            print("tablet connected", flush=True)
+            hello = {"t": "hello", "host": socket.gethostname(),
+                     "session": os.environ.get("XDG_SESSION_TYPE", "unknown")}
+            try:
+                self.wfile.write((json.dumps(hello) + "\n").encode())
+                if clients.last_app:
+                    self.wfile.write((json.dumps(
+                        {"t": "app", "name": clients.last_app}) + "\n").encode())
+                self.wfile.flush()
+                for line in self.rfile:
+                    try:
+                        handle(inj, json.loads(line))
+                    except (ValueError, TypeError) as err:
+                        print("bad message:", err, file=sys.stderr)
+            except OSError:
+                pass
+            finally:
+                clients.remove(self.wfile)
+                print("tablet disconnected", flush=True)
+
+    return Handler
+
+
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--port", type=int, default=7777)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print events instead of injecting them")
+    args = ap.parse_args()
+
+    try:
+        inj = Injector(dry_run=args.dry_run)
+    except (OSError, PermissionError) as err:
+        sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup-ubuntu.sh "
+                 "and log out/in once.")
+    clients = Clients()
+    threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
+    # bind to localhost only: the tablet reaches it through `adb reverse`
+    with Server(("127.0.0.1", args.port), make_handler(inj, clients)) as srv:
+        print(f"TabletDesk host listening on 127.0.0.1:{args.port}", flush=True)
+        srv.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

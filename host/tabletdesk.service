@@ -1,0 +1,14 @@
+[Unit]
+Description=TabletDesk - Android tablet as display, keyboard and Touch Bar over USB-C
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+# mode: extend | mirror | input   (see host/connect.sh)
+Environment=TABLETDESK_MODE=extend
+ExecStart=@HERE@/connect.sh --watch
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

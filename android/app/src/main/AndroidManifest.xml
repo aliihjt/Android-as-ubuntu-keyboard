@@ -49,6 +49,8 @@
         <activity android:name=".FilesActivity" android:exported="false" />
         <activity android:name=".PresenterActivity" android:exported="false" />
         <activity android:name=".ButtonsActivity" android:exported="false" />
+        <activity android:name=".SpotlightActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
 
         <service
             android:name=".OverlayService"

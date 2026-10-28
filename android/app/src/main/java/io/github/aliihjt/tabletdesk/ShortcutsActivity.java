@@ -6,28 +6,28 @@ import android.widget.TextView;
 
 /** One-tap actions, grouped like iPad Settings, plus ones for the app in front on Fedora. */
 public class ShortcutsActivity extends Page {
-    private static final String[][] EDIT = {
+    static final String[][] EDIT = {
             {"📋", "Copy", "ctrl+c"}, {"📥", "Paste", "ctrl+v"}, {"✂️", "Cut", "ctrl+x"},
             {"↩️", "Undo", "ctrl+z"}, {"↪️", "Redo", "ctrl+shift+z"}, {"☑️", "Select all", "ctrl+a"},
             {"💾", "Save", "ctrl+s"}, {"🔍", "Find", "ctrl+f"}};
-    private static final String[][] WINDOWS = {
+    static final String[][] WINDOWS = {
             {"⇄", "Switch app", "alt+tab"}, {"▦", "Overview", "super"}, {"🚀", "All apps", "super+a"},
             {"⬆️", "Maximize", "super+up"}, {"⬅️", "Left half", "super+left"},
             {"➡️", "Right half", "super+right"}, {"➖", "Hide", "super+h"}, {"✕", "Close", "ctrl+w"}};
-    private static final String[][] SYSTEM = {
+    static final String[][] SYSTEM = {
             {"📷", "Screenshot", "print"}, {"🖼", "Whole screen", "shift+print"},
             {"🪟", "Window shot", "alt+print"}, {"🎥", "Record", "ctrl+shift+alt+r"},
             {"😀", "Emoji", "ctrl+dot"}, {"🔒", "Lock", "super+l"},
             {"📁", "Files", "cmd:files"}, {"💻", "Terminal", "cmd:terminal"}};
-    private static final String[][] BROWSER = {
+    static final String[][] BROWSER = {
             {"◀️", "Back", "alt+left"}, {"▶️", "Forward", "alt+right"}, {"🔄", "Reload", "ctrl+r"},
             {"➕", "New tab", "ctrl+t"}, {"✕", "Close tab", "ctrl+w"}, {"🔗", "Address bar", "ctrl+l"},
             {"⭐", "Bookmark", "ctrl+d"}, {"⇥", "Next tab", "ctrl+tab"}};
-    private static final String[][] TERMINAL = {
+    static final String[][] TERMINAL = {
             {"⛔", "Stop (Ctrl+C)", "ctrl+c"}, {"📋", "Copy", "ctrl+shift+c"},
             {"📥", "Paste", "ctrl+shift+v"}, {"➕", "New tab", "ctrl+shift+t"},
             {"⬆️", "Previous", "up"}, {"⇥", "Complete", "tab"}};
-    private static final String[][] CODE = {
+    static final String[][] CODE = {
             {"🎛", "Commands", "ctrl+shift+p"}, {"📄", "Open file", "ctrl+p"},
             {"💬", "Comment", "ctrl+slash"}, {"💻", "Terminal", "ctrl+grave"},
             {"💾", "Save", "ctrl+s"}, {"▶️", "Run", "f5"}};

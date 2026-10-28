@@ -3,38 +3,74 @@ package io.github.aliihjt.tabletdesk;
 import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.Menu;
 import android.view.View;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Fedora Pad home: connection card with one big button, then big tiles. */
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+/**
+ * Fedora Pad home, laid out like a macOS desktop: menu bar on top, a widget
+ * for the connection, Launchpad-style icons, and the Dock at the bottom.
+ */
 public class MainActivity extends Page {
     /** RDP apps that show the Fedora screen, best first. */
     static final String[] RDP = {"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"};
 
+    // menu bar menus: title, then "Label|action|shortcut", "-" = separator
+    private static final String[][] MENUS = {
+            {"File", "New Window|ctrl+n|⌘N", "New Tab|ctrl+t|⌘T", "Open…|ctrl+o|⌘O", "-",
+                    "Save|ctrl+s|⌘S", "Print…|ctrl+p|⌘P", "-", "Close Window|ctrl+w|⌘W"},
+            {"Edit", "Undo|ctrl+z|⌘Z", "Redo|ctrl+shift+z|⇧⌘Z", "-", "Cut|ctrl+x|⌘X",
+                    "Copy|ctrl+c|⌘C", "Paste|ctrl+v|⌘V", "Select All|ctrl+a|⌘A", "-",
+                    "Find…|ctrl+f|⌘F", "Emoji & Symbols|ctrl+dot|⌘."},
+            {"View", "Zoom In|ctrl+equal|⌘+", "Zoom Out|ctrl+minus|⌘−", "Actual Size|ctrl+0|⌘0", "-",
+                    "Reload|f5|F5", "Enter Full Screen|f11|F11"},
+            {"Go", "Back|alt+left|⌘[", "Forward|alt+right|⌘]", "Home|alt+home|⇧⌘H", "-",
+                    "Launchpad|super+a|", "Mission Control|super|"},
+            {"Window", "Minimize|super+h|⌘M", "Zoom|super+up|", "Tile Left|super+left|", "Tile Right|super+right|",
+                    "-", "Cycle Through Windows|alt+tab|⌘⇥", "Move to Other Display|super+shift+right|"},
+            {"Help", "Fedora Help|f1|F1"},
+    };
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
-    private TextView hostName;
-    private TextView hostInfo;
-    private TextView pill;
+    private TextView hostName, hostInfo, clock, battery, dot;
+    private final Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            updateClock();
+            handler.postDelayed(this, 15_000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle state) {
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        super.onCreate(state);
         // started by the PC when the cable is plugged in: just bring up the floating button
         if (getIntent().getBooleanExtra("autostart", false) && Settings.canDrawOverlays(this)) {
-            super.onCreate(state);
             OverlayService.start(this);
             finish();
             return;
         }
-        super.onCreate(state);
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
@@ -46,114 +82,265 @@ public class MainActivity extends Page {
     }
 
     @Override
+    protected boolean fullScreen() {
+        return true;
+    }
+
+    @Override
     protected void build() {
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        ((View) content.getParent()).setPadding(0, 0, 0, 0);  // edge to edge, like a desktop
 
-        // header: big title + connection pill
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(0, th.dp(16), 0, th.dp(14));
-        head.addView(th.largeTitle("Fedora Pad"),
-                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        pill = th.text("", 13, 0xFFFFFFFF, true);
-        pill.setPadding(th.dp(12), th.dp(6), th.dp(12), th.dp(6));
-        head.addView(pill);
-        add(head);
+        content.addView(menuBar());
 
-        add(connectionCard());
+        // widget + Launchpad icons scroll; menu bar and Dock stay put
+        LinearLayout middle = new LinearLayout(this);
+        middle.setOrientation(LinearLayout.VERTICAL);
+        int side = th.dp(24);
+        middle.setPadding(side, th.dp(20), side, th.dp(20));
+        middle.addView(widget(), new LinearLayout.LayoutParams(
+                Math.min(th.dp(460), getResources().getDisplayMetrics().widthPixels - 2 * side),
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        middle.addView(launchpad(), th.fullWidth(28));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(middle);
+        content.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        section("Tools");
-        add(tiles());
-
-        TextView tip = th.caption("Tip: over the Fedora screen, tap the small round button for the keyboard, "
-                + "trackpad and media. Drag it anywhere.");
-        tip.setPadding(th.dp(16), th.dp(18), th.dp(16), 0);
-        add(tip);
+        LinearLayout dockRow = new LinearLayout(this);
+        dockRow.setGravity(Gravity.CENTER);
+        dockRow.setPadding(th.dp(8), 0, th.dp(8), th.dp(10));
+        dockRow.addView(dock());
+        content.addView(dockRow, th.fullWidth(0));
 
         onStatus(link.isConnected(), link.host());
     }
 
-    private View connectionCard() {
-        LinearLayout card = th.card();
-        int p = th.dp(18);
-        card.setPadding(p, p, p, p);
+    // ---- menu bar ----
 
+    private View menuBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackground(th.frosted(0));
+        bar.setPadding(th.dp(10), 0, th.dp(12), 0);
+        bar.setMinimumHeight(th.dp(32));
+
+        LinearLayout menus = new LinearLayout(this);
+        menus.setGravity(Gravity.CENTER_VERTICAL);
+        TextView logo = menuTitle("◆", true);
+        th.click(logo, v -> showMenu(v, new String[]{"◆", "About This PC|cmd:about|",
+                "System Settings…|cmd:settings|", "-", "Lock Screen|super+l|⌃⌘Q",
+                "Log Out…|cmd:logout|", "Restart…|cmd:restart|", "Shut Down…|cmd:poweroff|"}));
+        menus.addView(logo);
+        TextView app = menuTitle("Fedora Pad", true);
+        th.click(app, v -> startActivity(new Intent(this, SettingsActivity.class)));
+        menus.addView(app);
+        for (String[] m : MENUS) {
+            TextView t = menuTitle(m[0], false);
+            th.click(t, v -> showMenu(v, m));
+            menus.addView(t);
+        }
+        HorizontalScrollView menuScroll = new HorizontalScrollView(this);
+        menuScroll.setHorizontalScrollBarEnabled(false);
+        menuScroll.addView(menus);
+        bar.addView(menuScroll, new LinearLayout.LayoutParams(0, th.dp(32), 1f));
+
+        TextView search = menuTitle("🔍", false);
+        th.click(search, v -> startActivity(new Intent(this, SpotlightActivity.class)));
+        bar.addView(search);
+        dot = menuTitle("", false);
+        bar.addView(dot);
+        battery = menuTitle("", false);
+        bar.addView(battery);
+        clock = menuTitle("", true);
+        bar.addView(clock);
+        return bar;
+    }
+
+    private TextView menuTitle(String s, boolean bold) {
+        TextView t = th.text(s, 13.5f, th.text, bold);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        t.setPadding(th.dp(9), 0, th.dp(9), 0);
+        t.setMinHeight(th.dp(32));
+        return t;
+    }
+
+    /** A real dropdown that sends the shortcut to Fedora. */
+    private void showMenu(View anchor, String[] items) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        Menu menu = popup.getMenu();
+        int group = 0;
+        for (int i = 1; i < items.length; i++) {
+            if ("-".equals(items[i])) {
+                group++;
+                continue;
+            }
+            String[] p = items[i].split("\\|");
+            String keys = p.length > 2 && !p[2].isEmpty() ? "      " + p[2] : "";
+            menu.add(group, i, i, p[0] + keys);
+        }
+        if (Build.VERSION.SDK_INT >= 28) menu.setGroupDividerEnabled(true);
+        popup.setOnMenuItemClickListener(item -> {
+            link.action(items[item.getItemId()].split("\\|")[1]);
+            return true;
+        });
+        popup.show();
+    }
+
+    private void updateClock() {
+        clock.setText(new SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(new Date()));
+        Intent b = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (b != null) {
+            int level = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100
+                    / Math.max(1, b.getIntExtra(BatteryManager.EXTRA_SCALE, 100));
+            boolean charging = b.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
+            battery.setText((charging ? "⚡" : "") + level + "%");
+        }
+    }
+
+    // ---- widget ----
+
+    private View widget() {
+        LinearLayout w = new LinearLayout(this);
+        w.setOrientation(LinearLayout.VERTICAL);
+        w.setBackground(th.frosted(th.dp(22)));
+        int p = th.dp(18);
+        w.setPadding(p, p, p, p);
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.addView(th.iconChip("🖥", Theme.BLUE, 56));
+        top.addView(th.iconChip("🖥", Theme.BLUE, 48));
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
-        texts.setPadding(th.dp(14), 0, 0, 0);
-        hostName = th.text("", 20, th.text, true);
+        texts.setPadding(th.dp(12), 0, 0, 0);
+        hostName = th.text("", 18, th.text, true);
         hostInfo = th.caption("");
         texts.addView(hostName);
-        texts.addView(hostInfo, th.fullWidth(4));
+        texts.addView(hostInfo, th.fullWidth(3));
         top.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        card.addView(top);
+        w.addView(top);
 
         TextView start = th.primaryButton("Show Fedora Screen", v -> showScreen());
         start.setOnLongClickListener(v -> {  // Xorg desktops use VNC instead of RDP
             openVnc();
             return true;
         });
-        card.addView(start, th.fullWidth(18));
-
-        card.addView(th.segmented(new String[][]{
-                {"extend", "Second screen"}, {"mirror", "Same picture"}, {"input", "Keyboard only"}},
+        w.addView(start, th.fullWidth(14));
+        w.addView(th.segmented(new String[][]{
+                {"extend", "Second screen"}, {"mirror", "Same picture"}, {"input", "Keys only"}},
                 prefs.getString("mode", "extend"), mode -> {
                     prefs.edit().putString("mode", mode).apply();
                     link.mode(mode);
-                }), th.fullWidth(12));
-        return card;
+                }), th.fullWidth(10));
+        return w;
     }
 
-    private View tiles() {
-        Object[][] items = {
-                {"⌨️", Theme.BLUE, "Keyboard", "Type on Fedora", KeyboardActivity.class},
-                {"🖱", Theme.PURPLE, "Trackpad", "Mouse + keyboard", TrackpadActivity.class},
-                {"🎵", Theme.PINK, "Media", "Play, pause, volume", MediaActivity.class},
-                {"🎛", Theme.ORANGE, "Controls", "Brightness, Wi-Fi…", ControlsActivity.class},
-                {"⚡", Theme.INDIGO, "Shortcuts", "Copy, paste, windows", ShortcutsActivity.class},
-                {"🚀", Theme.TEAL, "Apps", "Open Fedora apps", AppsActivity.class},
-                {"📊", Theme.GREEN, "Stats", "CPU, memory, battery", StatsActivity.class},
-{"\u270D\uFE0F", Theme.YELLOW, "Text & Clipboard", "Write here, type there", ClipboardActivity.class},
-                {"\uD83D\uDCC1", Theme.BLUE, "Send Files", "Photos and files to PC", FilesActivity.class},
-                {"\uD83C\uDFA4", Theme.RED, "Presenter", "Slides remote + timer", PresenterActivity.class},
-                {"\u2B50", Theme.ORANGE, "My Buttons", "Your own shortcuts", ButtonsActivity.class},
-                {"⚙️", Theme.GRAY, "Settings", "Look and options", SettingsActivity.class},
+    // ---- Launchpad ----
+
+    private View launchpad() {
+        Object[][] apps = {
+                {"⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class},
+                {"🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class},
+                {"🎵", Theme.PINK, "Media", MediaActivity.class},
+                {"🎛", Theme.ORANGE, "Controls", ControlsActivity.class},
+                {"⚡", Theme.INDIGO, "Shortcuts", ShortcutsActivity.class},
+                {"🚀", Theme.TEAL, "Apps", AppsActivity.class},
+                {"✍️", Theme.YELLOW, "Text", ClipboardActivity.class},
+                {"📁", Theme.BLUE, "Send Files", FilesActivity.class},
+                {"🎤", Theme.RED, "Presenter", PresenterActivity.class},
+                {"⭐", Theme.ORANGE, "My Buttons", ButtonsActivity.class},
+                {"📊", Theme.GREEN, "Stats", StatsActivity.class},
+                {"🔍", Theme.GRAY, "Spotlight", SpotlightActivity.class},
+                {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
-        float widthDp = Math.min(820, getResources().getConfiguration().screenWidthDp);
-        int columns = widthDp >= 640 ? 4 : 2;
+        int columns = getResources().getConfiguration().screenWidthDp >= 700 ? 7 : 4;
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = null;
-        for (int i = 0; i < items.length; i++) {
+        for (int i = 0; i < apps.length; i++) {
             if (i % columns == 0) {
                 row = new LinearLayout(this);
-                grid.addView(row, th.fullWidth(i == 0 ? 0 : 12));
+                grid.addView(row, th.fullWidth(i == 0 ? 0 : 20));
             }
-            Object[] it = items[i];
-            row.addView(tile((String) it[0], (Integer) it[1], (String) it[2], (String) it[3], (Class<?>) it[4]),
-                    th.weighted(i % columns == 0 ? 0 : 12));
+            Object[] a = apps[i];
+            row.addView(appIcon((String) a[0], (Integer) a[1], (String) a[2], 64,
+                    () -> startActivity(new Intent(this, (Class<?>) a[3]))), th.weighted(0));
         }
+        int rest = apps.length % columns;
+        for (int i = rest; rest != 0 && i < columns; i++) row.addView(new View(this), th.weighted(0));
         return grid;
     }
 
-    private View tile(String symbol, int color, String title, String sub, Class<?> page) {
-        LinearLayout t = th.card();
-        int p = th.dp(16);
-        t.setPadding(p, p, p, p);
-        t.addView(th.iconChip(symbol, color, 46));
-        TextView name = th.text(title, 17, th.text, true);
-        t.addView(name, th.fullWidth(14));
-        TextView s = th.caption(sub);
-        s.setSingleLine(true);
-        t.addView(s, th.fullWidth(4));
-        t.setForeground(new android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(th.dark ? 0x33FFFFFF : 0x1F000000),
-                null, Theme.round(0xFFFFFFFF, th.dp(18))));
-        th.click(t, v -> startActivity(new Intent(this, page)));
-        return t;
+    /** Icon + white label, like Launchpad. */
+    private View appIcon(String symbol, int color, String label, int sizeDp, Runnable open) {
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView icon = th.iconChip(symbol, color, sizeDp);
+        icon.setElevation(th.dp(4));
+        cell.addView(icon);
+        TextView name = th.text(label, 13, 0xFFFFFFFF, true);
+        name.setShadowLayer(th.dp(3), 0, th.dp(1), 0x99000000);
+        name.setGravity(Gravity.CENTER);
+        name.setSingleLine(true);
+        cell.addView(name, th.fullWidth(8));
+        th.click(cell, v -> bounce(icon, open));
+        return cell;
+    }
+
+    // ---- Dock ----
+
+    private View dock() {
+        LinearLayout d = new LinearLayout(this);
+        d.setGravity(Gravity.CENTER_VERTICAL);
+        d.setBackground(th.frosted(th.dp(24)));
+        int p = th.dp(8);
+        d.setPadding(p, p, p, p);
+        Object[][] items = {
+                {"⌨️", Theme.BLUE, (Runnable) () -> startActivity(new Intent(this, KeyboardActivity.class))},
+                {"🖱", Theme.PURPLE, (Runnable) () -> startActivity(new Intent(this, TrackpadActivity.class))},
+                {"🎵", Theme.PINK, (Runnable) () -> startActivity(new Intent(this, MediaActivity.class))},
+                {"🎛", Theme.ORANGE, (Runnable) () -> startActivity(new Intent(this, ControlsActivity.class))},
+                null,
+                {"🖥", Theme.INDIGO, (Runnable) () -> link.combo("super")},       // Mission Control
+                {"▦", Theme.TEAL, (Runnable) () -> link.combo("super+a")},              // Launchpad on Fedora
+                {"🔍", Theme.GRAY, (Runnable) () -> startActivity(new Intent(this, SpotlightActivity.class))},
+                {"⚙️", Theme.GRAY, (Runnable) () -> startActivity(new Intent(this, SettingsActivity.class))},
+        };
+        for (Object[] it : items) {
+            if (it == null) {  // divider between apps and system items, as in the macOS Dock
+                View line = new View(this);
+                line.setBackgroundColor(th.dark ? 0x40FFFFFF : 0x33000000);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Math.max(1, th.dp(1)), th.dp(40));
+                lp.setMargins(th.dp(6), 0, th.dp(6), 0);
+                d.addView(line, lp);
+                continue;
+            }
+            TextView icon = th.iconChip((String) it[0], (Integer) it[1], 50);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) icon.getLayoutParams();
+            lp.setMargins(th.dp(4), 0, th.dp(4), 0);
+            Runnable open = (Runnable) it[2];
+            th.click(icon, v -> bounce(icon, open));
+            d.addView(icon);
+        }
+        return d;
+    }
+
+    /** The Dock's little bounce before an app opens. */
+    private void bounce(View v, Runnable then) {
+        v.animate().scaleX(1.18f).scaleY(1.18f).translationY(-th.dp(8)).setDuration(120)
+                .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(140)
+                        .withEndAction(then)).start();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        handler.post(tick);
+    }
+
+    @Override
+    protected void onPause() {
+        handler.removeCallbacks(tick);
+        super.onPause();
     }
 
     @Override
@@ -162,8 +349,8 @@ public class MainActivity extends Page {
         hostName.setText(connected ? host : "Not connected");
         hostInfo.setText(connected ? "Connected with the USB-C cable · charging"
                 : "Plug the tablet into the laptop with the USB-C cable.");
-        pill.setText(connected ? "●  Connected" : "○  Offline");
-        pill.setBackground(Theme.round(connected ? Theme.GREEN : Theme.GRAY, th.dp(14)));
+        dot.setText(connected ? "●" : "○");
+        dot.setTextColor(connected ? Theme.GREEN : th.secondary);
         if (connected && prefs.contains("mode")) link.mode(prefs.getString("mode", "extend"));
     }
 

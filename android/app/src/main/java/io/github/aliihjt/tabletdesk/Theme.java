@@ -134,6 +134,43 @@ final class Theme {
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
+    // ---- macOS desktop ----
+
+    /** macOS-style wallpaper (Sonoma-like colours), light or dark. */
+    android.graphics.drawable.Drawable wallpaper() {
+        return new GradientDrawable(GradientDrawable.Orientation.TL_BR, dark
+                ? new int[]{0xFF0F1B3D, 0xFF3A1F6B, 0xFF8A2E6E, 0xFFD0565C}
+                : new int[]{0xFF7FB3F5, 0xFFB9A6F2, 0xFFF1A7C8, 0xFFFBD3A6});
+    }
+
+    /** Frosted panel for the menu bar, widgets and the Dock (on the wallpaper). */
+    GradientDrawable frosted(float radius) {
+        GradientDrawable d = round(dark ? 0x8C1E1E1E : 0xA6FFFFFF, radius);
+        d.setStroke(Math.max(1, dp(0.75f)), dark ? 0x33FFFFFF : 0x80FFFFFF);
+        return d;
+    }
+
+    /** The three window buttons: close, minimise, full screen. */
+    LinearLayout trafficLights(Runnable close, Runnable minimise, Runnable zoom) {
+        LinearLayout row = new LinearLayout(ctx);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        int[] colors = {0xFFFF5F57, 0xFFFEBC2E, 0xFF28C840};
+        Runnable[] actions = {close, minimise, zoom};
+        for (int i = 0; i < 3; i++) {
+            View dot = new View(ctx);
+            GradientDrawable g = round(colors[i], dp(7));
+            g.setStroke(Math.max(1, dp(0.5f)), 0x33000000);
+            dot.setBackground(g);
+            Runnable a = actions[i];
+            // a bigger invisible touch area around each small dot
+            android.widget.FrameLayout hit = new android.widget.FrameLayout(ctx);
+            hit.addView(dot, new android.widget.FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER));
+            click(hit, v -> a.run());
+            row.addView(hit, new LinearLayout.LayoutParams(dp(26), dp(40)));
+        }
+        return row;
+    }
+
     // ---- buttons ----
 
     /** Big filled button (the main action of a screen). */

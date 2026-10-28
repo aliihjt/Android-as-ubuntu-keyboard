@@ -1,119 +1,103 @@
 # TabletDesk 💻📱
 
-Turn an Android tablet into a second screen, keyboard, trackpad and **macOS-style Touch Bar** for **Fedora Workstation** (GNOME). Everything runs over **one USB-C cable**, which also charges the tablet. A **macOS-style menu bar** sits at the top of the tablet screen. Ubuntu is still supported too.
+Turn an Android tablet into a **second screen, keyboard, trackpad and Touch Bar** for your **Fedora** laptop. Everything runs over **one USB-C cable**, which also charges the tablet. A **macOS-style menu bar** with Liquid Glass menus sits at the top of the tablet.
+
+**⬇️ [Download the app (APK)](https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/download/latest-apk/TabletDesk.apk)** · Fedora Workstation 40+ (GNOME) · Android 8+
 
 ```
- ┌──────────────────────────── tablet ─────────────────────────────┐
- │ ◆  Firefox  File  Edit  View  Go  Window  Help     ⌨ ▭ ● ⚡92% 23:10 │  ← menu bar
- │                                                                  │
- │           Fedora desktop (extended or mirrored screen)           │
- │                                                                  │
- │ [esc] [◀][▶][⟳][🔍 Address][＋Tab] … [fn] │ 🔅 🔆 🔇 🔉 🔊 ⏮ ⏯ ⏭ ⌄ │  ← Touch Bar
- └──────────────────────────────────────────────────────────────────┘
-                 USB-C  ⇄  power + ADB data  ⇄  Fedora laptop / PC
+ ┌──────────────────────────────── tablet ─────────────────────────────────┐
+ │ ◆  TabletDesk  Firefox  File  Edit  View  Go  Window  Help  Tools       │  ← menus
+ │ 🚀 🔍 ⌨ ☰                                          ●  ⚡92%  Wed 10:42  │  ← icons
+ │                                                                         │
+ │           Fedora desktop (extended second screen, or mirrored)          │
+ │                                                                         │
+ │   [esc] [◀][▶][⟳][🔍 Address][＋Tab] … [fn] │ 🔅 🔆 🔇 🔉 🔊 ⏮ ⏯ ⏭ ⌄    │  ← Touch Bar
+ └─────────────────────────────────────────────────────────────────────────┘
+                 USB-C  ⇄  power + data (ADB)  ⇄  Fedora laptop
 ```
 
-## Features
+## ✨ Features
 
-| Feature | What it does |
-|---|---|
-| 🖥 **Second screen** | `extend` mode uses GNOME Remote Desktop to add the tablet as a real virtual monitor. `mirror` mode shows the same picture on both. |
-| 👆 **Touch on screen** | Tap and drag directly on the Fedora screen inside the RDP app. |
-| ⌨ **Keyboard** | Uses the tablet's on-screen keyboard. Sticky Ctrl, Alt, Super and Shift keys. Non-English text (e.g. Persian) is typed through GNOME's Unicode input. A Bluetooth keyboard paired with the tablet also works. |
-| 🖱 **Trackpad** | Laptop-style gestures. 1 finger moves the pointer, a tap clicks, and tap-then-drag drags. 2 fingers scroll, and a 2-finger tap right-clicks. A 3-finger swipe opens Activities or switches workspaces. |
-| 🍎 **Menu bar** | macOS-style bar at the top showing the focused app's name. A small GNOME extension provides it, because Wayland hides other apps' windows. The File, Edit, View, Go, Window and Help menus send the matching shortcuts. The ◆ menu has Settings, Lock, Log Out and Shut Down. The right side shows the clock, the tablet's battery and the connection status. |
-| ▭ **Touch Bar** | Esc key, plus buttons that change with the focused app (browser, Ptyxis/terminal, VS Code, Files, desktop). Includes an **fn** layer with F1–F12, brightness, volume and media keys. Hold a key to repeat it. Tap ⌄ to collapse the bar. |
-| 🚫⌨ **Laptop keyboard off** | While the tablet is connected, the laptop's built-in keyboard is switched off, so the tablet is your keyboard. The laptop touchpad stays on. Unplugging, or stopping the service, gives the keyboard back. Toggle it in the Control Center (☰). |
-| 🎛 **Control Center** | Liquid Glass panel (☰ in the menu bar) with screen mode, dark mode, Do Not Disturb, the laptop-keyboard switch, brightness and volume sliders, and quick buttons for screenshot, lock, settings, files and terminal. |
-| 🚀 **Dock** | The 🚀 button in the menu bar lists the apps pinned in Fedora's dash. Tap one to open it. |
-| 🔠 **Interface size** | Normal, Large (default) or Extra large, chosen in the app. Scales the bars, menus, Control Center and trackpad. |
-| 🔌 **One cable** | USB-C charges the tablet while ADB tunnels all data through `127.0.0.1`. |
-| ⚡ **Plug & play** | A systemd user service sets everything up each time you plug the tablet in. |
+| | Feature | What it does |
+|---|---|---|
+| 🖥 | **Second screen** | **Extend** adds the tablet as a real extra monitor (drag windows across), **Mirror** shows the same picture, **Input only** skips the screen. The choice is remembered. |
+| 🖱 | **One desktop** | The laptop touchpad moves the pointer onto the tablet and the tablet draws it there. Touch works directly on the tablet too. |
+| ⌨ | **Keyboard** | Full-screen keyboard & trackpad page with sticky Ctrl / Alt / Super / Shift, arrows and a one-tap shortcut row (copy, paste, undo, save, find, switch app…). Persian and other languages work. A Bluetooth keyboard on the tablet types into Fedora too. |
+| 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is switched off (touchpad stays on). Unplug and it's back. |
+| 👆 | **Trackpad** | 1 finger move · tap click · tap + drag · 2 fingers scroll / right click · 3 fingers Activities and workspaces. Speed and natural scrolling are adjustable. |
+| 🍎 | **Menu bar** | Two lines: menus on top (with the focused app's name), icons, battery and clock below. Glass drop-down menus show the shortcut for every command. |
+| ⚙️ | **TabletDesk menu** | Every setting in one place: mode, laptop keyboard, touch, bars, size, theme, trackpad, PC info (CPU, RAM, battery), reconnect. |
+| 🧰 | **Tools menu** | Screenshots, screen recording, clipboard, emoji, Wi-Fi, Bluetooth, microphone, Night Light, dark mode, Do Not Disturb, keep PC awake, power profile. |
+| 🎛 | **Control Center** | Brightness and volume sliders, switches and quick buttons, like macOS. |
+| ▭ | **Touch Bar** | Esc, keys that change with the app (browser, terminal, VS Code, Files), an **fn** layer with F1–F12, brightness, volume and media. |
+| 🚀 | **Dock** | Opens the apps pinned in Fedora's dash. |
+| 📋 | **Clipboard** | Copy text from the tablet to the PC and back. |
+| 🎨 | **Liquid Glass** | Frosted, blurred glass design (Android 12+), light and dark themes, three sizes. |
+| ⚡ | **Plug & play** | Plug in and everything starts by itself: screen, bars, the right mode, and even **app updates**. |
 
-## Setup
+## 🚀 Setup (once)
 
-### 1. Tablet (once)
-1. Install **TabletDesk.apk**. Download it from this repo's **Actions** tab (artifact `TabletDesk-apk`) or from **Releases**.
-2. Install an RDP app to see the Fedora screen. **Windows App** (Microsoft Remote Desktop) is recommended; **aFreeRDP** is the alternative.
-3. Turn on USB debugging: Settings › About tablet › tap **Build number** 7×, then Developer options › **USB debugging** ON.
+### 📱 Tablet
+1. Settings › About tablet › tap **Build number** 7 times. Then Developer options › turn on **USB debugging**.
+   *Xiaomi / Redmi / POCO: also turn on **Install via USB**.*
+2. Install **Windows App** (Microsoft Remote Desktop) from the Play Store.
 
-### 2. Fedora (once)
+### 🐧 Fedora
 ```bash
+sudo dnf install -y git
 git clone https://github.com/aliihjt/Android-as-ubuntu-keyboard.git
-cd Android-as-ubuntu-keyboard
-./host/setup.sh
+cd Android-as-ubuntu-keyboard && ./host/setup.sh
 ```
-The script does the following:
-- Installs `android-tools` (adb), `python3-evdev`, `gnome-remote-desktop` and `openssl` with `dnf`.
-- Gives your user access to `/dev/uinput`.
-- Sets up GNOME Remote Desktop (RDP) with its own certificate and a random password. It **prints the user name and password** at the end.
-- Installs the small GNOME extension and the auto-start service.
+`setup.sh` installs what's needed, sets up GNOME Remote Desktop and **prints a user name and password**. Write them down.
 
-Then **log out and back in**, and run `gnome-extensions enable tabletdesk@aliihjt.github.io`.
-
-### 3. Connect
-Plug in the USB-C cable and tap **Allow USB debugging** on the tablet. Then run:
+Then **log out and back in**, and run:
 ```bash
-systemctl --user start tabletdesk        # auto mode (extend), reconnects on every plug-in
-# or run it by hand:
-./host/connect.sh extend                 # tablet = 2nd monitor
-./host/connect.sh mirror                 # tablet = same picture
-./host/connect.sh input                  # tablet = keyboard / trackpad / Touch Bar only
+gnome-extensions enable tabletdesk@aliihjt.github.io
 ```
-The first time, add a PC in the RDP app with these settings:
-- **PC name:** `127.0.0.1`
-- **User and password:** the ones `setup.sh` printed (also saved in `~/.config/tabletdesk/rdp-password`).
-- Accept the certificate warning. The certificate is the one `setup.sh` created.
 
-### 4. Automatic from then on ⚡
-Once set up, just **log in to Fedora and plug in the cable**. The background service does the rest:
+### 🔌 First connection
+1. Plug in the USB-C cable. On the tablet, tick **Always allow from this computer** and tap **Allow**.
+2. The TabletDesk app installs itself and opens. Windows App opens next.
+3. In Windows App, add the PC **`127.0.0.1`** with the user and password from `setup.sh`, and save the password.
 
-1. Detects the tablet and shows a "connected" pop-up on Fedora.
-2. Wakes the tablet screen and keeps it on while charging.
-3. Opens the menu bar and Touch Bar on the tablet.
-4. Turns on the second screen (extend or mirror).
-5. Opens the RDP app and connects it to `127.0.0.1`.
+**From now on: unlock Fedora and plug in the tablet. That's it.**
 
-When you unplug the tablet, it cleans up and waits for the next plug-in.
-
-For a fully hands-free connection:
-- On the tablet's **"Allow USB debugging"** prompt, tick **"Always allow from this computer"**.
-- In the RDP app, **save the password** for the `127.0.0.1` PC.
-- **Unlock Fedora.** If it's locked, a pop-up asks you to unlock it, and the screen connects right after.
-
-To watch what the service is doing: `journalctl --user -u tabletdesk -f`.
-
-The mode is **remembered**. Pick it once, either in the tablet app (**Extend / Mirror / Input only**) or with `./host/connect.sh mirror`, and every plug-in uses it. Changing it in the app while connected switches right away.
-
-## How it works
+## 🔄 Update
+```bash
+~/Android-as-ubuntu-keyboard/host/update.sh
 ```
-TabletDesk app ──TCP 127.0.0.1:7777──► adb reverse (USB) ──► tabletdesk_host.py ──► /dev/uinput (keys, mouse)
-RDP app        ──TCP 127.0.0.1:3389──► adb reverse (USB) ──► GNOME Remote Desktop (virtual monitor)
-GNOME extension ──D-Bus──► tabletdesk_host.py ──► focused app name ──► menu bar + Touch Bar
-```
-- **`host/tabletdesk_host.py`** turns JSON messages from the tablet into real input events through `uinput`, which works on Wayland.
-- **`host/connect.sh`** sets up `adb reverse` and keeps the tablet screen awake while charging. It also switches GNOME Remote Desktop between `extend` and `mirror-primary`. On an Xorg session (other desktops, or Ubuntu) it falls back to `xrandr` plus `x11vnc` and the AVNC app.
-- **`host/gnome-extension/`** reports the focused app on D-Bus. It supports GNOME 45–50.
-- **`android/`** is the app, written in plain Java with no extra libraries. It has the overlay service (menu bar and Touch Bar), the trackpad and keyboard screen, and the connection client.
+The tablet app also updates itself every time you plug in. The app shows its **Build** number on its home screen.
 
-## Troubleshooting
+## 🛟 Troubleshooting
+
 | Problem | Fix |
 |---|---|
-| RDP app can't connect | Check `grdctl status` shows RDP **enabled**, then run `systemctl --user restart gnome-remote-desktop`. Make sure the screen is unlocked: GNOME only shares an active session. |
-| Tablet screen is not a separate monitor | Make sure the mode is `extend`, then reconnect the RDP app. GNOME applies the mode change on a new connection. |
-| Menu bar always says "Fedora" | The extension isn't active. Log out and back in, run `gnome-extensions enable tabletdesk@aliihjt.github.io`, and check that `gnome-extensions list --enabled` lists it. |
-| Laptop keyboard or mouse stops working | Update (`git pull`, then `systemctl --user restart tabletdesk`). The host now releases every key and click when the tablet connects or disconnects. If it still happens, run `./host/connect.sh input` to test without the screen part. |
-| Fedora text on the tablet is tiny or blurry | Fedora Settings › Displays › select the tablet monitor › **Scale 200%**. GNOME remembers it. |
-| Laptop mouse pointer disappears after touching the tablet | Open the Control Center (☰) and tap **Show mouse pointer**, or use ◆ › **Show Mouse Pointer**. If it keeps happening, either switch Windows App to **Mouse pointer** mode in its session toolbar, or turn **Touch screen** off in the Control Center and use the trackpad instead. |
-| Touchpad or keyboard still off after unplugging | Run `~/Android-as-ubuntu-keyboard/host/reset.sh`. It stops TabletDesk and gives everything back. Unplugging now does the same automatically. |
-| `Cannot open /dev/uinput` | Run `setup.sh`, then log out and back in. |
-| KDE Plasma (Fedora KDE) | Input, the menu bar and the Touch Bar work. For the screen, turn on System Settings › Remote Desktop. It can mirror the screen only, and the menu bar shows "Fedora" instead of the app name. |
-| Tablet charges slowly | Use a USB-C port on the laptop, not a USB-A adapter. |
-| `adb` shows "unauthorized" | Unplug, replug and accept the prompt on the tablet. Or run `adb kill-server`. |
-| Persian/Unicode text doesn't appear | Unicode typing uses Ctrl+Shift+U, which works in GTK apps (GNOME apps, Firefox). Some Qt/Electron apps ignore it. |
+| Keyboard or touchpad stuck after unplugging | `~/Android-as-ubuntu-keyboard/host/reset.sh` |
+| Anything else | `~/Android-as-ubuntu-keyboard/host/diagnose.sh`, then open an issue with `~/tabletdesk-diagnose.txt` |
+| Screen doesn't appear | Unlock Fedora. GNOME only shares an unlocked screen. |
+| App doesn't update | Watch the tablet for an install prompt. Xiaomi: turn on **Install via USB**. |
+| Text on the tablet is tiny | Fedora Settings › Displays › tablet monitor › **Scale 200%** |
+| Menu bar shows "Fedora" instead of the app | Log out and in, then `gnome-extensions enable tabletdesk@aliihjt.github.io` |
+| See what's happening | `journalctl --user -u tabletdesk -f` |
 
-## Build the APK yourself
-```bash
-cd android && ./gradlew assembleDebug    # needs Android SDK 34 + JDK 17
-adb install app/build/outputs/apk/debug/app-debug.apk
+## 🔧 How it works
 ```
+TabletDesk app ──127.0.0.1:7777──► adb reverse (USB) ──► tabletdesk_host.py ──► /dev/uinput (keys, mouse)
+Windows App    ──127.0.0.1:3389──► adb reverse (USB) ──► GNOME Remote Desktop (virtual monitor)
+GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + pointer position ──► tablet
+```
+
+| Path | What it is |
+|---|---|
+| `host/tabletdesk_host.py` | Turns messages from the tablet into real keyboard and mouse input (works on Wayland), runs the whitelisted Tools and Control Center actions, and turns the laptop keyboard off while connected. |
+| `host/connect.sh` | Runs on every plug-in: `adb reverse`, screen mode, app updates, and a clean hand-back on unplug. |
+| `host/gnome-extension/` | Reports the focused app and the pointer position (GNOME 45–50). |
+| `android/` | The app, in plain Java with no extra libraries. |
+
+Everything listens on `127.0.0.1` only and travels over the USB cable. Nothing is exposed on your network.
+
+### Build the APK yourself
+```bash
+cd android && ./gradlew assembleDebug    # Android SDK 34 + JDK 17
+```
+GitHub Actions builds it on every push and publishes it to the [newest-build release](https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/tag/latest-apk).

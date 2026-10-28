@@ -48,10 +48,22 @@ jobs:
           files: |
             TabletDesk.apk
             version.txt
-      - name: Attach APK to release (tags only)
+      - name: Official release (tags v*)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: TabletDesk ${{ github.ref_name }}
+          make_latest: true
+          generate_release_notes: true
+          body: |
+            Your Android tablet as a second screen, keyboard, trackpad and Touch Bar for Fedora, over one USB-C cable.
+
+            **Install:** download `TabletDesk.apk` below onto the tablet, then on Fedora:
+            ```bash
+            git clone https://github.com/aliihjt/Android-as-ubuntu-keyboard.git
+            cd Android-as-ubuntu-keyboard && ./host/setup.sh
+            ```
+            Full guide: see the README.
           files: TabletDesk.apk
 
   host:

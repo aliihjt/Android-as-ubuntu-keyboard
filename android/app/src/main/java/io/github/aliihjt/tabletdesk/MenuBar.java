@@ -76,7 +76,7 @@ final class MenuBar implements HostLink.Listener {
     private final boolean autoHide;
     private final boolean blur;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final SimpleDateFormat clockFormat = new SimpleDateFormat("EEE d MMM  HH:mm", Locale.getDefault());
+    private final SimpleDateFormat clockFormat = new SimpleDateFormat("EEE HH:mm", Locale.getDefault());
     private final Runnable hide = this::collapse;
     private final Runnable tick = new Runnable() {
         @Override
@@ -163,11 +163,14 @@ final class MenuBar implements HostLink.Listener {
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 26),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
+        if (Build.VERSION.SDK_INT >= 30) {
+            // sit just below Android's status bar (or at the very top when it is hidden)
+            params.setFitInsetsTypes(android.view.WindowInsets.Type.statusBars()
+                    | android.view.WindowInsets.Type.displayCutout());
+        }
         if (blur && Build.VERSION.SDK_INT >= 31) {
             params.flags |= WindowManager.LayoutParams.FLAG_BLUR_BEHIND;
             params.setBlurBehindRadius(Ui.dp(ctx, 30));
@@ -199,7 +202,7 @@ final class MenuBar implements HostLink.Listener {
 
     @Override
     public void onStatus(boolean connected, String host) {
-        status.setText(connected ? "\u25CF " + host : "\u25CB Offline");
+        status.setText(connected ? "\u25CF" : "\u25CB");  // green = connected
         status.setTextColor(connected ? (dark ? 0xFF30D158 : 0xFF1E8E3E) : (dark ? 0xFFFF6961 : 0xFFC5221F));
     }
 

@@ -41,7 +41,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{0xFF101A2E, 0xFF231A3A, 0xFF0E2A33}));
         int m = Ui.dp(this, 16);
-        root.setPadding(m, Ui.dp(this, 40), m, m);  // room for the status bar + menu bar
+        root.setPadding(m, Ui.dp(this, 28), m, m);  // room for Android's status bar
 
         status = Ui.label(this, "", 13, 0xFFAAAAAA, false);
         status.setPadding(Ui.dp(this, 12), Ui.dp(this, 5), Ui.dp(this, 12), Ui.dp(this, 5));
@@ -77,6 +77,28 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         keyScroll.setBackground(Glass.surface(this, true, Ui.dp(this, 18), true));
         root.addView(keyScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 56)));
+
+        // one-tap keyboard shortcuts
+        String[][] shortcuts = {
+                {"\uD83D\uDCCB Copy", "ctrl+c"}, {"\uD83D\uDCE5 Paste", "ctrl+v"}, {"\u2702\uFE0F Cut", "ctrl+x"},
+                {"\u21A9\uFE0F Undo", "ctrl+z"}, {"\u21AA\uFE0F Redo", "ctrl+shift+z"}, {"Select all", "ctrl+a"},
+                {"\uD83D\uDCBE Save", "ctrl+s"}, {"\uD83D\uDD0D Find", "ctrl+f"}, {"\u2715 Close", "ctrl+w"},
+                {"\u21C4 Switch app", "alt+tab"}, {"\u25A6 Activities", "super"},
+                {"\uD83D\uDCF7 Screenshot", "print"}, {"\uD83D\uDD12 Lock", "super+l"}};
+        LinearLayout shortcutRow = new LinearLayout(this);
+        for (String[] sc : shortcuts) {
+            String combo = sc[1];
+            shortcutRow.addView(key(sc[0], v -> link.combo(combo)));
+        }
+        HorizontalScrollView shortcutScroll = new HorizontalScrollView(this);
+        shortcutScroll.setHorizontalScrollBarEnabled(false);
+        shortcutScroll.addView(shortcutRow);
+        shortcutScroll.setPadding(kp, kp, kp, kp);
+        shortcutScroll.setBackground(Glass.surface(this, true, Ui.dp(this, 18), true));
+        LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52));
+        scLp.topMargin = Ui.dp(this, 8);
+        root.addView(shortcutScroll, scLp);
 
         FrameLayout padFrame = new FrameLayout(this);
         padFrame.setBackground(Glass.surface(this, true, Ui.dp(this, 26), true));
@@ -116,7 +138,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         // leave space for the Touch Bar overlay
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.bottomMargin = OverlayService.running ? Ui.dp(this, 28) : 0;
+        blp.bottomMargin = 0;  // the Touch Bar is hidden while this screen is open
         root.addView(buttons, blp);
 
         setContentView(root);
@@ -128,11 +150,13 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         pad.sensitivity = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
                 .getInt("speed", 100) / 100f;
         link.addListener(this);
+        OverlayService.setBarsHidden(true);
     }
 
     @Override
     protected void onPause() {
         link.removeListener(this);
+        OverlayService.setBarsHidden(false);
         super.onPause();
     }
 

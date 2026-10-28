@@ -105,6 +105,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► focused app na
 | Laptop keyboard or mouse stops working | Update (`git pull`, then `systemctl --user restart tabletdesk`). The host now releases every key and click when the tablet connects or disconnects. If it still happens, run `./host/connect.sh input` to test without the screen part. |
 | Fedora text on the tablet is tiny or blurry | Fedora Settings › Displays › select the tablet monitor › **Scale 200%**. GNOME remembers it. |
 | Laptop mouse pointer disappears after touching the tablet | Open the Control Center (☰) and tap **Show mouse pointer**, or use ◆ › **Show Mouse Pointer**. If it keeps happening, either switch Windows App to **Mouse pointer** mode in its session toolbar, or turn **Touch screen** off in the Control Center and use the trackpad instead. |
+| Touchpad or keyboard still off after unplugging | Run `~/Android-as-ubuntu-keyboard/host/reset.sh`. It stops TabletDesk and gives everything back. Unplugging now does the same automatically. |
 | `Cannot open /dev/uinput` | Run `setup.sh`, then log out and back in. |
 | KDE Plasma (Fedora KDE) | Input, the menu bar and the Touch Bar work. For the screen, turn on System Settings › Remote Desktop. It can mirror the screen only, and the menu bar shows "Fedora" instead of the app name. |
 | Tablet charges slowly | Use a USB-C port on the laptop, not a USB-A adapter. |

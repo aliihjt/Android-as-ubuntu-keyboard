@@ -117,10 +117,12 @@ final class TouchBar implements HostLink.Listener {
         params = new WindowManager.LayoutParams(
                 expandedWidth(), Ui.dp(ctx, 46),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        if (android.os.Build.VERSION.SDK_INT >= 30) {  // stay above the navigation bar
+            params.setFitInsetsTypes(android.view.WindowInsets.Type.navigationBars());
+        }
         params.y = Ui.dp(ctx, 8);
 
         rebuildContext();

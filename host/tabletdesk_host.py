@@ -367,8 +367,13 @@ class LaptopKeyboard:
                 d = InputDevice(path)
             except OSError:
                 continue
-            keys = d.capabilities().get(e.EV_KEY, [])
-            if (e.KEY_A in keys and e.KEY_SPACE in keys
+            caps = d.capabilities()
+            keys = caps.get(e.EV_KEY, [])
+            letters = all(k in keys for k in (e.KEY_A, e.KEY_Q, e.KEY_Z, e.KEY_SPACE, e.KEY_ENTER))
+            # anything that moves a pointer (touchpad, mouse, touchscreen) is never touched
+            pointer = e.EV_ABS in caps or e.EV_REL in caps or e.BTN_LEFT in keys \
+                or e.BTN_TOUCH in keys or "touchpad" in d.name.lower()
+            if (letters and not pointer
                     and d.info.bustype not in self.EXTERNAL_BUSES
                     and not d.name.startswith("TabletDesk")):
                 yield d

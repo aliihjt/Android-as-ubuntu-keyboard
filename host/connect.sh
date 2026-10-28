@@ -57,9 +57,24 @@ cleanup_screen() {
     VIRT_OUT=""
   fi
 }
+# Give the laptop back exactly as it was: stop the host (frees the keyboard and
+# removes the virtual mouse), end any left-over remote session and its virtual
+# monitor, and make sure the touchpad is switched on.
+restore_laptop() {
+  if [ -n "$HOST_PID" ]; then
+    kill "$HOST_PID" 2>/dev/null
+    wait "$HOST_PID" 2>/dev/null
+    HOST_PID=""
+  fi
+  if [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]]; then
+    systemctl --user restart gnome-remote-desktop.service 2>/dev/null
+    gsettings set org.gnome.desktop.peripherals.touchpad send-events enabled 2>/dev/null
+  fi
+}
+
 cleanup() {
   cleanup_screen
-  [ -n "$HOST_PID" ] && kill "$HOST_PID" 2>/dev/null
+  restore_laptop
 }
 trap cleanup EXIT
 trap 'exit 0' INT TERM
@@ -210,6 +225,7 @@ session_once() {
   done
   notify "Tablet unplugged."
   cleanup_screen
+  restore_laptop
 }
 
 if [ "$WATCH" = 1 ]; then

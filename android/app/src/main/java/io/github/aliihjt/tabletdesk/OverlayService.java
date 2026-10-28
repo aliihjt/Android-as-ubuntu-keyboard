@@ -20,6 +20,7 @@ public class OverlayService extends Service {
     static final String PREFS = "tabletdesk";
     private static final String CHANNEL = "tabletdesk";
     static volatile boolean running;
+    private static OverlayService instance;
 
     private WindowManager wm;
     private MenuBar menuBar;
@@ -39,6 +40,7 @@ public class OverlayService extends Service {
         wm = getSystemService(WindowManager.class);
         HostLink.get().start();
         running = true;
+        instance = this;
     }
 
     @Override
@@ -72,12 +74,32 @@ public class OverlayService extends Service {
     public void onDestroy() {
         removeBars();
         running = false;
+        instance = null;
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    /**
+     * Hides both bars (and lets touches through) while a TabletDesk screen with
+     * its own controls, like the trackpad, is in front.
+     */
+    static void setBarsHidden(boolean hidden) {
+        OverlayService s = instance;
+        if (s == null) return;
+        if (s.menuBar != null) s.hide(s.menuBar.view(), s.menuBar.params(), hidden);
+        if (s.touchBar != null) s.hide(s.touchBar.view(), s.touchBar.params(), hidden);
+    }
+
+    private void hide(android.view.View v, WindowManager.LayoutParams lp, boolean hidden) {
+        if (!v.isAttachedToWindow()) return;
+        v.setVisibility(hidden ? android.view.View.GONE : android.view.View.VISIBLE);
+        if (hidden) lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        else lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        wm.updateViewLayout(v, lp);
     }
 
     private void removeBars() {

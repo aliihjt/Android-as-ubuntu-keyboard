@@ -35,6 +35,7 @@ final class MenuBar implements HostLink.Listener {
             "◆",
             "About This Computer|cmd:about", "System Settings…|cmd:settings", "-",
             "Files|cmd:files", "Terminal|cmd:terminal", "System Monitor|cmd:monitor", "-",
+            "Show Mouse Pointer|cursor:", "-",
             "Lock Screen|super+l|Super+L", "Suspend|cmd:suspend", "Log Out…|cmd:logout",
             "Restart…|cmd:restart", "Shut Down…|cmd:poweroff",
     };
@@ -104,19 +105,28 @@ final class MenuBar implements HostLink.Listener {
         bar.setElevation(Ui.dp(ctx, 2));
 
         TextView logo = menuTitle(SYSTEM_MENU[0], true, SYSTEM_MENU);
-        logo.setTextSize(14);
-        bar.addView(logo);
+        logo.setTextSize(15 * Ui.scale);
+        // menus scroll sideways if the screen is too narrow for them
+        LinearLayout menus = new LinearLayout(ctx);
+        menus.setGravity(Gravity.CENTER_VERTICAL);
+        menus.addView(logo);
         appName = menuTitle("Fedora", true, null);
         appName.setOnClickListener(v -> {
             String[] items = APP_MENU.clone();
             items[0] = HostLink.get().app();
             showMenu(v, items);
         });
-        bar.addView(appName);
-        for (String[] m : MENUS) bar.addView(menuTitle(m[0], false, m));
+        menus.addView(appName);
+        for (String[] m : MENUS) menus.addView(menuTitle(m[0], false, m));
+        android.widget.HorizontalScrollView menuScroll = new android.widget.HorizontalScrollView(ctx);
+        menuScroll.setHorizontalScrollBarEnabled(false);
+        menuScroll.setFillViewport(true);
+        menuScroll.addView(menus, new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        bar.addView(menuScroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
 
-        bar.addView(new View(ctx), new LinearLayout.LayoutParams(0, 1, 1f));
-
+        bar.addView(iconButton("\uD83D\uDE80", this::showDock));  // Dock: favourite apps
         bar.addView(iconButton("\uD83D\uDD0D", v -> HostLink.get().combo("super")));  // search apps
         bar.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
@@ -238,7 +248,7 @@ final class MenuBar implements HostLink.Listener {
 
     private TextView iconButton(String glyph, View.OnClickListener l) {
         TextView t = menuTitle(glyph, false, null);
-        t.setTextSize(14);
+        t.setTextSize(15 * Ui.scale);
         t.setOnClickListener(v -> {
             scheduleHide();
             l.onClick(v);
@@ -256,6 +266,20 @@ final class MenuBar implements HostLink.Listener {
         handler.removeCallbacks(hide);  // stay visible while a menu is open
         ControlCenter.dismiss();
         GlassMenu.show(ctx, anchor, items, dark, this::scheduleHide);
+    }
+
+    /** Fedora's favourite apps (the ones pinned in the dash) as a glass menu. */
+    private void showDock(View anchor) {
+        java.util.List<String[]> apps = HostLink.get().apps();
+        String[] items = new String[apps.size() + 3];
+        items[0] = "Apps";
+        for (int i = 0; i < apps.size(); i++) {
+            items[i + 1] = apps.get(i)[1] + "|launch:" + apps.get(i)[0];
+        }
+        items[apps.size() + 1] = "-";
+        items[apps.size() + 2] = "All Apps…|super+a|Super+A";
+        showMenu(anchor, items);
+        HostLink.get().requestApps();  // refresh for next time
     }
 
     private void updateClockAndBattery() {

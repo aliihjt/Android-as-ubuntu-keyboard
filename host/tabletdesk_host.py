@@ -16,12 +16,15 @@ Tablet -> host messages (one JSON object per line):
   {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
   {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd 0|1
   {"t":"state?"}                           ask for the values above
+  {"t":"cursor"}                           make a hidden mouse pointer visible again
+  {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
 
 Host -> tablet messages:
   {"t":"hello","host":"my-laptop","session":"x11"}
   {"t":"app","name":"Firefox"}             focused application
-  {"t":"state","volume":40,"brightness":70,"dark":true,"dnd":false}
+  {"t":"state","volume":40,"brightness":70,"dark":true,"dnd":false,"touch":true}
+  {"t":"apps","list":[{"id":"firefox.desktop","name":"Firefox"}]}
 """
 
 import argparse
@@ -201,6 +204,16 @@ class Injector:
                 else:
                     self.mouse.write(e.EV_KEY, self._code(b), 0)
                     self.mouse.syn()
+
+    def nudge(self):
+        """GNOME hides the pointer after touch input until a mouse moves: wiggle it."""
+        with self.lock:
+            if self.dry_run:
+                print("nudge")
+                return
+            for d in (1, -1):
+                self.mouse.write(e.EV_REL, e.REL_X, d)
+                self.mouse.syn()
 
     def move(self, dx, dy):
         # keep sub-pixel remainders so slow finger motion is not lost
@@ -478,6 +491,8 @@ def set_value(what, value):
                 laptop_kbd.turn_on()
             else:
                 laptop_kbd.turn_off()
+    elif what == "touch":  # touching the desktop image on the tablet
+        _run(["grdctl", "rdp", "disable-view-only" if v else "enable-view-only"])
     elif what == "dnd":
         _run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners",
               "false" if v else "true"])
@@ -499,9 +514,53 @@ def read_state():
         ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
     if laptop_kbd:
         state["laptopkbd"] = not laptop_kbd.is_off()
+    grd = _run(["grdctl", "status"]).lower()
+    if "view-only" in grd:
+        state["touch"] = "view-only: no" in grd
     state["dnd"] = _run(["gsettings", "get", "org.gnome.desktop.notifications",
                          "show-banners"]).strip() == "false"
     return state
+
+
+APP_DIRS = ["~/.local/share/applications", "~/.local/share/flatpak/exports/share/applications",
+            "/var/lib/flatpak/exports/share/applications", "/usr/local/share/applications",
+            "/usr/share/applications"]
+
+
+def favourite_apps():
+    """The apps pinned in GNOME's dash, as [{"id", "name", "path"}]."""
+    out = _run(["gsettings", "get", "org.gnome.shell", "favorite-apps"])
+    ids = [x.strip().strip("'\"") for x in out.strip().strip("[]@as ").split(",") if x.strip()]
+    apps = []
+    for app_id in ids:
+        for d in APP_DIRS:
+            path = os.path.join(os.path.expanduser(d), app_id)
+            if not os.path.isfile(path):
+                continue
+            name = app_id.rsplit(".desktop", 1)[0].split(".")[-1].title()
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if line.startswith("Name="):
+                            name = line[5:].strip()
+                            break
+            except OSError:
+                pass
+            apps.append({"id": app_id, "name": name, "path": path})
+            break
+    return apps
+
+
+def launch_app(app_id):
+    # only apps from the user's own favourites can be started
+    for app in favourite_apps():
+        if app["id"] == app_id:
+            try:
+                subprocess.Popen(["gio", "launch", app["path"]], stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, start_new_session=True)
+            except OSError as err:
+                print("launch failed:", app_id, err, file=sys.stderr)
+            return
 
 
 MODE_FILE = os.path.expanduser("~/.config/tabletdesk/mode")
@@ -538,6 +597,13 @@ def handle(inj, msg, reply=None):
         set_value(str(msg.get("what", "")), msg.get("value", 0))
     elif t == "state?" and reply:
         reply(read_state())
+    elif t == "cursor":
+        inj.nudge()
+    elif t == "apps?" and reply:
+        reply({"t": "apps", "list": [{"id": a["id"], "name": a["name"]}
+                                     for a in favourite_apps()]})
+    elif t == "launch":
+        launch_app(str(msg.get("id", "")))
 
 
 def make_handler(inj, clients):

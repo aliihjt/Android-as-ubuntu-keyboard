@@ -29,6 +29,7 @@ final class ControlCenter implements HostLink.StateListener {
     private final TextView darkTile;
     private final TextView dndTile;
     private final TextView kbdTile;
+    private final TextView touchTile;
     private final SeekBar brightness;
     private final SeekBar volume;
     private final TextView[] modeCells = new TextView[3];
@@ -36,6 +37,7 @@ final class ControlCenter implements HostLink.StateListener {
     private boolean dndOn;
     /** laptop's own keyboard: off while the tablet is connected (default) */
     private boolean laptopKbdOn;
+    private boolean touchOn = true;
     /** true while applying values from the laptop, so they are not sent back */
     private boolean applying;
 
@@ -114,6 +116,24 @@ final class ControlCenter implements HostLink.StateListener {
         });
         col.addView(kbdTile, block(10));
 
+        // if touching the desktop image keeps hiding the laptop's pointer, turn this off
+        LinearLayout rt = new LinearLayout(ctx);
+        touchTile = tile("", 13);
+        touchTile.setOnClickListener(v -> {
+            Ui.haptic(v);
+            touchOn = !touchOn;
+            HostLink.get().set("touch", touchOn ? 1 : 0);
+            paintToggles();
+        });
+        TextView cursor = tile("\uD83D\uDDB1  Show\nmouse pointer", 13);
+        cursor.setOnClickListener(v -> {
+            Ui.haptic(v);
+            HostLink.get().action("cursor:");
+        });
+        rt.addView(touchTile, weighted(false));
+        rt.addView(cursor, weighted(true));
+        col.addView(rt, block(10));
+
         LinearLayout r2 = new LinearLayout(ctx);
         TextView pad2 = tile("⌨  Trackpad", 13);
         pad2.setOnClickListener(v -> {
@@ -182,6 +202,7 @@ final class ControlCenter implements HostLink.StateListener {
         darkOn = s.optBoolean("dark", darkOn);
         dndOn = s.optBoolean("dnd", dndOn);
         laptopKbdOn = s.optBoolean("laptopkbd", laptopKbdOn);
+        touchOn = s.optBoolean("touch", touchOn);
         applying = false;
         paintToggles();
     }
@@ -198,6 +219,9 @@ final class ControlCenter implements HostLink.StateListener {
                 + (laptopKbdOn ? "On \u2014 tap to turn off" : "Off while tablet is connected"));
         kbdTile.setBackground(Glass.chip(ctx, dark, Ui.dp(ctx, 16), !laptopKbdOn));
         kbdTile.setTextColor(!laptopKbdOn ? 0xFFFFFFFF : fg);
+        touchTile.setText("\uD83D\uDC46  Touch screen\n" + (touchOn ? "On" : "Off (view only)"));
+        touchTile.setBackground(Glass.chip(ctx, dark, Ui.dp(ctx, 16), touchOn));
+        touchTile.setTextColor(touchOn ? 0xFFFFFFFF : fg);
     }
 
     private void paintModes() {

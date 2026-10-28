@@ -50,6 +50,8 @@ public final class HostLink {
     private volatile String host = "Fedora";
     private volatile String app = "Fedora";
     private volatile StateListener stateListener;
+    /** favourite Fedora apps for the Dock: {id, name} */
+    private volatile List<String[]> apps = new java.util.ArrayList<>();
 
     private HostLink() {
     }
@@ -118,6 +120,14 @@ public final class HostLink {
         send(obj("t", "mode", "m", m));
     }
 
+    public List<String[]> apps() {
+        return apps;
+    }
+
+    public void requestApps() {
+        send("{\"t\":\"apps?\"}");
+    }
+
     public void setStateListener(StateListener l) {
         stateListener = l;
     }
@@ -148,6 +158,12 @@ public final class HostLink {
                 break;
             case "text":
                 text(value);
+                break;
+            case "launch":
+                send(obj("t", "launch", "id", value));
+                break;
+            case "cursor":
+                send("{\"t\":\"cursor\"}");
                 break;
             default:
                 combo(value);
@@ -208,6 +224,15 @@ public final class HostLink {
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected
                     setConnected(true);
+                    requestApps();
+                } else if ("apps".equals(t)) {
+                    org.json.JSONArray list = msg.optJSONArray("list");
+                    List<String[]> next = new java.util.ArrayList<>();
+                    for (int i = 0; list != null && i < list.length(); i++) {
+                        JSONObject a = list.optJSONObject(i);
+                        if (a != null) next.add(new String[]{a.optString("id"), a.optString("name")});
+                    }
+                    apps = next;
                 } else if ("state".equals(t)) {
                     StateListener l = stateListener;
                     if (l != null) main.post(() -> l.onState(msg));

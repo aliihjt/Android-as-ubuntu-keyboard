@@ -32,6 +32,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        Ui.loadScale(this);
         HostLink.get().start();
 
         // Launched by host/connect.sh when the cable is plugged in.
@@ -66,6 +67,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(button("🖥  Open desktop screen (VNC — Xorg session)", v -> openVnc()));
 
         col.addView(section("Options"));
+        col.addView(sizePicker());
         col.addView(check("Show macOS menu bar (top)", "menubar"));
         col.addView(check("Show Touch Bar (bottom)", "touchbar"));
         col.addView(check("Auto-hide bars when not used (like macOS full screen)", "autohide"));
@@ -202,6 +204,32 @@ public class MainActivity extends Activity implements HostLink.Listener {
         return b;
     }
 
+    /** Interface size for the bars, menus, Control Center and trackpad. */
+    private LinearLayout sizePicker() {
+        int[] sizes = {100, 135, 165};
+        String[] names = {"A  Normal", "A  Large", "A  Extra large"};
+        LinearLayout row = new LinearLayout(this);
+        int current = prefs.getInt("uiscale", 135);
+        for (int i = 0; i < sizes.length; i++) {
+            int size = sizes[i];
+            TextView t = Ui.label(this, names[i], 12 + i * 2, size == current ? 0xFFFFFFFF : FG, true);
+            t.setGravity(android.view.Gravity.CENTER);
+            int p = Ui.dp(this, 10);
+            t.setPadding(p, p, p, p);
+            t.setBackground(Ui.pressable(size == current ? 0xFF0A84FF : 0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
+            t.setOnClickListener(v -> {
+                prefs.edit().putInt("uiscale", size).apply();
+                if (OverlayService.running) OverlayService.start(this);  // rebuild the bars
+                recreate();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), Ui.dp(this, 8));
+            row.addView(t, lp);
+        }
+        return row;
+    }
+
     private LinearLayout modePicker() {
         String[][] modes = {
                 {"extend", "\uD83D\uDDA5\uD83D\uDDA5  Extend", "2nd screen"},
@@ -249,7 +277,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
     private CheckBox check(String text, String key) {
         CheckBox c = new CheckBox(this);
         c.setText(text);
-        c.setTextSize(15);
+        c.setTextSize(15 * Ui.scale);
         c.setTextColor(FG);
         c.setChecked(prefs.getBoolean(key, true));
         c.setOnCheckedChangeListener((v, on) -> {

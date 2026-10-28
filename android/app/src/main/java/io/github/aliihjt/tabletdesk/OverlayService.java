@@ -53,6 +53,7 @@ public class OverlayService extends Service {
             return START_NOT_STICKY;
         }
         removeBars();
+        Ui.loadScale(this);
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         if (prefs.getBoolean("touchbar", true)) {
             touchBar = new TouchBar(this, wm, prefs.getBoolean("autohide", true));

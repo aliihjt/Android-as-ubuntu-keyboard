@@ -16,8 +16,16 @@ final class Ui {
     private Ui() {
     }
 
+    /** User-chosen interface size (Settings: Normal / Large / Extra large). */
+    static float scale = 1.35f;
+
+    static void loadScale(Context c) {
+        scale = c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
+                .getInt("uiscale", 135) / 100f;
+    }
+
     static int dp(Context c, float v) {
-        return Math.round(v * c.getResources().getDisplayMetrics().density);
+        return Math.round(v * scale * c.getResources().getDisplayMetrics().density);
     }
 
     static GradientDrawable rounded(int color, float radiusPx) {
@@ -35,7 +43,7 @@ final class Ui {
     static TextView label(Context c, String text, float sp, int color, boolean bold) {
         TextView t = new TextView(c);
         t.setText(text);
-        t.setTextSize(sp);
+        t.setTextSize(sp * scale);
         t.setTextColor(color);
         t.setGravity(Gravity.CENTER_VERTICAL);
         t.setSingleLine(true);

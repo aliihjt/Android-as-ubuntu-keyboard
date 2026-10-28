@@ -32,6 +32,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        Ui.loadScale(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         link.start();
 

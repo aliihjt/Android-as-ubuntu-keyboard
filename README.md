@@ -25,6 +25,8 @@ Turn an Android tablet into a second screen, keyboard, trackpad and **macOS-styl
 | ▭ **Touch Bar** | Esc key, plus buttons that change with the focused app (browser, Ptyxis/terminal, VS Code, Files, desktop). Includes an **fn** layer with F1–F12, brightness, volume and media keys. Hold a key to repeat it. Tap ⌄ to collapse the bar. |
 | 🚫⌨ **Laptop keyboard off** | While the tablet is connected, the laptop's built-in keyboard is switched off, so the tablet is your keyboard. The laptop touchpad stays on. Unplugging, or stopping the service, gives the keyboard back. Toggle it in the Control Center (☰). |
 | 🎛 **Control Center** | Liquid Glass panel (☰ in the menu bar) with screen mode, dark mode, Do Not Disturb, the laptop-keyboard switch, brightness and volume sliders, and quick buttons for screenshot, lock, settings, files and terminal. |
+| 🚀 **Dock** | The 🚀 button in the menu bar lists the apps pinned in Fedora's dash. Tap one to open it. |
+| 🔠 **Interface size** | Normal, Large (default) or Extra large, chosen in the app. Scales the bars, menus, Control Center and trackpad. |
 | 🔌 **One cable** | USB-C charges the tablet while ADB tunnels all data through `127.0.0.1`. |
 | ⚡ **Plug & play** | A systemd user service sets everything up each time you plug the tablet in. |
 
@@ -102,6 +104,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► focused app na
 | Menu bar always says "Fedora" | The extension isn't active. Log out and back in, run `gnome-extensions enable tabletdesk@aliihjt.github.io`, and check that `gnome-extensions list --enabled` lists it. |
 | Laptop keyboard or mouse stops working | Update (`git pull`, then `systemctl --user restart tabletdesk`). The host now releases every key and click when the tablet connects or disconnects. If it still happens, run `./host/connect.sh input` to test without the screen part. |
 | Fedora text on the tablet is tiny or blurry | Fedora Settings › Displays › select the tablet monitor › **Scale 200%**. GNOME remembers it. |
+| Laptop mouse pointer disappears after touching the tablet | Open the Control Center (☰) and tap **Show mouse pointer**, or use ◆ › **Show Mouse Pointer**. If it keeps happening, either switch Windows App to **Mouse pointer** mode in its session toolbar, or turn **Touch screen** off in the Control Center and use the trackpad instead. |
 | `Cannot open /dev/uinput` | Run `setup.sh`, then log out and back in. |
 | KDE Plasma (Fedora KDE) | Input, the menu bar and the Touch Bar work. For the screen, turn on System Settings › Remote Desktop. It can mirror the screen only, and the menu bar shows "Fedora" instead of the app name. |
 | Tablet charges slowly | Use a USB-C port on the laptop, not a USB-A adapter. |

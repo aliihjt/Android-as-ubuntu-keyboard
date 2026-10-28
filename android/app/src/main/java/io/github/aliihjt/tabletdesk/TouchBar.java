@@ -20,8 +20,6 @@ import android.widget.TextView;
  * Shrinks to a small handle when unused so it does not cover the desktop.
  */
 final class TouchBar implements HostLink.Listener {
-    private static final int KEY_BG = 0xFF2C2C2E;
-    private static final int ACCENT = 0xFF0A84FF;
     private static final long AUTO_HIDE_MS = 8000;
 
     private static final String[] BROWSER = {
@@ -69,7 +67,7 @@ final class TouchBar implements HostLink.Listener {
         bar = new LinearLayout(ctx);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackground(Ui.rounded(0xF0111113, Ui.dp(ctx, 16)));
+        bar.setBackground(Glass.surface(ctx, true, Ui.dp(ctx, 23), false));
         bar.setElevation(Ui.dp(ctx, 6));
         int pad = Ui.dp(ctx, 6);
         bar.setPadding(pad, pad, pad, pad);
@@ -86,12 +84,12 @@ final class TouchBar implements HostLink.Listener {
         fnKey.setOnClickListener(v -> {
             poke();
             fnMode = !fnMode;
-            fnKey.setBackground(Ui.pressable(fnMode ? ACCENT : KEY_BG, Ui.dp(ctx, 8), 0x55FFFFFF));
+            fnKey.setBackground(keyBg(fnMode));
             rebuildContext();
         });
         bar.addView(fnKey);
         View divider = new View(ctx);
-        divider.setBackgroundColor(0xFF48484A);
+        divider.setBackgroundColor(0x33FFFFFF);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(Ui.dp(ctx, 1), Ui.dp(ctx, 22));
         dlp.setMargins(Ui.dp(ctx, 5), 0, Ui.dp(ctx, 5), 0);
         bar.addView(divider, dlp);
@@ -107,7 +105,7 @@ final class TouchBar implements HostLink.Listener {
 
         // small pill shown while collapsed; tap or swipe it to bring the bar back
         handle = new View(ctx);
-        handle.setBackground(Ui.rounded(0xCC1C1C1E, Ui.dp(ctx, 4)));
+        handle.setBackground(Glass.surface(ctx, true, Ui.dp(ctx, 4), false));
         handle.setElevation(Ui.dp(ctx, 3));
         handle.setVisibility(View.GONE);
         root.addView(handle, new FrameLayout.LayoutParams(Ui.dp(ctx, 110), Ui.dp(ctx, 8), Gravity.CENTER));
@@ -182,6 +180,13 @@ final class TouchBar implements HostLink.Listener {
         if (!fnMode) rebuildContext();
     }
 
+    /** Glass capsule key that brightens while pressed. */
+    private android.graphics.drawable.Drawable keyBg(boolean active) {
+        return new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x66FFFFFF),
+                Glass.chip(ctx, true, Ui.dp(ctx, 17), active), null);
+    }
+
     private void rebuildContext() {
         contextRow.removeAllViews();
         if (fnMode) {
@@ -212,7 +217,7 @@ final class TouchBar implements HostLink.Listener {
         t.setGravity(Gravity.CENTER);
         t.setPadding(Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10), 0);
         if (minWidthDp > 0) t.setMinWidth(Ui.dp(ctx, minWidthDp));
-        t.setBackground(Ui.pressable(KEY_BG, Ui.dp(ctx, 8), 0x55FFFFFF));
+        t.setBackground(keyBg(false));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
         lp.setMargins(Ui.dp(ctx, 3), 0, Ui.dp(ctx, 3), 0);

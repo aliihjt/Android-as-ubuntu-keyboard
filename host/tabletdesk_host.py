@@ -14,11 +14,14 @@ Tablet -> host messages (one JSON object per line):
   {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
   {"t":"cmd","name":"settings"}            run a whitelisted desktop command
   {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
+  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd 0|1
+  {"t":"state?"}                           ask for the values above
   {"t":"ping"}
 
 Host -> tablet messages:
   {"t":"hello","host":"my-laptop","session":"x11"}
   {"t":"app","name":"Firefox"}             focused application
+  {"t":"state","volume":40,"brightness":70,"dark":true,"dnd":false}
 """
 
 import argparse
@@ -362,6 +365,48 @@ def run_command(name):
         print("command failed:", name, err, file=sys.stderr)
 
 
+def _run(argv):
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=2).stdout
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def set_value(what, value):
+    """Control Center switches. Fixed commands only, the value is a clamped int."""
+    v = max(0, min(100, int(value)))
+    if what == "volume":
+        _run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{v}%"])
+        _run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+    elif what == "brightness":
+        _run(["brightnessctl", "--quiet", "set", f"{max(v, 1)}%"])
+    elif what == "dark":
+        _run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme",
+              "prefer-dark" if v else "default"])
+    elif what == "dnd":
+        _run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners",
+              "false" if v else "true"])
+
+
+def read_state():
+    state = {"t": "state"}
+    out = _run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])  # "Volume: 0.45 [MUTED]"
+    try:
+        state["volume"] = round(float(out.split()[1]) * 100)
+    except (IndexError, ValueError):
+        pass
+    out = _run(["brightnessctl", "-m"])  # "intel_backlight,backlight,120,50%,240"
+    try:
+        state["brightness"] = int(out.split(",")[3].rstrip("%\n"))
+    except (IndexError, ValueError):
+        pass
+    state["dark"] = "prefer-dark" in _run(
+        ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
+    state["dnd"] = _run(["gsettings", "get", "org.gnome.desktop.notifications",
+                         "show-banners"]).strip() == "false"
+    return state
+
+
 MODE_FILE = os.path.expanduser("~/.config/tabletdesk/mode")
 
 
@@ -374,7 +419,7 @@ def save_mode(mode):
         f.write(mode + "\n")
 
 
-def handle(inj, msg):
+def handle(inj, msg, reply=None):
     t = msg.get("t")
     if t == "move":
         inj.move(float(msg.get("dx", 0)), float(msg.get("dy", 0)))
@@ -392,6 +437,10 @@ def handle(inj, msg):
         run_command(str(msg.get("name", "")))
     elif t == "mode":
         save_mode(str(msg.get("m", "")))
+    elif t == "set":
+        set_value(str(msg.get("what", "")), msg.get("value", 0))
+    elif t == "state?" and reply:
+        reply(read_state())
 
 
 def make_handler(inj, clients):
@@ -409,9 +458,14 @@ def make_handler(inj, clients):
                     self.wfile.write((json.dumps(
                         {"t": "app", "name": clients.last_app}) + "\n").encode())
                 self.wfile.flush()
+                def reply(obj):
+                    with clients.lock:  # don't interleave with focus broadcasts
+                        self.wfile.write((json.dumps(obj) + "\n").encode())
+                        self.wfile.flush()
+
                 for line in self.rfile:
                     try:
-                        handle(inj, json.loads(line))
+                        handle(inj, json.loads(line), reply)
                     except (ValueError, TypeError) as err:
                         print("bad message:", err, file=sys.stderr)
             except OSError:

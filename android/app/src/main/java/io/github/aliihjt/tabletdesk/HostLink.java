@@ -30,6 +30,11 @@ public final class HostLink {
         void onApp(String name);
     }
 
+    /** Laptop settings (volume, brightness, dark mode, ...) for the Control Center. */
+    public interface StateListener {
+        void onState(JSONObject state);
+    }
+
     public static final int PORT = 7777;
     private static final HostLink INSTANCE = new HostLink();
 
@@ -44,6 +49,7 @@ public final class HostLink {
     private volatile boolean connected;
     private volatile String host = "Fedora";
     private volatile String app = "Fedora";
+    private volatile StateListener stateListener;
 
     private HostLink() {
     }
@@ -110,6 +116,21 @@ public final class HostLink {
     /** extend / mirror / input: remembered on the laptop for every connection. */
     public void mode(String m) {
         send(obj("t", "mode", "m", m));
+    }
+
+    public void setStateListener(StateListener l) {
+        stateListener = l;
+    }
+
+    /** Ask the laptop for its current volume / brightness / toggles. */
+    public void requestState() {
+        send("{\"t\":\"state?\"}");
+    }
+
+    /** what: volume / brightness (0-100), dark / dnd (0 or 1). */
+    public void set(String what, int value) {
+        send(String.format(Locale.US, "{\"t\":\"set\",\"what\":%s,\"value\":%d}",
+                JSONObject.quote(what), value));
     }
 
     public void command(String name) {
@@ -187,6 +208,9 @@ public final class HostLink {
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected
                     setConnected(true);
+                } else if ("state".equals(t)) {
+                    StateListener l = stateListener;
+                    if (l != null) main.post(() -> l.onState(msg));
                 } else if ("app".equals(t)) {
                     String name = msg.optString("name", "Fedora");
                     app = name;

@@ -10,15 +10,12 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.ContextThemeWrapper;
 import android.view.Gravity;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -67,7 +64,6 @@ final class MenuBar implements HostLink.Listener {
     private final WindowManager wm;
     private final boolean dark;
     private final int fg;
-    private final Context popupTheme;
     private final FrameLayout root;
     private final LinearLayout bar;
     private final View strip;
@@ -77,6 +73,7 @@ final class MenuBar implements HostLink.Listener {
     private final TextView clock;
     private final WindowManager.LayoutParams params;
     private final boolean autoHide;
+    private final boolean blur;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat clockFormat = new SimpleDateFormat("EEE d MMM  HH:mm", Locale.getDefault());
     private final Runnable hide = this::collapse;
@@ -96,14 +93,13 @@ final class MenuBar implements HostLink.Listener {
         this.autoHide = autoHide;
         dark = Ui.isDark(ctx);
         fg = dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
-        popupTheme = new ContextThemeWrapper(ctx, dark
-                ? android.R.style.Theme_DeviceDefault : android.R.style.Theme_DeviceDefault_Light);
 
         root = new FrameLayout(ctx);
         bar = new LinearLayout(ctx);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(dark ? 0xE01C1C1E : 0xE6F6F6F8);
+        blur = Glass.blurAvailable(ctx);
+        bar.setBackgroundColor(blur ? (dark ? 0x66141418 : 0x8CF7F7FA) : (dark ? 0xE01C1C1E : 0xE6F6F6F8));
         bar.setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 10), 0);
         bar.setElevation(Ui.dp(ctx, 2));
 
@@ -121,12 +117,16 @@ final class MenuBar implements HostLink.Listener {
 
         bar.addView(new View(ctx), new LinearLayout.LayoutParams(0, 1, 1f));
 
+        bar.addView(iconButton("\uD83D\uDD0D", v -> HostLink.get().combo("super")));  // search apps
         bar.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         }));
-        bar.addView(iconButton("\u25AD", v -> toggleTouchBar.run()));  // Touch Bar on/off
+        bar.addView(iconButton("\u2630", v -> {  // Control Center
+            handler.removeCallbacks(hide);
+            ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
+        }));
         status = small("");
         bar.addView(status);
         battery = small("");
@@ -158,6 +158,10 @@ final class MenuBar implements HostLink.Listener {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
+        if (blur && Build.VERSION.SDK_INT >= 31) {
+            params.flags |= WindowManager.LayoutParams.FLAG_BLUR_BEHIND;
+            params.setBlurBehindRadius(Ui.dp(ctx, 30));
+        }
         if (Build.VERSION.SDK_INT >= 28) {
             params.layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -177,6 +181,8 @@ final class MenuBar implements HostLink.Listener {
     }
 
     void destroy() {
+        GlassMenu.dismiss();
+        ControlCenter.dismiss();
         handler.removeCallbacksAndMessages(null);
         HostLink.get().removeListener(this);
     }
@@ -248,26 +254,8 @@ final class MenuBar implements HostLink.Listener {
 
     private void showMenu(View anchor, String[] items) {
         handler.removeCallbacks(hide);  // stay visible while a menu is open
-        PopupMenu popup = new PopupMenu(popupTheme, anchor);
-        Menu menu = popup.getMenu();
-        int group = 0;
-        for (int i = 1; i < items.length; i++) {
-            if ("-".equals(items[i])) {
-                group++;
-                continue;
-            }
-            String[] parts = items[i].split("\\|");
-            String title = parts.length > 2 ? parts[0] + "      " + parts[2] : parts[0];
-            menu.add(group, i, i, title);
-        }
-        if (Build.VERSION.SDK_INT >= 28) menu.setGroupDividerEnabled(true);
-        popup.setOnMenuItemClickListener(item -> {
-            String[] parts = items[item.getItemId()].split("\\|");
-            HostLink.get().action(parts[1]);
-            return true;
-        });
-        popup.setOnDismissListener(p -> scheduleHide());
-        popup.show();
+        ControlCenter.dismiss();
+        GlassMenu.show(ctx, anchor, items, dark, this::scheduleHide);
     }
 
     private void updateClockAndBattery() {

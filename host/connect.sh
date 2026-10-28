@@ -11,6 +11,8 @@
 # Env overrides: TABLETDESK_MODE, TABLETDESK_SIZE=1920x1200, TABLETDESK_PORT
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=app-update.sh
+source "$HERE/app-update.sh"
 PKG=io.github.aliihjt.tabletdesk
 PORT="${TABLETDESK_PORT:-7777}"
 VNC_PORT=5900
@@ -200,6 +202,7 @@ session_once() {
   model=$(adb shell getprop ro.product.model | tr -d '\r')
   notify "$model connected ($MODE mode)."
   wake_tablet
+  update_app   # keep the tablet app on the newest build
   adb reverse tcp:"$PORT" tcp:"$PORT" >/dev/null
   adb shell svc power stayon usb                                   # screen stays on while charging
   adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow 2>/dev/null # menu bar + Touch Bar overlays

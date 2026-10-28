@@ -2,16 +2,30 @@ plugins {
     id 'com.android.application'
 }
 
+// CI build number, so every new APK is a higher version than the last one
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
 android {
     namespace 'io.github.aliihjt.tabletdesk'
     compileSdk 34
+
+    // One fixed (public, debug-only) signing key: without it every CI build
+    // gets a random key and Android refuses to update the installed app.
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
 
     defaultConfig {
         applicationId 'io.github.aliihjt.tabletdesk'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode buildNumber
+        versionName "1.$buildNumber"
     }
 
     lint {

@@ -48,6 +48,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.setPadding(m, Ui.dp(this, 48), m, m);
 
         col.addView(Ui.label(this, "TabletDesk", 30, FG, true));
+        col.addView(Ui.label(this, "Build " + buildNumber(), 13, MUTED, false));
         TextView sub = Ui.label(this, "Your tablet as Fedora's screen, keyboard, trackpad & Touch Bar — over one USB-C cable",
                 15, MUTED, false);
         sub.setSingleLine(false);
@@ -139,6 +140,16 @@ public class MainActivity extends Activity implements HostLink.Listener {
 
     @Override
     public void onApp(String name) {
+    }
+
+    /** Same number as the GitHub Actions build that made this APK. */
+    private String buildNumber() {
+        try {
+            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return String.valueOf(Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return "?";
+        }
     }
 
     private void toggleBars() {

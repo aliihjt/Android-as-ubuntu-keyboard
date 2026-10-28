@@ -28,10 +28,26 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../TabletDesk.apk
+          echo "$GITHUB_RUN_NUMBER" > ../version.txt
       - uses: actions/upload-artifact@v4
         with:
           name: TabletDesk-apk
           path: TabletDesk.apk
+      # Fixed download link for the newest app, used by host/connect.sh to
+      # update the tablet automatically:
+      # releases/download/latest-apk/TabletDesk.apk (+ version.txt)
+      - name: Publish newest APK
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: TabletDesk (newest build)
+          body: "Newest TabletDesk app, build ${{ github.run_number }} from ${{ github.ref_name }}. Plugging the tablet in installs it automatically."
+          prerelease: true
+          make_latest: false
+          files: |
+            TabletDesk.apk
+            version.txt
       - name: Attach APK to release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

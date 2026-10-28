@@ -75,6 +75,7 @@ final class MenuBar implements HostLink.Listener {
     private final WindowManager.LayoutParams params;
     private final boolean autoHide;
     private final boolean blur;
+    private final Runnable toggleTouchBar;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat clockFormat = new SimpleDateFormat("EEE HH:mm", Locale.getDefault());
     private final Runnable hide = this::collapse;
@@ -90,6 +91,7 @@ final class MenuBar implements HostLink.Listener {
     @SuppressLint("ClickableViewAccessibility")
     MenuBar(Context ctx, WindowManager wm, boolean autoHide, Runnable toggleTouchBar) {
         this.ctx = ctx;
+        this.toggleTouchBar = toggleTouchBar;
         this.wm = wm;
         this.autoHide = autoHide;
         dark = Ui.isDark(ctx);
@@ -116,6 +118,10 @@ final class MenuBar implements HostLink.Listener {
             items[0] = HostLink.get().app();
             showMenu(v, items);
         });
+        // every TabletDesk option in one menu
+        TextView settings = menuTitle("TabletDesk", true, null);
+        settings.setOnClickListener(v -> showMenu(v, tabletDeskMenu()));
+        menus.addView(settings);
         menus.addView(appName);
         for (String[] m : MENUS) menus.addView(menuTitle(m[0], false, m));
         android.widget.HorizontalScrollView menuScroll = new android.widget.HorizontalScrollView(ctx);
@@ -271,7 +277,114 @@ final class MenuBar implements HostLink.Listener {
     private void showMenu(View anchor, String[] items) {
         handler.removeCallbacks(hide);  // stay visible while a menu is open
         ControlCenter.dismiss();
-        GlassMenu.show(ctx, anchor, items, dark, this::scheduleHide);
+        GlassMenu.show(ctx, anchor, items, dark, this::scheduleHide, this::handleLocal);
+    }
+
+    private static String check(boolean on) {
+        return on ? "\u2713  " : "     ";
+    }
+
+    private android.content.SharedPreferences prefs() {
+        return ctx.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE);
+    }
+
+    /** All options, as a menu: ✓ marks what is on. */
+    private String[] tabletDeskMenu() {
+        android.content.SharedPreferences p = prefs();
+        String mode = p.getString("mode", "extend");
+        org.json.JSONObject st = HostLink.get().lastState();
+        boolean laptopKbdOff = !st.optBoolean("laptopkbd", false);
+        boolean touch = st.optBoolean("touch", true);
+        int size = p.getInt("uiscale", 135);
+        int speed = p.getInt("speed", 100);
+        int offset = p.getInt("menuoffset", 32);
+        return new String[]{
+                "TabletDesk",
+                "\u2328  Keyboard & Trackpad|local:trackpad",
+                "\u2630  Control Center…|local:cc",
+                "-",
+                check(mode.equals("extend")) + "Extend (second screen)|local:mode:extend",
+                check(mode.equals("mirror")) + "Mirror (same picture)|local:mode:mirror",
+                check(mode.equals("input")) + "Input only (no screen)|local:mode:input",
+                "-",
+                check(laptopKbdOff) + "Laptop keyboard off while connected|local:laptopkbd",
+                check(touch) + "Touch screen|local:touch",
+                "     Show Mouse Pointer|cursor:",
+                "-",
+                check(p.getBoolean("touchbar", true)) + "Show Touch Bar|local:touchbar",
+                check(p.getBoolean("autohide", true)) + "Auto-hide bars|local:autohide",
+                "     Move menu bar lower|local:lower|" + offset + " dp",
+                "     Move menu bar higher|local:higher",
+                "-",
+                check(size == 100) + "Size: Normal|local:size:100",
+                check(size == 135) + "Size: Large|local:size:135",
+                check(size == 165) + "Size: Extra large|local:size:165",
+                "-",
+                "     Trackpad faster|local:faster|" + speed + "%",
+                "     Trackpad slower|local:slower",
+                "-",
+                "     Open TabletDesk app…|local:app",
+                "     Hide bars until next plug-in|local:stop",
+        };
+    }
+
+    private void handleLocal(String name) {
+        android.content.SharedPreferences p = prefs();
+        org.json.JSONObject st = HostLink.get().lastState();
+        boolean rebuild = false;  // settings that change how the bars look
+        if (name.startsWith("mode:")) {
+            String m = name.substring(5);
+            p.edit().putString("mode", m).apply();
+            HostLink.get().mode(m);
+        } else if (name.startsWith("size:")) {
+            p.edit().putInt("uiscale", Integer.parseInt(name.substring(5))).apply();
+            rebuild = true;
+        } else {
+            switch (name) {
+                case "trackpad":
+                case "app": {
+                    Intent i = new Intent(ctx, name.equals("app") ? MainActivity.class : TrackpadActivity.class);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(i);
+                    break;
+                }
+                case "cc":
+                    ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
+                    break;
+                case "laptopkbd":  // currently off -> turn on (1), and the other way round
+                    HostLink.get().set("laptopkbd", st.optBoolean("laptopkbd", false) ? 0 : 1);
+                    HostLink.get().requestState();
+                    break;
+                case "touch":
+                    HostLink.get().set("touch", st.optBoolean("touch", true) ? 0 : 1);
+                    HostLink.get().requestState();
+                    break;
+                case "touchbar":
+                case "autohide":
+                    p.edit().putBoolean(name, !p.getBoolean(name, true)).apply();
+                    rebuild = true;
+                    break;
+                case "lower":
+                case "higher": {
+                    int o = p.getInt("menuoffset", 32) + (name.equals("lower") ? 12 : -12);
+                    p.edit().putInt("menuoffset", Math.max(0, Math.min(160, o))).apply();
+                    rebuild = true;
+                    break;
+                }
+                case "faster":
+                case "slower": {
+                    int s = p.getInt("speed", 100) + (name.equals("faster") ? 25 : -25);
+                    p.edit().putInt("speed", Math.max(50, Math.min(300, s))).apply();
+                    break;
+                }
+                case "stop":
+                    OverlayService.stop(ctx);
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (rebuild) OverlayService.start(ctx);
     }
 
     /** Fedora's favourite apps (the ones pinned in the dash) as a glass menu. */

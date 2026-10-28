@@ -56,6 +56,8 @@ public final class HostLink {
     private volatile String app = "Fedora";
     private volatile StateListener stateListener;
     private volatile PointerListener pointerListener;
+    /** last laptop settings received (volume, laptopkbd, touch, ...) */
+    private volatile JSONObject lastState = new JSONObject();
     /** favourite Fedora apps for the Dock: {id, name} */
     private volatile List<String[]> apps = new java.util.ArrayList<>();
 
@@ -132,6 +134,10 @@ public final class HostLink {
 
     public void requestApps() {
         send("{\"t\":\"apps?\"}");
+    }
+
+    public JSONObject lastState() {
+        return lastState;
     }
 
     public void setPointerListener(PointerListener l) {
@@ -235,6 +241,7 @@ public final class HostLink {
                     // so only the host's hello means we are really connected
                     setConnected(true);
                     requestApps();
+                    requestState();
                 } else if ("ptr".equals(t)) {
                     PointerListener l = pointerListener;
                     float x = (float) msg.optDouble("x", -1), y = (float) msg.optDouble("y", -1);
@@ -248,6 +255,7 @@ public final class HostLink {
                     }
                     apps = next;
                 } else if ("state".equals(t)) {
+                    lastState = msg;
                     StateListener l = stateListener;
                     if (l != null) main.post(() -> l.onState(msg));
                 } else if ("app".equals(t)) {

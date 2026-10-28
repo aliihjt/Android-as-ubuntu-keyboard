@@ -26,6 +26,13 @@ final class GlassMenu {
      */
     @SuppressLint("RtlHardcoded")
     static void show(Context ctx, View anchor, String[] items, boolean dark, Runnable onDismiss) {
+        show(ctx, anchor, items, dark, onDismiss, null);
+    }
+
+    /** local handles "local:<name>" actions inside the app instead of on the laptop. */
+    @SuppressLint("RtlHardcoded")
+    static void show(Context ctx, View anchor, String[] items, boolean dark, Runnable onDismiss,
+                     java.util.function.Consumer<String> local) {
         dismiss();
         int fg = dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
         int muted = dark ? 0x99EBEBF5 : 0x993C3C43;
@@ -49,7 +56,8 @@ final class GlassMenu {
             String[] p = items[i].split("\\|");
             list.addView(row(ctx, p[0], p.length > 2 ? p[2] : "", fg, muted, v -> {
                 Ui.haptic(v);
-                HostLink.get().action(p[1]);
+                if (p[1].startsWith("local:") && local != null) local.accept(p[1].substring(6));
+                else HostLink.get().action(p[1]);
                 if (self[0] != null) self[0].dismiss();
             }));
         }

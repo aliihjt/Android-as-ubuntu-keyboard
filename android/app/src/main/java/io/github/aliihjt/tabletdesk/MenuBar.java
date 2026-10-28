@@ -174,7 +174,7 @@ final class MenuBar implements HostLink.Listener {
         params.gravity = Gravity.TOP | Gravity.START;
         // user-chosen distance from the top edge (Settings: "Menu bar position")
         params.y = Math.round(ctx.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
-                .getInt("menuoffset", 32) * ctx.getResources().getDisplayMetrics().density);
+                .getInt("menuoffset", 60) * ctx.getResources().getDisplayMetrics().density);
         if (Build.VERSION.SDK_INT >= 30) {
             // sit just below Android's status bar (or at the very top when it is hidden)
             params.setFitInsetsTypes(android.view.WindowInsets.Type.statusBars()
@@ -297,7 +297,7 @@ final class MenuBar implements HostLink.Listener {
         boolean touch = st.optBoolean("touch", true);
         int size = p.getInt("uiscale", 135);
         int speed = p.getInt("speed", 100);
-        int offset = p.getInt("menuoffset", 32);
+        int offset = p.getInt("menuoffset", 60);
         return new String[]{
                 "TabletDesk",
                 "\u2328  Keyboard & Trackpad|local:trackpad",
@@ -366,7 +366,7 @@ final class MenuBar implements HostLink.Listener {
                     break;
                 case "lower":
                 case "higher": {
-                    int o = p.getInt("menuoffset", 32) + (name.equals("lower") ? 12 : -12);
+                    int o = p.getInt("menuoffset", 60) + (name.equals("lower") ? 12 : -12);
                     p.edit().putInt("menuoffset", Math.max(0, Math.min(160, o))).apply();
                     rebuild = true;
                     break;

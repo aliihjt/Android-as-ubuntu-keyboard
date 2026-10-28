@@ -58,6 +58,12 @@ public class OverlayService extends Service {
         removeBars();
         Ui.loadScale(this);
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        // one-time move of the menu bar further down (asked for by the user),
+        // also for tablets where it was already set higher
+        if (prefs.getInt("menuoffset_v", 0) < 2) {
+            prefs.edit().putInt("menuoffset", Math.max(prefs.getInt("menuoffset", 60), 60))
+                    .putInt("menuoffset_v", 2).apply();
+        }
         pointer = new PointerOverlay(this);
         wm.addView(pointer, pointer.params());
         if (prefs.getBoolean("touchbar", true)) {

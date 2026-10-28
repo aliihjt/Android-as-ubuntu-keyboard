@@ -14,7 +14,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
   {"t":"cmd","name":"settings"}            run a whitelisted desktop command
   {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
-  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd 0|1
+  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd 0|1
   {"t":"state?"}                           ask for the values above
   {"t":"ping"}
 
@@ -36,10 +36,9 @@ import threading
 import time
 
 try:
-    from evdev import UInput, ecodes as e
+    from evdev import InputDevice, UInput, ecodes as e, list_devices
 except ImportError:  # allows --dry-run on machines without python3-evdev
-    UInput = None
-    e = None
+    InputDevice = UInput = e = list_devices = None
 
 # Whitelisted commands the tablet's menu bar may trigger. Nothing else runs.
 # A list of lists means "first one that is installed".
@@ -316,6 +315,90 @@ def pretty_app(name):
     return name.split(".")[-1].replace("-", " ").title()
 
 
+LAPTOP_KBD_FILE = os.path.expanduser("~/.config/tabletdesk/laptop-keyboard")
+
+
+class LaptopKeyboard:
+    """Turns the laptop's built-in keyboard off while a tablet is connected.
+
+    It "grabs" the keyboard device, so its keys stop reaching the desktop; the
+    touchpad is left alone. The kernel drops the grab automatically if this
+    program stops, so the keyboard can never stay off by accident.
+    """
+    # USB, Bluetooth and virtual devices are external keyboards: keep those on
+    EXTERNAL_BUSES = (0x03, 0x05, 0x06)
+
+    def __init__(self, dry_run=False):
+        self.dry_run = dry_run or InputDevice is None
+        self.grabbed = []
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def enabled_by_user():
+        """True = turn the laptop keyboard off when the tablet connects (default)."""
+        try:
+            with open(LAPTOP_KBD_FILE) as f:
+                return f.read().strip() != "keep-on"
+        except OSError:
+            return True
+
+    @staticmethod
+    def save_choice(turn_off):
+        os.makedirs(os.path.dirname(LAPTOP_KBD_FILE), exist_ok=True)
+        with open(LAPTOP_KBD_FILE, "w") as f:
+            f.write("turn-off\n" if turn_off else "keep-on\n")
+
+    def _built_in_keyboards(self):
+        for path in list_devices():
+            try:
+                d = InputDevice(path)
+            except OSError:
+                continue
+            keys = d.capabilities().get(e.EV_KEY, [])
+            if (e.KEY_A in keys and e.KEY_SPACE in keys
+                    and d.info.bustype not in self.EXTERNAL_BUSES
+                    and not d.name.startswith("TabletDesk")):
+                yield d
+            else:
+                d.close()
+
+    def turn_off(self):
+        with self.lock:
+            if self.grabbed:
+                return
+            if self.dry_run:
+                print("laptop keyboard off")
+                self.grabbed.append(None)
+                return
+            for d in self._built_in_keyboards():
+                try:
+                    d.grab()
+                    self.grabbed.append(d)
+                    print("laptop keyboard off:", d.name, flush=True)
+                except OSError as err:
+                    print("cannot turn off", d.name, err, file=sys.stderr)
+                    d.close()
+
+    def turn_on(self):
+        with self.lock:
+            for d in self.grabbed:
+                if d is None:
+                    print("laptop keyboard on")
+                    continue
+                try:
+                    d.ungrab()
+                except OSError:
+                    pass
+                d.close()
+            self.grabbed = []
+
+    def is_off(self):
+        return bool(self.grabbed)
+
+
+laptop_kbd = None  # set in main()
+
+
 class Clients:
     """Connected tablets, so focus changes can be pushed to all of them."""
 
@@ -327,10 +410,15 @@ class Clients:
     def add(self, f):
         with self.lock:
             self.files.add(f)
+        if laptop_kbd and laptop_kbd.enabled_by_user():
+            laptop_kbd.turn_off()
 
     def remove(self, f):
         with self.lock:
             self.files.discard(f)
+            last = not self.files
+        if last and laptop_kbd:  # last tablet gone: give the keyboard back
+            laptop_kbd.turn_on()
 
     def broadcast(self, msg):
         data = (json.dumps(msg) + "\n").encode()
@@ -383,6 +471,13 @@ def set_value(what, value):
     elif what == "dark":
         _run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme",
               "prefer-dark" if v else "default"])
+    elif what == "laptopkbd":  # 1 = laptop keyboard on, 0 = off while connected
+        if laptop_kbd:
+            laptop_kbd.save_choice(turn_off=not v)
+            if v:
+                laptop_kbd.turn_on()
+            else:
+                laptop_kbd.turn_off()
     elif what == "dnd":
         _run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners",
               "false" if v else "true"])
@@ -402,6 +497,8 @@ def read_state():
         pass
     state["dark"] = "prefer-dark" in _run(
         ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
+    if laptop_kbd:
+        state["laptopkbd"] = not laptop_kbd.is_off()
     state["dnd"] = _run(["gsettings", "get", "org.gnome.desktop.notifications",
                          "show-banners"]).strip() == "false"
     return state
@@ -495,6 +592,8 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
+    global laptop_kbd
+    laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     # bind to localhost only: the tablet reaches it through `adb reverse`

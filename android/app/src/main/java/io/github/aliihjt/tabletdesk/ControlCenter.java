@@ -28,11 +28,14 @@ final class ControlCenter implements HostLink.StateListener {
     private final Dialog dialog;
     private final TextView darkTile;
     private final TextView dndTile;
+    private final TextView kbdTile;
     private final SeekBar brightness;
     private final SeekBar volume;
     private final TextView[] modeCells = new TextView[3];
     private boolean darkOn;
     private boolean dndOn;
+    /** laptop's own keyboard: off while the tablet is connected (default) */
+    private boolean laptopKbdOn;
     /** true while applying values from the laptop, so they are not sent back */
     private boolean applying;
 
@@ -102,6 +105,15 @@ final class ControlCenter implements HostLink.StateListener {
         r1.addView(dndTile, weighted(true));
         col.addView(r1, block(10));
 
+        kbdTile = tile("", 13);
+        kbdTile.setOnClickListener(v -> {
+            Ui.haptic(v);
+            laptopKbdOn = !laptopKbdOn;
+            HostLink.get().set("laptopkbd", laptopKbdOn ? 1 : 0);
+            paintToggles();
+        });
+        col.addView(kbdTile, block(10));
+
         LinearLayout r2 = new LinearLayout(ctx);
         TextView pad2 = tile("⌨  Trackpad", 13);
         pad2.setOnClickListener(v -> {
@@ -169,6 +181,7 @@ final class ControlCenter implements HostLink.StateListener {
         else brightness.setEnabled(false);  // desktop PC without a backlight
         darkOn = s.optBoolean("dark", darkOn);
         dndOn = s.optBoolean("dnd", dndOn);
+        laptopKbdOn = s.optBoolean("laptopkbd", laptopKbdOn);
         applying = false;
         paintToggles();
     }
@@ -180,6 +193,11 @@ final class ControlCenter implements HostLink.StateListener {
         dndTile.setText("🔕  Focus\n" + (dndOn ? "Do Not Disturb" : "Off"));
         dndTile.setBackground(Glass.chip(ctx, dark, Ui.dp(ctx, 16), dndOn));
         dndTile.setTextColor(dndOn ? 0xFFFFFFFF : fg);
+        // highlighted = the tablet is the keyboard (laptop keyboard off)
+        kbdTile.setText("\u2328\uFE0F  Laptop keyboard\n"
+                + (laptopKbdOn ? "On \u2014 tap to turn off" : "Off while tablet is connected"));
+        kbdTile.setBackground(Glass.chip(ctx, dark, Ui.dp(ctx, 16), !laptopKbdOn));
+        kbdTile.setTextColor(!laptopKbdOn ? 0xFFFFFFFF : fg);
     }
 
     private void paintModes() {

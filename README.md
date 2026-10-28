@@ -23,6 +23,8 @@ Turn an Android tablet into a second screen, keyboard, trackpad and **macOS-styl
 | 🖱 **Trackpad** | Laptop-style gestures. 1 finger moves the pointer, a tap clicks, and tap-then-drag drags. 2 fingers scroll, and a 2-finger tap right-clicks. A 3-finger swipe opens Activities or switches workspaces. |
 | 🍎 **Menu bar** | macOS-style bar at the top showing the focused app's name. A small GNOME extension provides it, because Wayland hides other apps' windows. The File, Edit, View, Go, Window and Help menus send the matching shortcuts. The ◆ menu has Settings, Lock, Log Out and Shut Down. The right side shows the clock, the tablet's battery and the connection status. |
 | ▭ **Touch Bar** | Esc key, plus buttons that change with the focused app (browser, Ptyxis/terminal, VS Code, Files, desktop). Includes an **fn** layer with F1–F12, brightness, volume and media keys. Hold a key to repeat it. Tap ⌄ to collapse the bar. |
+| 🚫⌨ **Laptop keyboard off** | While the tablet is connected, the laptop's built-in keyboard is switched off, so the tablet is your keyboard. The laptop touchpad stays on. Unplugging, or stopping the service, gives the keyboard back. Toggle it in the Control Center (☰). |
+| 🎛 **Control Center** | Liquid Glass panel (☰ in the menu bar) with screen mode, dark mode, Do Not Disturb, the laptop-keyboard switch, brightness and volume sliders, and quick buttons for screenshot, lock, settings, files and terminal. |
 | 🔌 **One cable** | USB-C charges the tablet while ADB tunnels all data through `127.0.0.1`. |
 | ⚡ **Plug & play** | A systemd user service sets everything up each time you plug the tablet in. |
 

@@ -28,6 +28,8 @@ import java.util.Locale;
  */
 final class MenuBar implements HostLink.Listener {
     private static final long AUTO_HIDE_MS = 4000;
+    /** two lines: menus on top, icons + status below */
+    private static final int BAR_HEIGHT_DP = 54;
 
     // First entry is the menu title; then "Label|action|shortcut hint", "-" = separator.
     // Actions: plain key combo, "cmd:<name>" (whitelisted on host) or "text:<chars>".
@@ -99,8 +101,7 @@ final class MenuBar implements HostLink.Listener {
 
         root = new FrameLayout(ctx);
         bar = new LinearLayout(ctx);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setOrientation(LinearLayout.VERTICAL);
         blur = Glass.blurAvailable(ctx);
         bar.setBackgroundColor(blur ? (dark ? 0x66141418 : 0x8CF7F7FA) : (dark ? 0xE01C1C1E : 0xE6F6F6F8));
         bar.setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 10), 0);
@@ -130,26 +131,32 @@ final class MenuBar implements HostLink.Listener {
         menuScroll.addView(menus, new android.widget.FrameLayout.LayoutParams(
                 android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-        bar.addView(menuScroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+        // line 1: the menus
+        bar.addView(menuScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        bar.addView(iconButton("\uD83D\uDE80", this::showDock));  // Dock: favourite apps
-        bar.addView(iconButton("\uD83D\uDD0D", v -> HostLink.get().combo("super")));  // search apps
-        bar.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
+        // line 2: icons on the left, status / battery / clock on the right
+        LinearLayout line2 = new LinearLayout(ctx);
+        line2.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(line2, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        line2.addView(iconButton("\uD83D\uDE80", this::showDock));  // Dock: favourite apps
+        line2.addView(iconButton("\uD83D\uDD0D", v -> HostLink.get().combo("super")));  // search apps
+        line2.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         }));
-        bar.addView(iconButton("\u2630", v -> {  // Control Center
+        line2.addView(iconButton("\u2630", v -> {  // Control Center
             handler.removeCallbacks(hide);
             ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
         }));
+        line2.addView(new View(ctx), new LinearLayout.LayoutParams(0, 1, 1f));
         status = small("");
-        bar.addView(status);
+        line2.addView(status);
         battery = small("");
-        bar.addView(battery);
+        line2.addView(battery);
         clock = small("");
         clock.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        bar.addView(clock);
+        line2.addView(clock);
         root.addView(bar, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -167,14 +174,14 @@ final class MenuBar implements HostLink.Listener {
         });
 
         params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 26),
+                WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, BAR_HEIGHT_DP),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         // user-chosen distance from the top edge (Settings: "Menu bar position")
         params.y = Math.round(ctx.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
-                .getInt("menuoffset", 60) * ctx.getResources().getDisplayMetrics().density);
+                .getInt("menuoffset", 0) * ctx.getResources().getDisplayMetrics().density);
         if (Build.VERSION.SDK_INT >= 30) {
             // sit just below Android's status bar (or at the very top when it is hidden)
             params.setFitInsetsTypes(android.view.WindowInsets.Type.statusBars()
@@ -238,7 +245,7 @@ final class MenuBar implements HostLink.Listener {
         collapsed = false;
         bar.setVisibility(View.VISIBLE);
         strip.setVisibility(View.GONE);
-        params.height = Ui.dp(ctx, 26);
+        params.height = Ui.dp(ctx, BAR_HEIGHT_DP);
         if (root.isAttachedToWindow()) wm.updateViewLayout(root, params);
         scheduleHide();
     }
@@ -297,7 +304,6 @@ final class MenuBar implements HostLink.Listener {
         boolean touch = st.optBoolean("touch", true);
         int size = p.getInt("uiscale", 135);
         int speed = p.getInt("speed", 100);
-        int offset = p.getInt("menuoffset", 60);
         return new String[]{
                 "TabletDesk",
                 "\u2328  Keyboard & Trackpad|local:trackpad",
@@ -313,8 +319,6 @@ final class MenuBar implements HostLink.Listener {
                 "-",
                 check(p.getBoolean("touchbar", true)) + "Show Touch Bar|local:touchbar",
                 check(p.getBoolean("autohide", true)) + "Auto-hide bars|local:autohide",
-                "     Move menu bar lower|local:lower|" + offset + " dp",
-                "     Move menu bar higher|local:higher",
                 "-",
                 check(size == 100) + "Size: Normal|local:size:100",
                 check(size == 135) + "Size: Large|local:size:135",
@@ -366,7 +370,7 @@ final class MenuBar implements HostLink.Listener {
                     break;
                 case "lower":
                 case "higher": {
-                    int o = p.getInt("menuoffset", 60) + (name.equals("lower") ? 12 : -12);
+                    int o = p.getInt("menuoffset", 0) + (name.equals("lower") ? 12 : -12);
                     p.edit().putInt("menuoffset", Math.max(0, Math.min(160, o))).apply();
                     rebuild = true;
                     break;

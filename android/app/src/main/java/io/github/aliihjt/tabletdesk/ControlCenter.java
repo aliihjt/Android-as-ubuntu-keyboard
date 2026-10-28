@@ -180,7 +180,7 @@ final class ControlCenter implements HostLink.StateListener {
             if (onDismiss != null) onDismiss.run();
         });
         Glass.place(dialog, Ui.dp(ctx, 340), WindowManager.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.RIGHT, Ui.dp(ctx, 8), Ui.dp(ctx, 32));
+                Gravity.TOP | Gravity.RIGHT, Ui.dp(ctx, 8), Ui.dp(ctx, 60));  // below the 2-line menu bar
         dialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
 
         paintToggles();

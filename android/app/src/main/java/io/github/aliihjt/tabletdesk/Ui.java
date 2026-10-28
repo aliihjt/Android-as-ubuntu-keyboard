@@ -17,7 +17,7 @@ final class Ui {
     }
 
     /** User-chosen interface size (Settings: Normal / Large / Extra large). */
-    static float scale = 1.35f;
+    static float scale = 1.15f;
 
     /** Vibrate on key taps (Settings). */
     static boolean haptics = true;
@@ -25,7 +25,7 @@ final class Ui {
     static void loadScale(Context c) {
         android.content.SharedPreferences p =
                 c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE);
-        scale = p.getInt("uiscale", 135) / 100f;
+        scale = p.getInt("uiscale", 115) / 100f;
         haptics = p.getBoolean("haptics", true);
     }
 

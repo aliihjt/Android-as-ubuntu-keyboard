@@ -1,5 +1,6 @@
 package io.github.aliihjt.tabletdesk;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -9,43 +10,73 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
+import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
-/** Keeps the menu bar and Touch Bar floating above every app (including the VNC viewer). */
+/**
+ * Everything Fedora Pad shows over the Fedora screen: one small floating
+ * button (tap it for Keyboard, Trackpad, Media, Home), the floating keyboard or
+ * trackpad, and the laptop's mouse pointer when it moves onto the tablet.
+ */
 public class OverlayService extends Service {
     static final String ACTION_STOP = "io.github.aliihjt.tabletdesk.STOP";
-    static final String ACTION_KEYBOARD = "io.github.aliihjt.tabletdesk.KEYBOARD";
+    static final String ACTION_PANEL = "io.github.aliihjt.tabletdesk.PANEL";
+    static final String EXTRA_MODE = "mode";
     static final String PREFS = "tabletdesk";
     private static final String CHANNEL = "tabletdesk";
     static volatile boolean running;
     private static OverlayService instance;
 
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private WindowManager wm;
-    private MenuBar menuBar;
-    private TouchBar touchBar;
+    private SharedPreferences prefs;
     private PointerOverlay pointer;
-    private FloatingKeyboard keyboard;
+    private View bubble;
+    private WindowManager.LayoutParams bubbleParams;
+    private View menu;
+    private FloatingPanel panel;
+    private String panelMode;
+    private final Runnable fade = () -> {
+        if (bubble != null) bubble.animate().alpha(0.45f).setDuration(400);
+    };
 
     static void start(Context c) {
         c.startForegroundService(new Intent(c, OverlayService.class));
     }
 
-    /** Show or hide the floating keyboard (starts the bars first if needed). */
-    static void toggleKeyboard(Context c) {
-        c.startForegroundService(new Intent(c, OverlayService.class).setAction(ACTION_KEYBOARD));
+    /** Opens the floating keyboard or trackpad (or closes it if it is already open). */
+    static void showPanel(Context c, String mode) {
+        c.startForegroundService(new Intent(c, OverlayService.class)
+                .setAction(ACTION_PANEL).putExtra(EXTRA_MODE, mode));
     }
 
     static void stop(Context c) {
         c.startService(new Intent(c, OverlayService.class).setAction(ACTION_STOP));
     }
 
+    /** Fedora Pad's own pages hide the floating button while they are open. */
+    static void setBubbleHidden(boolean hidden) {
+        OverlayService s = instance;
+        if (s == null || s.bubble == null) return;
+        s.bubble.setVisibility(hidden ? View.GONE : View.VISIBLE);
+        s.hideMenu();
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         wm = getSystemService(WindowManager.class);
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         HostLink.get().start();
         running = true;
         instance = this;
@@ -54,58 +85,33 @@ public class OverlayService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         goForeground();  // every startForegroundService() must be answered
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+        String action = intent == null ? null : intent.getAction();
+        if (ACTION_STOP.equals(action) || !Settings.canDrawOverlays(this)) {
             stopSelf();
             return START_NOT_STICKY;
         }
-        if (!Settings.canDrawOverlays(this)) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        boolean keyboardRequest = intent != null && ACTION_KEYBOARD.equals(intent.getAction());
-        if (keyboardRequest && pointer != null) {  // bars already up: just toggle
-            toggleKeyboardNow();
-            return START_STICKY;
-        }
-        removeBars();
         Ui.loadScale(this);
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        // one-time: the two-line menu bar sits right at the top again
-        if (prefs.getInt("menuoffset_v", 0) < 3) {
-            prefs.edit().putInt("menuoffset", 0).putInt("menuoffset_v", 3).apply();
+        if (pointer == null) {
+            pointer = new PointerOverlay(this);
+            wm.addView(pointer, pointer.params());
         }
-        pointer = new PointerOverlay(this);
-        wm.addView(pointer, pointer.params());
-        if (prefs.getBoolean("touchbar", true)) {
-            touchBar = new TouchBar(this, wm, prefs.getBoolean("autohide", true));
-            wm.addView(touchBar.view(), touchBar.params());
-        }
-        if (prefs.getBoolean("menubar", true)) {
-            menuBar = new MenuBar(this, wm, prefs.getBoolean("autohide", true), () -> {
-                if (touchBar != null) touchBar.toggleCollapsed();
-            });
-            wm.addView(menuBar.view(), menuBar.params());
-        }
-        if (keyboardRequest) toggleKeyboardNow();
+        if (bubble == null && prefs.getBoolean("bubble", true)) addBubble();
+        if (ACTION_PANEL.equals(action)) togglePanel(intent.getStringExtra(EXTRA_MODE));
         return START_STICKY;
-    }
-
-    private void toggleKeyboardNow() {
-        if (keyboard != null) {
-            keyboard.destroy();
-            wm.removeView(keyboard.view());
-            keyboard = null;
-            return;
-        }
-        Ui.loadScale(this);
-        keyboard = new FloatingKeyboard(this, wm);
-        wm.addView(keyboard.view(), keyboard.params());
     }
 
     @Override
     public void onDestroy() {
-        if (keyboard != null) toggleKeyboardNow();  // removes it
-        removeBars();
+        handler.removeCallbacksAndMessages(null);
+        closePanel();
+        hideMenu();
+        if (bubble != null) wm.removeView(bubble);
+        if (pointer != null) {
+            pointer.destroy();
+            wm.removeView(pointer);
+        }
+        bubble = null;
+        pointer = null;
         running = false;
         instance = null;
         super.onDestroy();
@@ -116,47 +122,173 @@ public class OverlayService extends Service {
         return null;
     }
 
-    /**
-     * Hides both bars (and lets touches through) while a TabletDesk screen with
-     * its own controls, like the trackpad, is in front.
-     */
-    static void setBarsHidden(boolean hidden) {
-        OverlayService s = instance;
-        if (s == null) return;
-        if (s.menuBar != null) s.hide(s.menuBar.view(), s.menuBar.params(), hidden);
-        if (s.touchBar != null) s.hide(s.touchBar.view(), s.touchBar.params(), hidden);
+    // ---- floating button ----
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void addBubble() {
+        Theme th = new Theme(this);
+        TextView b = th.text("⌨️", 22, 0xFFFFFFFF, false);
+        b.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable bg = Theme.round(0xD91C1C1E, th.dp(20));
+        bg.setStroke(th.dp(2), 0x59FFFFFF);
+        b.setBackground(bg);
+        b.setElevation(th.dp(8));
+        bubble = b;
+
+        int size = th.dp(58);
+        bubbleParams = new WindowManager.LayoutParams(size, size,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+        bubbleParams.gravity = Gravity.TOP | Gravity.START;
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        bubbleParams.x = prefs.getInt("bubble_x", screenW - size - th.dp(16));
+        bubbleParams.y = prefs.getInt("bubble_y", screenH / 3);
+
+        float[] start = new float[4];
+        boolean[] dragged = {false};
+        b.setOnTouchListener((v, ev) -> {
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    handler.removeCallbacks(fade);
+                    v.setAlpha(1f);
+                    start[0] = ev.getRawX();
+                    start[1] = ev.getRawY();
+                    start[2] = bubbleParams.x;
+                    start[3] = bubbleParams.y;
+                    dragged[0] = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    float dx = ev.getRawX() - start[0], dy = ev.getRawY() - start[1];
+                    if (Math.hypot(dx, dy) > th.dp(8)) dragged[0] = true;
+                    if (dragged[0]) {
+                        hideMenu();
+                        bubbleParams.x = Math.round(start[2] + dx);
+                        bubbleParams.y = Math.max(0, Math.round(start[3] + dy));
+                        wm.updateViewLayout(v, bubbleParams);
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                    if (dragged[0]) {  // snap to the nearest side, like AssistiveTouch
+                        bubbleParams.x = bubbleParams.x + size / 2 < screenW / 2
+                                ? th.dp(8) : screenW - size - th.dp(8);
+                        wm.updateViewLayout(v, bubbleParams);
+                        prefs.edit().putInt("bubble_x", bubbleParams.x)
+                                .putInt("bubble_y", bubbleParams.y).apply();
+                    } else {
+                        Ui.haptic(v);
+                        if (menu == null) showMenu();
+                        else hideMenu();
+                    }
+                    handler.postDelayed(fade, 3000);
+                    return true;
+                default:
+                    return true;
+            }
+        });
+        wm.addView(b, bubbleParams);
+        handler.postDelayed(fade, 3000);
     }
 
-    private void hide(android.view.View v, WindowManager.LayoutParams lp, boolean hidden) {
-        if (!v.isAttachedToWindow()) return;
-        v.setVisibility(hidden ? android.view.View.GONE : android.view.View.VISIBLE);
-        if (hidden) lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-        else lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-        wm.updateViewLayout(v, lp);
+    /** The small menu next to the button. */
+    @SuppressLint("ClickableViewAccessibility")
+    private void showMenu() {
+        Theme th = new Theme(this);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        int p = th.dp(8);
+        row.setPadding(p, p, p, p);
+        android.graphics.drawable.GradientDrawable bg = Theme.round(0xEB1C1C1E, th.dp(22));
+        bg.setStroke(th.dp(1), 0x40FFFFFF);
+        row.setBackground(bg);
+        row.setElevation(th.dp(10));
+        row.addView(menuItem(th, "⌨️", "Keyboard", () -> togglePanel(FloatingPanel.KEYBOARD)));
+        row.addView(menuItem(th, "🖱", "Trackpad", () -> togglePanel(FloatingPanel.TRACKPAD)));
+        row.addView(menuItem(th, "🎵", "Media", () -> openPage(MediaActivity.class)));
+        row.addView(menuItem(th, "⚡", "Shortcuts", () -> openPage(ShortcutsActivity.class)));
+        row.addView(menuItem(th, "⌂", "Home", () -> openPage(MainActivity.class)));
+
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        boolean leftSide = bubbleParams.x < screenW / 2;
+        row.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        lp.x = leftSide ? bubbleParams.x + bubbleParams.width + th.dp(8)
+                : bubbleParams.x - row.getMeasuredWidth() - th.dp(8);
+        lp.y = Math.max(0, bubbleParams.y + bubbleParams.height / 2 - row.getMeasuredHeight() / 2);
+        row.setOnTouchListener((v, ev) -> {
+            if (ev.getActionMasked() == MotionEvent.ACTION_OUTSIDE) hideMenu();
+            return false;
+        });
+        menu = row;
+        wm.addView(row, lp);
     }
 
-    private void removeBars() {
-        if (pointer != null) {
-            pointer.destroy();
-            wm.removeView(pointer);
-            pointer = null;
-        }
-        if (menuBar != null) {
-            menuBar.destroy();
-            wm.removeView(menuBar.view());
-            menuBar = null;
-        }
-        if (touchBar != null) {
-            touchBar.destroy();
-            wm.removeView(touchBar.view());
-            touchBar = null;
+    private View menuItem(Theme th, String symbol, String label, Runnable action) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(th.dp(10), th.dp(6), th.dp(10), th.dp(6));
+        item.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x40FFFFFF), null,
+                Theme.round(0xFFFFFFFF, th.dp(14))));
+        TextView icon = th.text(symbol, 22, 0xFFFFFFFF, false);
+        icon.setGravity(Gravity.CENTER);
+        item.addView(icon);
+        TextView name = th.text(label, 11.5f, 0xCCFFFFFF, true);
+        name.setGravity(Gravity.CENTER);
+        item.addView(name, th.fullWidth(4));
+        th.click(item, v -> {
+            hideMenu();
+            action.run();
+        });
+        return item;
+    }
+
+    private void hideMenu() {
+        if (menu != null) {
+            wm.removeView(menu);
+            menu = null;
         }
     }
+
+    private void openPage(Class<?> page) {
+        startActivity(new Intent(this, page).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    // ---- floating keyboard / trackpad ----
+
+    private void togglePanel(String mode) {
+        if (mode == null) return;
+        boolean same = mode.equals(panelMode);
+        closePanel();
+        if (same) return;
+        panel = new FloatingPanel(this, wm, mode, this::closePanel);
+        panelMode = mode;
+        wm.addView(panel.view(), panel.params());
+    }
+
+    private void closePanel() {
+        if (panel != null) {
+            wm.removeView(panel.view());
+            panel = null;
+            panelMode = null;
+        }
+    }
+
+    // ---- foreground notification ----
 
     private void goForeground() {
         NotificationManager nm = getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel(
-                CHANNEL, "Menu bar & Touch Bar", NotificationManager.IMPORTANCE_LOW));
+                CHANNEL, "Fedora Pad", NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(this, 0,
                 new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 1,
@@ -164,8 +296,8 @@ public class OverlayService extends Service {
                 PendingIntent.FLAG_IMMUTABLE);
         Notification n = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle("TabletDesk is running")
-                .setContentText("Menu bar and Touch Bar are shown over all apps")
+                .setContentTitle("Fedora Pad is ready")
+                .setContentText("Tap the floating button for the keyboard and trackpad")
                 .setContentIntent(open)
                 .addAction(new Notification.Action.Builder(null, "Stop", stop).build())
                 .setOngoing(true)

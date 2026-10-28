@@ -21,8 +21,8 @@
 
     <application
         android:icon="@drawable/ic_launcher"
-        android:label="TabletDesk"
-        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        android:label="Fedora Pad"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
             android:name=".MainActivity"
@@ -34,12 +34,16 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".TrackpadActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden"
-            android:exported="false"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        <activity android:name=".KeyboardActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity android:name=".TrackpadActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity android:name=".MediaActivity" android:exported="false" />
+        <activity android:name=".StatsActivity" android:exported="false" />
+        <activity android:name=".ControlsActivity" android:exported="false" />
+        <activity android:name=".ShortcutsActivity" android:exported="false" />
+        <activity android:name=".AppsActivity" android:exported="false" />
+        <activity android:name=".SettingsActivity" android:exported="false" />
 
         <service
             android:name=".OverlayService"
@@ -47,7 +51,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the desktop menu bar and Touch Bar overlays visible while the tablet is used as a laptop screen" />
+                android:value="Shows the floating keyboard button over the Fedora screen while the tablet is used as a second screen" />
         </service>
     </application>
 </manifest>

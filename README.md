@@ -34,7 +34,8 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | ✍️ | **Text & Clipboard** | Write on the tablet (any language) and type it on Fedora in one tap; clipboard both ways. |
 | 📁 | **Send Files** | Photos and files from the tablet to Fedora's Downloads › Fedora Pad, over the cable. |
 | 🎤 | **Presenter** | Slide remote with huge ◀ ▶ buttons, start / end, black screen and a timer. |
-| ⭐ | **My Buttons** | Make your own one-tap buttons: a key combination or a text to type. |
+| 🎚 | **Stream Deck** | Big buttons you make yourself; each runs several steps: open an app, open a website, press keys, type text, wait. |
+| 🗂 | **Windows** | Every open Fedora window as a card: tap to jump to it, ✕ to close it. |
 | ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
 | ● | **Floating button** | The only thing over the Fedora screen. Drag it anywhere; tap it for a floating **keyboard** or **trackpad**, Media, Shortcuts or Home. |
 | 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is off (touchpad stays on). Unplug and it's back. |
@@ -74,6 +75,12 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+
+## 📶 Wi-Fi mode (no cable)
+1. On Fedora: `./host/wifi-setup.sh`. It explains the one firewall command needed and asks you to run it yourself.
+2. Plug the tablet in once: it pairs automatically (nothing to type).
+3. Unplug: Fedora Pad keeps working on the same Wi-Fi. The connection is encrypted and only paired tablets get in.
+4. For the screen, add a second PC in Windows App with the laptop's IP address.
 
 ## 🔄 Update
 ```bash

@@ -77,6 +77,7 @@ public class OverlayService extends Service {
         super.onCreate();
         wm = getSystemService(WindowManager.class);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        HostLink.get().attach(this);
         HostLink.get().start();
         running = true;
         instance = this;

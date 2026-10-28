@@ -58,6 +58,19 @@ public class SettingsActivity extends Page {
                 pref("↕️", Theme.INDIGO, "Natural scrolling", "Content follows your fingers", "natural"),
                 pref("📳", Theme.GRAY, "Vibrate on tap", null, "haptics")));
 
+        section("Wi-Fi mode");
+        String wifiState = link.wifiPaired()
+                ? "Paired. Unplug and Fedora Pad keeps working on the same Wi-Fi."
+                : "Not paired. On Fedora run host/wifi-setup.sh, then plug the tablet in once.";
+        add(th.group(
+                th.row("\uD83D\uDCF6", Theme.BLUE, "Use Wi-Fi without the cable", wifiState,
+                        th.toggle(prefs.getBoolean("wifi_use", true),
+                                on -> prefs.edit().putBoolean("wifi_use", on).apply())),
+                link(th.row("\uD83D\uDDD1", Theme.RED, "Forget Wi-Fi pairing", null, th.chevron()), () -> {
+                    link.forgetWifi();
+                    recreate();
+                })));
+
         section("Connection");
         add(th.group(
                 link(th.row("🔄", Theme.GREEN, "Reconnect the Fedora screen", null, th.chevron()),

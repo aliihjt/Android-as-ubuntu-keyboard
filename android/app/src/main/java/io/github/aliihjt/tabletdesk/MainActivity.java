@@ -246,7 +246,8 @@ public class MainActivity extends Page {
                 {"✍️", Theme.YELLOW, "Text", ClipboardActivity.class},
                 {"📁", Theme.BLUE, "Send Files", FilesActivity.class},
                 {"🎤", Theme.RED, "Presenter", PresenterActivity.class},
-                {"⭐", Theme.ORANGE, "My Buttons", ButtonsActivity.class},
+                {"\uD83C\uDF9A", Theme.ORANGE, "Stream Deck", ButtonsActivity.class},
+                {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"🔍", Theme.GRAY, "Spotlight", SpotlightActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
@@ -347,7 +348,7 @@ public class MainActivity extends Page {
     public void onStatus(boolean connected, String host) {
         if (hostName == null) return;
         hostName.setText(connected ? host : "Not connected");
-        hostInfo.setText(connected ? "Connected with the USB-C cable · charging"
+        hostInfo.setText(connected ? ("Wi-Fi".equals(link.via()) ? "Connected over Wi-Fi" : "Connected with the USB-C cable \u00B7 charging")
                 : "Plug the tablet into the laptop with the USB-C cable.");
         dot.setText(connected ? "●" : "○");
         dot.setTextColor(connected ? Theme.GREEN : th.secondary);

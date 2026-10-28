@@ -102,7 +102,8 @@ public class SpotlightActivity extends Page {
                 {"✍️", Theme.YELLOW, "Text & Clipboard", ClipboardActivity.class},
                 {"📁", Theme.BLUE, "Send Files", FilesActivity.class},
                 {"🎤", Theme.RED, "Presenter", PresenterActivity.class},
-                {"⭐", Theme.ORANGE, "My Buttons", ButtonsActivity.class},
+                {"\uD83C\uDF9A", Theme.ORANGE, "Stream Deck", ButtonsActivity.class},
+                {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
@@ -125,8 +126,8 @@ public class SpotlightActivity extends Page {
             for (int i = 0; i < mine.length(); i++) {
                 JSONObject b = mine.getJSONObject(i);
                 String action = b.optString("action");
-                index.add(new Object[]{"⭐", Theme.ORANGE, b.optString("label"), "My button",
-                        (Runnable) () -> link.action(action)});
+                index.add(new Object[]{"⭐", Theme.ORANGE, b.optString("label"), "Stream Deck",
+                        (Runnable) () -> ButtonsActivity.run(action)});
             }
         } catch (Exception ignored) {
         }

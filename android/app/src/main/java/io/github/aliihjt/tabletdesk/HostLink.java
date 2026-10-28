@@ -60,6 +60,8 @@ public final class HostLink {
     private volatile String host = "Fedora";
     private volatile String app = "Fedora";
     private volatile StateListener stateListener;
+    private volatile android.content.SharedPreferences prefs;
+    private volatile String via = "USB";
     private volatile PointerListener pointerListener;
     private volatile ClipListener clipListener;
     /** one listener per reply type ("media", "stats", ...) for the live panels */
@@ -71,6 +73,29 @@ public final class HostLink {
     private volatile List<String[]> apps = new java.util.ArrayList<>();
 
     private HostLink() {
+    }
+
+    /** Gives HostLink somewhere to keep the Wi-Fi pairing. Call before start(). */
+    public void attach(android.content.Context c) {
+        if (prefs == null) {
+            prefs = c.getApplicationContext().getSharedPreferences("tabletdesk", android.content.Context.MODE_PRIVATE);
+        }
+    }
+
+    /** "USB" or "Wi-Fi": how the tablet is connected right now. */
+    public String via() {
+        return via;
+    }
+
+    /** True once the PC has paired this tablet for Wi-Fi mode (over the cable). */
+    public boolean wifiPaired() {
+        return prefs != null && prefs.contains("wifi_token");
+    }
+
+    public void forgetWifi() {
+        if (prefs != null) {
+            prefs.edit().remove("wifi_token").remove("wifi_fp").remove("wifi_ips").remove("wifi_port").apply();
+        }
     }
 
     public synchronized void start() {
@@ -184,6 +209,11 @@ public final class HostLink {
         return true;
     }
 
+    /** Window switcher: bring a Fedora window to the front, or close it. */
+    public void window(String id, boolean close) {
+        send(obj("t", close ? "winclose" : "winfocus", "id", id));
+    }
+
     /** play-pause, next or previous on the PC's media player. */
     public void media(String action) {
         send(obj("t", "mediactl", "a", action));
@@ -231,6 +261,12 @@ public final class HostLink {
             case "launch":
                 send(obj("t", "launch", "id", value));
                 break;
+            case "url":
+                send(obj("t", "url", "u", value));
+                break;
+            case "app":
+                send(obj("t", "launch", "id", value));
+                break;
             case "cursor":
                 send("{\"t\":\"cursor\"}");
                 break;
@@ -256,8 +292,7 @@ public final class HostLink {
 
     private void loop() {
         while (true) {
-            try (Socket s = new Socket()) {
-                s.connect(new InetSocketAddress("127.0.0.1", PORT), 2000);
+            try (Socket s = open()) {
                 s.setTcpNoDelay(true);
                 queue.clear();
                 Thread reader = new Thread(() -> readLoop(s), "HostLink-reader");
@@ -280,6 +315,76 @@ public final class HostLink {
         }
     }
 
+    /** The cable first (adb reverse); if it isn't there, the paired PC over Wi-Fi. */
+    private Socket open() throws IOException {
+        Socket usb = new Socket();
+        try {
+            usb.connect(new InetSocketAddress("127.0.0.1", PORT), 1500);
+            via = "USB";
+            return usb;
+        } catch (IOException e) {
+            usb.close();
+        }
+        android.content.SharedPreferences p = prefs;
+        if (p == null || !p.contains("wifi_token") || !p.getBoolean("wifi_use", true)) {
+            throw new IOException("not connected");
+        }
+        int port = p.getInt("wifi_port", 7778);
+        for (String ip : p.getString("wifi_ips", "").split(",")) {
+            if (ip.isEmpty()) continue;
+            Socket raw = new Socket();
+            try {
+                raw.connect(new InetSocketAddress(ip, port), 1500);
+                javax.net.ssl.SSLSocket tls = (javax.net.ssl.SSLSocket) pinned(p.getString("wifi_fp", ""))
+                        .createSocket(raw, ip, port, true);
+                tls.startHandshake();
+                JSONObject auth = new JSONObject().put("t", "auth").put("token", p.getString("wifi_token", ""));
+                tls.getOutputStream().write((auth + "\n").getBytes(StandardCharsets.UTF_8));
+                via = "Wi-Fi";
+                return tls;
+            } catch (IOException | JSONException e) {
+                raw.close();
+            }
+        }
+        throw new IOException("PC not found on Wi-Fi");
+    }
+
+    /** TLS that trusts exactly one certificate: the PC's, learned over the cable. */
+    private static javax.net.ssl.SSLSocketFactory pinned(String fingerprint) throws IOException {
+        javax.net.ssl.X509TrustManager tm = new javax.net.ssl.X509TrustManager() {
+            @Override
+            public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String auth) {
+            }
+
+            @Override
+            public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String auth)
+                    throws java.security.cert.CertificateException {
+                try {
+                    byte[] d = java.security.MessageDigest.getInstance("SHA-256").digest(chain[0].getEncoded());
+                    StringBuilder hex = new StringBuilder();
+                    for (byte b : d) hex.append(String.format(Locale.US, "%02x", b));
+                    if (!hex.toString().equals(fingerprint)) {
+                        throw new java.security.cert.CertificateException("not the paired PC");
+                    }
+                } catch (java.security.NoSuchAlgorithmException e) {
+                    throw new java.security.cert.CertificateException(e);
+                }
+            }
+
+            @Override
+            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                return new java.security.cert.X509Certificate[0];
+            }
+        };
+        try {
+            javax.net.ssl.SSLContext ctx = javax.net.ssl.SSLContext.getInstance("TLS");
+            ctx.init(null, new javax.net.ssl.TrustManager[]{tm}, null);
+            return ctx.getSocketFactory();
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IOException(e);
+        }
+    }
+
     private void readLoop(Socket s) {
         try {
             BufferedReader in = new BufferedReader(
@@ -290,7 +395,19 @@ public final class HostLink {
                 String t = msg.optString("t");
                 java.util.function.Consumer<JSONObject> typedListener = typed.get(t);
                 if (typedListener != null) main.post(() -> typedListener.accept(msg));
-                if ("hello".equals(t)) {
+                if ("pair".equals(t) && prefs != null && "USB".equals(via)) {
+                    // only ever accepted over the cable
+                    org.json.JSONArray ips = msg.optJSONArray("ips");
+                    StringBuilder list = new StringBuilder();
+                    for (int i = 0; ips != null && i < ips.length(); i++) {
+                        if (list.length() > 0) list.append(',');
+                        list.append(ips.optString(i));
+                    }
+                    prefs.edit().putString("wifi_token", msg.optString("token"))
+                            .putString("wifi_fp", msg.optString("fp"))
+                            .putString("wifi_ips", list.toString())
+                            .putInt("wifi_port", msg.optInt("port", 7778)).apply();
+                } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected

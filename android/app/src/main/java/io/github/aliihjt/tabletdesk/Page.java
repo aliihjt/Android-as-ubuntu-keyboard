@@ -36,6 +36,7 @@ abstract class Page extends Activity implements HostLink.Listener {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui.loadScale(this);
+        link.attach(this);
         link.start();
         th = new Theme(this);
 
@@ -173,7 +174,7 @@ abstract class Page extends Activity implements HostLink.Listener {
     @Override
     public void onStatus(boolean connected, String host) {
         if (statusDot != null) {
-            statusDot.setText(connected ? "● " + host : "○ Not connected");
+            statusDot.setText(connected ? "\u25CF " + host + " \u00B7 " + link.via() : "\u25CB Not connected");
             statusDot.setTextColor(connected ? Theme.GREEN : th.secondary);
         }
     }

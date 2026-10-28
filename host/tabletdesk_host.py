@@ -20,6 +20,8 @@ Tablet -> host messages (one JSON object per line):
   {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
   {"t":"media?"} / {"t":"mediactl","a":"next"}  what's playing / play-pause, next, previous
   {"t":"stats?"}                           CPU, RAM, temperature, disk, network, battery
+  {"t":"allapps?"} / {"t":"url","u":"https://…"}  Stream Deck: installed apps / open a website
+  {"t":"windows?"} / {"t":"winfocus"|"winclose","id":"123"}  window switcher
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -33,6 +35,10 @@ Host -> tablet messages:
 """
 
 import argparse
+import hashlib
+import hmac
+import secrets
+import ssl
 import base64
 import glob
 import json
@@ -813,9 +819,39 @@ def favourite_apps():
     return apps
 
 
+def all_apps():
+    """Every installed app with a menu entry, as [{"id", "name", "path"}], by name."""
+    apps, seen = [], set()
+    for d in APP_DIRS:
+        for path in glob.glob(os.path.join(os.path.expanduser(d), "*.desktop")):
+            app_id = os.path.basename(path)
+            if app_id in seen:
+                continue
+            name, hidden, is_app = None, False, False
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    in_entry = False
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("["):
+                            in_entry = line == "[Desktop Entry]"
+                        elif in_entry and line.startswith("Name=") and name is None:
+                            name = line[5:]
+                        elif in_entry and line in ("NoDisplay=true", "Hidden=true"):
+                            hidden = True
+                        elif in_entry and line == "Type=Application":
+                            is_app = True
+            except OSError:
+                continue
+            seen.add(app_id)
+            if name and is_app and not hidden:
+                apps.append({"id": app_id, "name": name, "path": path})
+    return sorted(apps, key=lambda a: a["name"].lower())
+
+
 def launch_app(app_id):
-    # only apps from the user's own favourites can be started
-    for app in favourite_apps():
+    # only real, installed apps (by their .desktop id) can be started
+    for app in favourite_apps() + all_apps():
         if app["id"] == app_id:
             try:
                 subprocess.Popen(["gio", "launch", app["path"]], stdout=subprocess.DEVNULL,
@@ -823,6 +859,46 @@ def launch_app(app_id):
             except OSError as err:
                 print("launch failed:", app_id, err, file=sys.stderr)
             return
+
+
+def open_url(url):
+    """Stream Deck "website" step: only plain web links."""
+    url = str(url).strip()
+    if url.startswith(("https://", "http://")) and not any(c.isspace() for c in url):
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+_bus = []
+
+
+def shell_call(method, arg=None):
+    """Calls the GNOME extension (window list etc.); None if it isn't loaded."""
+    if Gio is None:
+        return None
+    try:
+        if not _bus:
+            _bus.append(Gio.bus_get_sync(Gio.BusType.SESSION, None))
+        params = GLib.Variant("(s)", (arg,)) if arg is not None else None
+        out = GLib.VariantType("(s)") if arg is None else None
+        res = _bus[0].call_sync("org.gnome.Shell", "/io/github/aliihjt/TabletDesk",
+                                "io.github.aliihjt.TabletDesk", method, params, out,
+                                Gio.DBusCallFlags.NONE, 1000, None)
+        return res.unpack()[0] if arg is None else ""
+    except GLib.Error as err:
+        print("GNOME extension call failed:", method, err.message, file=sys.stderr)
+        return None
+
+
+def windows_list():
+    raw = shell_call("Windows")
+    if raw is None:
+        return {"t": "windows", "error": "Log out and back in once so the GNOME extension loads.",
+                "list": []}
+    try:
+        return {"t": "windows", "list": json.loads(raw)}
+    except ValueError:
+        return {"t": "windows", "list": []}
 
 
 INBOX = os.path.expanduser("~/Downloads/Fedora Pad")
@@ -912,13 +988,69 @@ def handle(inj, msg, reply=None):
     elif t == "apps?" and reply:
         reply({"t": "apps", "list": [{"id": a["id"], "name": a["name"]}
                                      for a in favourite_apps()]})
+    elif t == "allapps?" and reply:
+        reply({"t": "allapps", "list": [{"id": a["id"], "name": a["name"]} for a in all_apps()]})
+    elif t == "url":
+        open_url(msg.get("u", ""))
+    elif t == "windows?" and reply:
+        reply(windows_list())
+    elif t in ("winfocus", "winclose"):
+        wid = str(msg.get("id", ""))
+        if wid.isdigit():
+            shell_call("Activate" if t == "winfocus" else "Close", wid)
     elif t == "launch":
         launch_app(str(msg.get("id", "")))
 
 
-def make_handler(inj, clients):
+CONF_DIR = os.path.expanduser("~/.config/tabletdesk")
+WIFI_FLAG = os.path.join(CONF_DIR, "wifi")
+LAN_PORT = 7778
+
+
+def wifi_enabled():
+    return os.path.exists(WIFI_FLAG)
+
+
+def lan_identity():
+    """Secret token + TLS certificate for Wi-Fi mode, created on first use.
+    Returns (token, cert path, key path, sha256 fingerprint of the cert)."""
+    os.makedirs(CONF_DIR, exist_ok=True)
+    token_file = os.path.join(CONF_DIR, "lan-token")
+    cert = os.path.join(CONF_DIR, "lan.crt")
+    key = os.path.join(CONF_DIR, "lan.key")
+    if not os.path.exists(token_file):
+        with open(os.open(token_file, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
+            f.write(secrets.token_urlsafe(32))
+    if not (os.path.exists(cert) and os.path.exists(key)):
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650",
+                        "-subj", "/CN=Fedora Pad", "-keyout", key, "-out", cert],
+                       capture_output=True, check=True)
+        os.chmod(key, 0o600)
+    with open(token_file) as f:
+        token = f.read().strip()
+    with open(cert) as f:
+        der = ssl.PEM_cert_to_DER_cert(f.read())
+    return token, cert, key, hashlib.sha256(der).hexdigest()
+
+
+def lan_ips():
+    """This PC's addresses on the home network."""
+    out = _run(["ip", "-4", "-o", "addr", "show", "scope", "global"])
+    ips = []
+    for line in out.splitlines():
+        parts = line.split()
+        if "inet" in parts:
+            ip = parts[parts.index("inet") + 1].split("/")[0]
+            if not parts[1].startswith(("docker", "virbr", "veth", "br-")):
+                ips.append(ip)
+    return ips
+
+
+def make_handler(inj, clients, lan=False):
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
+            if lan and not self.authorised():
+                return
             self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             clients.add(self.wfile)
             inj.release_all()
@@ -927,6 +1059,12 @@ def make_handler(inj, clients):
                      "session": os.environ.get("XDG_SESSION_TYPE", "unknown")}
             try:
                 self.wfile.write((json.dumps(hello) + "\n").encode())
+                if not lan and wifi_enabled():
+                    # pairing over the trusted cable: the tablet learns where and how to
+                    # reach this PC over Wi-Fi, and which certificate to trust
+                    token, _, _, fp = lan_identity()
+                    self.wfile.write((json.dumps({"t": "pair", "ips": lan_ips(), "port": LAN_PORT,
+                                                  "token": token, "fp": fp}) + "\n").encode())
                 if clients.last_app:
                     self.wfile.write((json.dumps(
                         {"t": "app", "name": clients.last_app}) + "\n").encode())
@@ -951,12 +1089,53 @@ def make_handler(inj, clients):
                 inj.release_all()
                 print("tablet disconnected", flush=True)
 
+        def authorised(self):
+            """Wi-Fi clients must first send the token they got over the cable."""
+            try:
+                self.request.settimeout(10)
+                first = json.loads(self.rfile.readline(4096) or b"{}")
+                self.request.settimeout(None)
+                token = lan_identity()[0]
+                ok = first.get("t") == "auth" and hmac.compare_digest(
+                    str(first.get("token", "")).encode(), token.encode())
+            except (OSError, ValueError, ssl.SSLError):
+                ok = False
+            if not ok:
+                print("refused a Wi-Fi connection without the right key", file=sys.stderr)
+            return ok
+
     return Handler
 
 
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
+
+
+class LanServer(Server):
+    """Wi-Fi mode: the same protocol over TLS, for paired tablets only."""
+
+    def __init__(self, addr, handler, cert, key):
+        self.tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.tls.minimum_version = ssl.TLSVersion.TLSv1_2
+        self.tls.load_cert_chain(cert, key)
+        super().__init__(addr, handler)
+
+    def get_request(self):
+        sock, addr = self.socket.accept()
+        # the handshake happens in the client's own thread on first read
+        return self.tls.wrap_socket(sock, server_side=True, do_handshake_on_connect=False), addr
+
+
+def start_wifi(inj, clients):
+    try:
+        _, cert, key, _ = lan_identity()
+        srv = LanServer(("0.0.0.0", LAN_PORT), make_handler(inj, clients, lan=True), cert, key)
+    except (OSError, subprocess.CalledProcessError, ssl.SSLError) as err:
+        print("Wi-Fi mode could not start:", err, file=sys.stderr)
+        return
+    print(f"Wi-Fi mode on, port {LAN_PORT} (encrypted, paired tablets only)", flush=True)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 
 def main():
@@ -976,6 +1155,8 @@ def main():
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()
+    if wifi_enabled():
+        start_wifi(inj, clients)
     # bind to localhost only: the tablet reaches it through `adb reverse`
     with Server(("127.0.0.1", args.port), make_handler(inj, clients)) as srv:
         print(f"TabletDesk host listening on 127.0.0.1:{args.port}", flush=True)

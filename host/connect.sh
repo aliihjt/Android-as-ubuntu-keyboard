@@ -62,8 +62,12 @@ cleanup_screen() {
 # Give the laptop back exactly as it was: stop the host (frees the keyboard and
 # removes the virtual mouse), end any left-over remote session and its virtual
 # monitor, and make sure the touchpad is switched on.
+WIFI_FLAG="$HOME/.config/tabletdesk/wifi"
+
 restore_laptop() {
-  if [ -n "$HOST_PID" ]; then
+  # Wi-Fi mode keeps the host running so the tablet can carry on without the cable
+  # (it gives the laptop keyboard back by itself when the tablet disconnects)
+  if [ -n "$HOST_PID" ] && [ ! -e "$WIFI_FLAG" ]; then
     kill "$HOST_PID" 2>/dev/null
     wait "$HOST_PID" 2>/dev/null
     HOST_PID=""
@@ -233,6 +237,9 @@ session_once() {
   cleanup_screen
   restore_laptop
 }
+
+# Wi-Fi mode: be reachable even before a cable is plugged in
+[ -e "$WIFI_FLAG" ] && start_host
 
 if [ "$WATCH" = 1 ]; then
   while true; do session_once; sleep 1; done

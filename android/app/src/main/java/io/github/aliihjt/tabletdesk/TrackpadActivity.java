@@ -3,6 +3,7 @@ package io.github.aliihjt.tabletdesk;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.InputDevice;
@@ -41,7 +42,14 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{0xFF101A2E, 0xFF231A3A, 0xFF0E2A33}));
         int m = Ui.dp(this, 16);
-        root.setPadding(m, Ui.dp(this, 28), m, m);  // room for Android's status bar
+        root.setPadding(m, m, m, m);  // full screen: no status bar to leave room for
+        if (Build.VERSION.SDK_INT >= 30) {  // full screen: move up above the on-screen keyboard
+            root.setOnApplyWindowInsetsListener((v, insets) -> {
+                int ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
+                v.setPadding(m, m, m, m + ime);
+                return insets;
+            });
+        }
 
         status = Ui.label(this, "", 13, 0xFFAAAAAA, false);
         status.setPadding(Ui.dp(this, 12), Ui.dp(this, 5), Ui.dp(this, 12), Ui.dp(this, 5));
@@ -144,8 +152,36 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         root.addView(buttons, blp);
 
         setContentView(root);
-        getWindow().setStatusBarColor(0);
-        getWindow().setNavigationBarColor(0xFF0E2A33);
+        if (Build.VERSION.SDK_INT >= 28) {  // use the area around a camera cutout too
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+        goFullScreen();
+    }
+
+    /** Hide Android's status and navigation bars; a swipe from the edge shows them briefly. */
+    private void goFullScreen() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(android.view.WindowInsets.Type.statusBars()
+                        | android.view.WindowInsets.Type.navigationBars());
+                c.setSystemBarsBehavior(
+                        android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) goFullScreen();  // stay full screen after the keyboard or a dialog
     }
 
     @Override

@@ -25,6 +25,7 @@ Host -> tablet messages:
   {"t":"app","name":"Firefox"}             focused application
   {"t":"state","volume":40,"brightness":70,"dark":true,"dnd":false,"touch":true}
   {"t":"apps","list":[{"id":"firefox.desktop","name":"Firefox"}]}
+  {"t":"ptr","x":0.4,"y":0.7}              pointer is on the tablet's screen ({"t":"ptr"} = not)
 """
 
 import argparse
@@ -38,6 +39,10 @@ import sys
 import threading
 import time
 
+try:  # PyGObject (installed on Fedora Workstation): fast D-Bus calls
+    from gi.repository import Gio, GLib
+except ImportError:
+    Gio = GLib = None
 try:
     from evdev import InputDevice, UInput, ecodes as e, list_devices
 except ImportError:  # allows --dry-run on machines without python3-evdev
@@ -466,6 +471,42 @@ def watch_focus(clients, interval=0.7):
         time.sleep(interval)
 
 
+def follow_pointer(clients, fps=30):
+    """Tell the tablet where the mouse pointer is on its screen.
+
+    The RDP app on the tablet doesn't draw the PC's pointer, so without this
+    the pointer seems to vanish when the touchpad moves it onto the tablet.
+    """
+    if Gio is None:
+        return
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    except GLib.Error:
+        return
+    last = None
+    while True:
+        if not clients.files:
+            last = None
+            time.sleep(0.5)
+            continue
+        try:
+            res = bus.call_sync("org.gnome.Shell", "/io/github/aliihjt/TabletDesk",
+                                "io.github.aliihjt.TabletDesk", "Pointer", None,
+                                GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE, 200, None)
+            value = res.unpack()[0]
+        except GLib.Error:  # extension not loaded yet (log out/in once)
+            time.sleep(3)
+            continue
+        if value != last:
+            last = value
+            msg = {"t": "ptr"}
+            if value:
+                p = json.loads(value)
+                msg.update(x=round(p["x"], 4), y=round(p["y"], 4))
+            clients.broadcast(msg)
+        time.sleep(1 / fps)
+
+
 def run_command(name):
     argv = COMMANDS.get(name)
     if not argv:
@@ -675,6 +716,7 @@ def main():
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
+    threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()
     # bind to localhost only: the tablet reaches it through `adb reverse`
     with Server(("127.0.0.1", args.port), make_handler(inj, clients)) as srv:
         print(f"TabletDesk host listening on 127.0.0.1:{args.port}", flush=True)

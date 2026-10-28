@@ -76,8 +76,8 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(offsetLabel);
         SeekBar offset = new SeekBar(this);
         offset.setMax(120);
-        offset.setProgress(prefs.getInt("menuoffset", 12));
-        offsetLabel.setText("Menu bar position: " + prefs.getInt("menuoffset", 12) + " dp from top");
+        offset.setProgress(prefs.getInt("menuoffset", 32));
+        offsetLabel.setText("Menu bar position: " + prefs.getInt("menuoffset", 32) + " dp from top");
         offset.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar s, int p, boolean user) {

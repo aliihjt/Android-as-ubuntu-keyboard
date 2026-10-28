@@ -25,6 +25,7 @@ public class OverlayService extends Service {
     private WindowManager wm;
     private MenuBar menuBar;
     private TouchBar touchBar;
+    private PointerOverlay pointer;
 
     static void start(Context c) {
         c.startForegroundService(new Intent(c, OverlayService.class));
@@ -57,6 +58,8 @@ public class OverlayService extends Service {
         removeBars();
         Ui.loadScale(this);
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        pointer = new PointerOverlay(this);
+        wm.addView(pointer, pointer.params());
         if (prefs.getBoolean("touchbar", true)) {
             touchBar = new TouchBar(this, wm, prefs.getBoolean("autohide", true));
             wm.addView(touchBar.view(), touchBar.params());
@@ -103,6 +106,11 @@ public class OverlayService extends Service {
     }
 
     private void removeBars() {
+        if (pointer != null) {
+            pointer.destroy();
+            wm.removeView(pointer);
+            pointer = null;
+        }
         if (menuBar != null) {
             menuBar.destroy();
             wm.removeView(menuBar.view());

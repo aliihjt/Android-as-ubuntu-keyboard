@@ -35,6 +35,11 @@ public final class HostLink {
         void onState(JSONObject state);
     }
 
+    /** Laptop pointer on the tablet's screen: x, y in 0..1, or -1, -1 when it's elsewhere. */
+    public interface PointerListener {
+        void onPointer(float x, float y);
+    }
+
     public static final int PORT = 7777;
     private static final HostLink INSTANCE = new HostLink();
 
@@ -50,6 +55,7 @@ public final class HostLink {
     private volatile String host = "Fedora";
     private volatile String app = "Fedora";
     private volatile StateListener stateListener;
+    private volatile PointerListener pointerListener;
     /** favourite Fedora apps for the Dock: {id, name} */
     private volatile List<String[]> apps = new java.util.ArrayList<>();
 
@@ -126,6 +132,10 @@ public final class HostLink {
 
     public void requestApps() {
         send("{\"t\":\"apps?\"}");
+    }
+
+    public void setPointerListener(PointerListener l) {
+        pointerListener = l;
     }
 
     public void setStateListener(StateListener l) {
@@ -225,6 +235,10 @@ public final class HostLink {
                     // so only the host's hello means we are really connected
                     setConnected(true);
                     requestApps();
+                } else if ("ptr".equals(t)) {
+                    PointerListener l = pointerListener;
+                    float x = (float) msg.optDouble("x", -1), y = (float) msg.optDouble("y", -1);
+                    if (l != null) main.post(() -> l.onPointer(x, y));
                 } else if ("apps".equals(t)) {
                     org.json.JSONArray list = msg.optJSONArray("list");
                     List<String[]> next = new java.util.ArrayList<>();

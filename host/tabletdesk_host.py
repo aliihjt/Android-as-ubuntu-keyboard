@@ -390,6 +390,14 @@ class LaptopKeyboard:
                 return
             for d in self._built_in_keyboards():
                 try:
+                    # Wait until no key is held (e.g. the Enter that started us).
+                    # Grabbing mid-press hides the key-up from GNOME: the key
+                    # then counts as held forever, and "disable touchpad while
+                    # typing" keeps the touchpad off even after unplugging.
+                    for _ in range(50):
+                        if not d.active_keys():
+                            break
+                        time.sleep(0.1)
                     d.grab()
                     self.grabbed.append(d)
                     print("laptop keyboard off:", d.name, flush=True)

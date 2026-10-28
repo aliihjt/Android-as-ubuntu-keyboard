@@ -166,6 +166,9 @@ final class MenuBar implements HostLink.Listener {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
+        // user-chosen distance from the top edge (Settings: "Menu bar position")
+        params.y = Math.round(ctx.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
+                .getInt("menuoffset", 12) * ctx.getResources().getDisplayMetrics().density);
         if (Build.VERSION.SDK_INT >= 30) {
             // sit just below Android's status bar (or at the very top when it is hidden)
             params.setFitInsetsTypes(android.view.WindowInsets.Type.statusBars()

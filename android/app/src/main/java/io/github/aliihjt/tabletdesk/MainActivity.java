@@ -72,6 +72,30 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(check("Show macOS menu bar (top)", "menubar"));
         col.addView(check("Show Touch Bar (bottom)", "touchbar"));
         col.addView(check("Auto-hide bars when not used (like macOS full screen)", "autohide"));
+        TextView offsetLabel = Ui.label(this, "", 15, FG, false);
+        col.addView(offsetLabel);
+        SeekBar offset = new SeekBar(this);
+        offset.setMax(120);
+        offset.setProgress(prefs.getInt("menuoffset", 12));
+        offsetLabel.setText("Menu bar position: " + prefs.getInt("menuoffset", 12) + " dp from top");
+        offset.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar s, int p, boolean user) {
+                offsetLabel.setText("Menu bar position: " + p + " dp from top");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar s) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar s) {
+                prefs.edit().putInt("menuoffset", s.getProgress()).apply();
+                if (OverlayService.running) OverlayService.start(MainActivity.this);  // move it now
+            }
+        });
+        col.addView(offset);
+
         TextView speedLabel = Ui.label(this, "", 15, FG, false);
         col.addView(speedLabel);
         SeekBar speed = new SeekBar(this);

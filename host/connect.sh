@@ -189,6 +189,9 @@ session_once() {
   adb shell svc power stayon usb                                   # screen stays on while charging
   adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow 2>/dev/null # menu bar + Touch Bar overlays
   start_host
+  # the tablet's virtual trackpad counts as an "external mouse"; GNOME can be set
+  # to switch the laptop touchpad off when one appears, so keep it on
+  gsettings set org.gnome.desktop.peripherals.touchpad send-events enabled 2>/dev/null
   [ "$MODE" != "input" ] && start_screen
   # start the menu bar + Touch Bar overlays, then put the desktop screen under them
   adb shell am start -n "$PKG/.MainActivity" --ez autostart true 2>&1 \

@@ -167,6 +167,23 @@ public final class HostLink {
         send(obj("t", type + "?"));
     }
 
+    /**
+     * One piece of a file for the PC. Waits while the send queue is full, so
+     * call it from a background thread. Returns false if the PC is not connected.
+     */
+    public boolean sendFileChunk(String id, String name, String base64, boolean last)
+            throws InterruptedException {
+        if (!connected) return false;
+        JSONObject o = new JSONObject();
+        try {
+            o.put("t", "file").put("id", id).put("name", name).put("data", base64).put("last", last);
+        } catch (JSONException e) {
+            return false;
+        }
+        queue.put(o.toString());
+        return true;
+    }
+
     /** play-pause, next or previous on the PC's media player. */
     public void media(String action) {
         send(obj("t", "mediactl", "a", action));

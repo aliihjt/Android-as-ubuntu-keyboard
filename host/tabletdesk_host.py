@@ -20,6 +20,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
   {"t":"media?"} / {"t":"mediactl","a":"next"}  what's playing / play-pause, next, previous
   {"t":"stats?"}                           CPU, RAM, temperature, disk, network, battery
+  {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
 
@@ -32,6 +33,7 @@ Host -> tablet messages:
 """
 
 import argparse
+import base64
 import glob
 import json
 import os
@@ -797,6 +799,40 @@ def launch_app(app_id):
             return
 
 
+INBOX = os.path.expanduser("~/Downloads/Fedora Pad")
+_transfers = {}  # transfer id -> [final path, open file]
+
+
+def receive_file(msg, reply):
+    """Files sent from the tablet, in base64 chunks, saved to ~/Downloads/Fedora Pad."""
+    tid = str(msg.get("id", ""))[:64]
+    if not tid:
+        return
+    if tid not in _transfers:
+        name = os.path.basename(str(msg.get("name", "file"))).strip().lstrip(".") or "file"
+        os.makedirs(INBOX, exist_ok=True)
+        base, ext = os.path.splitext(name)
+        path, n = os.path.join(INBOX, name), 1
+        while os.path.exists(path):  # never overwrite: "photo (1).jpg"
+            path = os.path.join(INBOX, f"{base} ({n}){ext}")
+            n += 1
+        _transfers[tid] = [path, open(path + ".part", "wb")]
+    path, f = _transfers[tid]
+    try:
+        f.write(base64.b64decode(str(msg.get("data", ""))))
+    except (ValueError, OSError) as err:
+        print("file chunk failed:", err, file=sys.stderr)
+    if msg.get("last"):
+        f.close()
+        os.replace(path + ".part", path)
+        del _transfers[tid]
+        if reply:
+            reply({"t": "filedone", "id": tid, "name": os.path.basename(path)})
+        if shutil.which("notify-send"):
+            subprocess.Popen(["notify-send", "-a", "Fedora Pad", "File received",
+                              os.path.basename(path) + " is in Downloads › Fedora Pad"])
+
+
 MODE_FILE = os.path.expanduser("~/.config/tabletdesk/mode")
 
 
@@ -832,6 +868,8 @@ def handle(inj, msg, reply=None):
     elif t == "state?" and reply:
         # several helper programs: don't hold up keys and mouse meanwhile
         threading.Thread(target=lambda: reply(read_state()), daemon=True).start()
+    elif t == "file":
+        receive_file(msg, reply)
     elif t == "media?" and reply:
         reply(media_state())
     elif t == "mediactl":

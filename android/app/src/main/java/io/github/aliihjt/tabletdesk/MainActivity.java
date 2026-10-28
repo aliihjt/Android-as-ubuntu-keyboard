@@ -116,6 +116,10 @@ public class MainActivity extends Page {
                 {"⚡", Theme.INDIGO, "Shortcuts", "Copy, paste, windows", ShortcutsActivity.class},
                 {"🚀", Theme.TEAL, "Apps", "Open Fedora apps", AppsActivity.class},
                 {"📊", Theme.GREEN, "Stats", "CPU, memory, battery", StatsActivity.class},
+{"\u270D\uFE0F", Theme.YELLOW, "Text & Clipboard", "Write here, type there", ClipboardActivity.class},
+                {"\uD83D\uDCC1", Theme.BLUE, "Send Files", "Photos and files to PC", FilesActivity.class},
+                {"\uD83C\uDFA4", Theme.RED, "Presenter", "Slides remote + timer", PresenterActivity.class},
+                {"\u2B50", Theme.ORANGE, "My Buttons", "Your own shortcuts", ButtonsActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", "Look and options", SettingsActivity.class},
         };
         float widthDp = Math.min(820, getResources().getConfiguration().screenWidthDp);

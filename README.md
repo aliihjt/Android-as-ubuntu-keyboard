@@ -31,6 +31,10 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | ⚡ | **Shortcuts** | One-tap copy, paste, undo, windows, screenshots, recording, emoji, plus shortcuts for the app you're using (browser, terminal, VS Code). |
 | 🚀 | **Apps** | Opens the apps pinned in Fedora's dash, plus search, all apps and AI. |
 | 📊 | **Stats** | Live CPU, memory, temperature, disk, battery and network speed. |
+| ✍️ | **Text & Clipboard** | Write on the tablet (any language) and type it on Fedora in one tap; clipboard both ways. |
+| 📁 | **Send Files** | Photos and files from the tablet to Fedora's Downloads › Fedora Pad, over the cable. |
+| 🎤 | **Presenter** | Slide remote with huge ◀ ▶ buttons, start / end, black screen and a timer. |
+| ⭐ | **My Buttons** | Make your own one-tap buttons: a key combination or a text to type. |
 | ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
 | ● | **Floating button** | The only thing over the Fedora screen. Drag it anywhere; tap it for a floating **keyboard** or **trackpad**, Media, Shortcuts or Home. |
 | 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is off (touchpad stays on). Unplug and it's back. |

@@ -44,6 +44,11 @@
         <activity android:name=".ShortcutsActivity" android:exported="false" />
         <activity android:name=".AppsActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".ClipboardActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".FilesActivity" android:exported="false" />
+        <activity android:name=".PresenterActivity" android:exported="false" />
+        <activity android:name=".ButtonsActivity" android:exported="false" />
 
         <service
             android:name=".OverlayService"

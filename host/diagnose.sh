@@ -21,6 +21,12 @@ OUT="$HOME/tabletdesk-diagnose.txt"
   adb shell dumpsys package io.github.aliihjt.tabletdesk 2>/dev/null | grep -m1 versionCode
   echo; echo "== remote desktop"; grdctl status 2>&1 | grep -iv password
   gsettings get org.gnome.desktop.remote-desktop.rdp screen-share-mode 2>/dev/null
+  echo; echo "== Wi-Fi mode"
+  [ -e "$HOME/.config/tabletdesk/wifi" ] && echo "on" || echo "off (run host/wifi-setup.sh)"
+  ip -4 -o addr show scope global | awk '{print $2, $4}'
+  echo "listening:"; ss -ltn 2>/dev/null | grep -E ':(7778|3389) ' || echo "nothing on 7778/3389"
+  echo "firewall ($(firewall-cmd --get-default-zone 2>/dev/null)):"
+  firewall-cmd --list-ports 2>/dev/null; firewall-cmd --list-services 2>/dev/null
   echo; echo "== monitors"; (gdctl show 2>/dev/null || echo "gdctl not available") | head -40
   echo; echo "== tabletdesk log"; journalctl --user -u tabletdesk -n 80 --no-pager 2>&1
   echo; echo "== remote desktop log"; journalctl --user -u gnome-remote-desktop -n 30 --no-pager 2>&1

@@ -556,13 +556,31 @@ public class MainActivity extends Page implements HostLink.StateListener {
     }
 
     static void openRdp(android.content.Context c) {
+        String ip = HostLink.get().wifiIp();
         for (String pkg : RDP) {
             Intent i = c.getPackageManager().getLaunchIntentForPackage(pkg);
-            if (i != null) {
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                c.startActivity(i);
-                return;
+            if (i == null) continue;
+            if (!ip.isEmpty()) {
+                // over Wi-Fi the screen is at the laptop's own address, not 127.0.0.1
+                android.content.ClipboardManager cm = c.getSystemService(android.content.ClipboardManager.class);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Fedora PC", ip));
+                String user = HostLink.get().user();
+                Intent direct = new Intent(Intent.ACTION_VIEW, Uri.parse("rdp://full%20address=s:" + ip + ":3389"
+                        + (user.isEmpty() ? "" : "&username=s:" + Uri.encode(user))));
+                direct.setPackage(pkg);
+                direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                Toast.makeText(c, "Over Wi-Fi: connect Windows App to " + ip
+                        + " (copied). Same user and password as 127.0.0.1.", Toast.LENGTH_LONG).show();
+                try {
+                    c.startActivity(direct);
+                    return;
+                } catch (ActivityNotFoundException ignored) {
+                    // this app version has no rdp:// links: just open it
+                }
             }
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(i);
+            return;
         }
         openStore(c, RDP[0]);
     }

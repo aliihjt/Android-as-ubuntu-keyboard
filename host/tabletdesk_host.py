@@ -1056,7 +1056,9 @@ def make_handler(inj, clients, lan=False):
             inj.release_all()
             print("tablet connected", flush=True)
             hello = {"t": "hello", "host": socket.gethostname(),
-                     "session": os.environ.get("XDG_SESSION_TYPE", "unknown")}
+                     "session": os.environ.get("XDG_SESSION_TYPE", "unknown"),
+                     # for "Show Fedora Screen" over Wi-Fi (Remote Desktop login name)
+                     "user": os.environ.get("USER", "")}
             try:
                 self.wfile.write((json.dumps(hello) + "\n").encode())
                 if not lan and wifi_enabled():

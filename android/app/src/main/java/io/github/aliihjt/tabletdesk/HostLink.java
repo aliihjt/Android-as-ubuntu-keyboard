@@ -62,6 +62,8 @@ public final class HostLink {
     private volatile StateListener stateListener;
     private volatile android.content.SharedPreferences prefs;
     private volatile String via = "USB";
+    private volatile String wifiIp = "";
+    private volatile String user = "";
     private volatile PointerListener pointerListener;
     private volatile ClipListener clipListener;
     /** one listener per reply type ("media", "stats", ...) for the live panels */
@@ -80,6 +82,16 @@ public final class HostLink {
         if (prefs == null) {
             prefs = c.getApplicationContext().getSharedPreferences("tabletdesk", android.content.Context.MODE_PRIVATE);
         }
+    }
+
+    /** The laptop's address when connected over Wi-Fi ("" over the cable). */
+    public String wifiIp() {
+        return "Wi-Fi".equals(via) ? wifiIp : "";
+    }
+
+    /** The Fedora user name (for Remote Desktop). */
+    public String user() {
+        return user;
     }
 
     /** "USB" or "Wi-Fi": how the tablet is connected right now. */
@@ -341,6 +353,7 @@ public final class HostLink {
                 JSONObject auth = new JSONObject().put("t", "auth").put("token", p.getString("wifi_token", ""));
                 tls.getOutputStream().write((auth + "\n").getBytes(StandardCharsets.UTF_8));
                 via = "Wi-Fi";
+                wifiIp = ip;
                 return tls;
             } catch (IOException | JSONException e) {
                 raw.close();
@@ -409,6 +422,7 @@ public final class HostLink {
                             .putInt("wifi_port", msg.optInt("port", 7778)).apply();
                 } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
+                    user = msg.optString("user", "");
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected
                     setConnected(true);

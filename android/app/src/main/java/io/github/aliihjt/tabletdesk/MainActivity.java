@@ -71,16 +71,35 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(statusCard(), block(18));
         col.addView(quickTiles(), block(14));
 
-        col.addView(section("Screen"));
-        col.addView(card(segmented(new String[][]{
+        col.addView(tipsCard(), block(14));
+
+        // everything else folds away under "Settings" so the screen stays simple
+        LinearLayout settings = new LinearLayout(this);
+        settings.setOrientation(LinearLayout.VERTICAL);
+        boolean open = prefs.getBoolean("show_settings", false);
+        settings.setVisibility(open ? View.VISIBLE : View.GONE);
+        TextView settingsButton = pill(open ? "\u2699\uFE0F  Hide settings  \u25B4" : "\u2699\uFE0F  Settings  \u25BE",
+                false, v -> {
+                    boolean show = settings.getVisibility() != View.VISIBLE;
+                    settings.setVisibility(show ? View.VISIBLE : View.GONE);
+                    prefs.edit().putBoolean("show_settings", show).apply();
+                    ((TextView) v).setText(show ? "\u2699\uFE0F  Hide settings  \u25B4" : "\u2699\uFE0F  Settings  \u25BE");
+                });
+        LinearLayout.LayoutParams sbl = block(18);
+        sbl.height = Ui.dp(this, 48);
+        col.addView(settingsButton, sbl);
+        col.addView(settings);
+
+        settings.addView(section("Screen"));
+        settings.addView(card(segmented(new String[][]{
                 {"extend", "🖥🖥  Extend"}, {"mirror", "🪞  Mirror"},
                 {"input", "⌨  Input only"}}, prefs.getString("mode", "extend"), mode -> {
             prefs.edit().putString("mode", mode).apply();
             HostLink.get().mode(mode);
         }), hint("Extend = second screen · Mirror = same picture · Input = keyboard & trackpad only")));
 
-        col.addView(section("Laptop"));
-        col.addView(card(
+        settings.addView(section("Laptop"));
+        settings.addView(card(
                 toggle("Laptop keyboard off while connected", "The tablet becomes your keyboard",
                         !HostLink.get().lastState().optBoolean("laptopkbd", false),
                         on -> HostLink.get().set("laptopkbd", on ? 0 : 1)),
@@ -88,14 +107,14 @@ public class MainActivity extends Activity implements HostLink.Listener {
                         HostLink.get().lastState().optBoolean("touch", true),
                         on -> HostLink.get().set("touch", on ? 1 : 0))));
 
-        col.addView(section("Bars"));
-        col.addView(card(
+        settings.addView(section("Bars"));
+        settings.addView(card(
                 prefToggle("Menu bar", "macOS-style menus at the top", "menubar", false),
                 prefToggle("Touch Bar", "Context keys at the bottom", "touchbar", false),
                 prefToggle("Auto-hide", "Bars tuck away when not used", "autohide", false)));
 
-        col.addView(section("Look"));
-        col.addView(card(
+        settings.addView(section("Look"));
+        settings.addView(card(
                 label("Size"),
                 segmented(new String[][]{{"100", "A  Normal"}, {"135", "A  Large"}, {"165", "A  Extra large"}},
                         String.valueOf(prefs.getInt("uiscale", 135)), v -> {
@@ -110,13 +129,19 @@ public class MainActivity extends Activity implements HostLink.Listener {
                     restyle();
                 })));
 
-        col.addView(section("Trackpad"));
-        col.addView(card(
+        settings.addView(section("Trackpad"));
+        settings.addView(card(
                 slider("Speed", "speed", 50, 300, "%"),
                 prefToggle("Natural scrolling", "Content follows your fingers", "natural", false),
                 prefToggle("Vibrate on tap", "Feel each key and click", "haptics", true)));
 
-        col.addView(section("First-time setup"));
+        settings.addView(section("Desktop bars"));
+        settings.addView(card(pill("\u25A0  Stop the menu bar and Touch Bar", false, v -> {
+            OverlayService.stop(this);
+            startButton.postDelayed(this::refreshStart, 300);
+        })));
+
+        settings.addView(section("First-time setup"));
         TextView help = Ui.label(this,
                 "1  Tablet: Settings › About › tap Build number 7×, then Developer options › USB debugging on.\n"
                         + "2  Fedora: run host/setup.sh, then log out and back in.\n"
@@ -126,7 +151,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
                 13.5f, muted, false);
         help.setSingleLine(false);
         help.setLineSpacing(0, 1.35f);
-        col.addView(card(help));
+        settings.addView(card(help));
 
         // keep it readable on wide tablets: centered column, at most ~760dp wide
         FrameLayout center = new FrameLayout(this);
@@ -216,18 +241,23 @@ public class MainActivity extends Activity implements HostLink.Listener {
         top.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         card.addView(top);
 
-        LinearLayout buttons = new LinearLayout(this);
-        startButton = pill("", true, v -> toggleBars());
-        buttons.addView(startButton, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
-        View g = new View(this);
-        buttons.addView(g, new LinearLayout.LayoutParams(Ui.dp(this, 10), 1));
-        TextView screen = pill("🖥  Open screen", false, v -> openRdp());
-        screen.setOnLongClickListener(v -> {  // Xorg sessions use VNC instead
+        LinearLayout startRow = new LinearLayout(this);
+        startButton = pill("", true, v -> startEverything());
+        startButton.setOnLongClickListener(v -> {  // Xorg sessions use VNC instead
             openVnc();
             return true;
         });
-        buttons.addView(screen, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
-        card.addView(buttons, block(14));
+        startRow.addView(startButton, new LinearLayout.LayoutParams(0, Ui.dp(this, 56), 1f));
+        card.addView(startRow, block(14));
+        LinearLayout buttons = new LinearLayout(this);
+        TextView keyboard = pill("\u2328\uFE0F  Keyboard", false, v -> openFloatingKeyboard());
+        buttons.addView(keyboard, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
+        View g2 = new View(this);
+        buttons.addView(g2, new LinearLayout.LayoutParams(Ui.dp(this, 10), 1));
+        TextView trackpad = pill("\uD83D\uDDB1  Trackpad", false,
+                v -> startActivity(new Intent(this, TrackpadActivity.class)));
+        buttons.addView(trackpad, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
+        card.addView(buttons, block(10));
         onStatus(HostLink.get().isConnected(), HostLink.get().host());
         return card;
     }
@@ -268,9 +298,41 @@ public class MainActivity extends Activity implements HostLink.Listener {
         startButton.postDelayed(this::refreshStart, 300);
     }
 
+    /** One tap: menu bar + Touch Bar, then the Fedora screen. */
+    private void startEverything() {
+        if (!Settings.canDrawOverlays(this)) {
+            toggleBars();  // asks for the permission first
+            return;
+        }
+        if (!OverlayService.running) OverlayService.start(this);
+        startButton.postDelayed(this::refreshStart, 300);
+        openRdp();
+    }
+
+    private void openFloatingKeyboard() {
+        if (!Settings.canDrawOverlays(this)) {
+            toggleBars();
+            return;
+        }
+        OverlayService.toggleKeyboard(this);
+        openRdp();  // the keyboard floats over the Fedora screen
+    }
+
+    private View tipsCard() {
+        TextView t = Ui.label(this,
+                "\u2460  Plug in the USB-C cable\n"
+                        + "\u2461  Tap \u25B6 Start \u2014 the Fedora screen opens\n"
+                        + "\u2462  Tap \u2328 Keyboard for a keyboard on top of it, or \uD83D\uDDB1 Trackpad for the full page\n"
+                        + "Every option is also in the TabletDesk menu at the top of the screen.",
+                13.5f, muted, false);
+        t.setSingleLine(false);
+        t.setLineSpacing(0, 1.4f);
+        return card(t);
+    }
+
     private void refreshStart() {
         if (startButton != null) {
-            startButton.setText(OverlayService.running ? "■  Stop desktop bars" : "▶  Start desktop bars");
+            startButton.setText(OverlayService.running ? "\uD83D\uDDA5  Show Fedora screen" : "\u25B6  Start");
         }
     }
 

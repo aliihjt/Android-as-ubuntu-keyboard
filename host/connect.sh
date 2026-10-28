@@ -71,6 +71,9 @@ restore_laptop() {
   if [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]]; then
     systemctl --user restart gnome-remote-desktop.service 2>/dev/null
     gsettings set org.gnome.desktop.peripherals.touchpad send-events enabled 2>/dev/null
+  # number pad keys from the tablet should type digits, not act as arrows
+  gsettings set org.gnome.desktop.peripherals.keyboard numlock-state true 2>/dev/null
+  gsettings set org.gnome.desktop.peripherals.keyboard remember-numlock-state true 2>/dev/null
   fi
 }
 

@@ -29,6 +29,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
     private TrackpadView pad;
     private TextView status;
     private boolean keyboardShown;
+    private LinearLayout numpadPanel;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -74,6 +75,8 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         keys.addView(key("del", v -> onKey("delete")));
         keys.addView(key("⌫", v -> onKey("backspace")));
         keys.addView(key("⏎", v -> onKey("enter")));
+        keys.addView(key("\uD83D\uDD22 123", v -> numpadPanel.setVisibility(
+                numpadPanel.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE)));
         TextView kb = key("⌨ Keyboard", v -> toggleKeyboard());
         kb.setBackground(keyBg(true));
         keys.addView(kb);
@@ -109,6 +112,33 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52));
         scLp.topMargin = Ui.dp(this, 8);
         root.addView(shortcutScroll, scLp);
+
+        // number pad (hidden until "123" is tapped); sends real keypad keys
+        numpadPanel = new LinearLayout(this);
+        numpadPanel.setOrientation(LinearLayout.VERTICAL);
+        numpadPanel.setPadding(kp, kp, kp, kp);
+        numpadPanel.setBackground(Glass.surface(this, true, Ui.dp(this, 18), true));
+        String[][] np = {{"7|kp7", "8|kp8", "9|kp9", "\u00F7|kpslash", "\u232B|backspace"},
+                {"4|kp4", "5|kp5", "6|kp6", "\u00D7|kpasterisk", "tab|tab"},
+                {"1|kp1", "2|kp2", "3|kp3", "\u2212|kpminus", "esc|esc"},
+                {"0|kp0", ".|kpdot", "\u23CE|kpenter", "+|kpplus", "del|delete"}};
+        for (String[] row : np) {
+            LinearLayout r = new LinearLayout(this);
+            for (String k : row) {
+                String[] kv = k.split("\\|");
+                TextView t = key(kv[0], v -> link.combo(kv[1]));
+                t.setTextSize(18 * Ui.scale);
+                LinearLayout.LayoutParams klp = new LinearLayout.LayoutParams(0, Ui.dp(this, 46), 1f);
+                klp.setMargins(Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3));
+                r.addView(t, klp);
+            }
+            numpadPanel.addView(r);
+        }
+        numpadPanel.setVisibility(View.GONE);
+        LinearLayout.LayoutParams npLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        npLp.topMargin = Ui.dp(this, 8);
+        root.addView(numpadPanel, npLp);
 
         FrameLayout padFrame = new FrameLayout(this);
         padFrame.setBackground(Glass.surface(this, true, Ui.dp(this, 26), true));

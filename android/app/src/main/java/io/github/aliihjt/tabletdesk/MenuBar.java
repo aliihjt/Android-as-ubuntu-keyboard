@@ -144,14 +144,16 @@ final class MenuBar implements HostLink.Listener {
         LinearLayout line2 = new LinearLayout(ctx);
         line2.setGravity(Gravity.CENTER_VERTICAL);
         bar.addView(line2, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-        line2.addView(iconButton("\uD83D\uDE80", this::showDock));  // Dock: favourite apps
-        line2.addView(iconButton("\uD83D\uDD0D", v -> HostLink.get().combo("super")));  // search apps
-        line2.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
+        // labelled buttons, so it is obvious what each one does
+        line2.addView(iconButton("\uD83D\uDE80 Apps", this::showDock));  // favourite apps
+        line2.addView(iconButton("\uD83D\uDD0D Search", v -> HostLink.get().combo("super")));
+        line2.addView(iconButton("\u2328 Keyboard", v -> OverlayService.toggleKeyboard(ctx)));  // floating
+        line2.addView(iconButton("\uD83D\uDDB1 Trackpad", v -> {  // full-screen keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         }));
-        line2.addView(iconButton("\u2630", v -> {  // Control Center
+        line2.addView(iconButton("\u2630 Control", v -> {  // Control Center
             handler.removeCallbacks(hide);
             ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
         }));
@@ -273,7 +275,10 @@ final class MenuBar implements HostLink.Listener {
 
     private TextView iconButton(String glyph, View.OnClickListener l) {
         TextView t = menuTitle(glyph, false, null);
-        t.setTextSize(15 * Ui.scale);
+        t.setTextSize(13 * Ui.scale);
+        t.setBackground(Ui.pressable(dark ? 0x1FFFFFFF : 0x0F000000, Ui.dp(ctx, 8),
+                dark ? 0x40FFFFFF : 0x26000000));  // a visible button, not just a glyph
+        ((LinearLayout.LayoutParams) t.getLayoutParams()).rightMargin = Ui.dp(ctx, 4);
         t.setOnClickListener(v -> {
             scheduleHide();
             l.onClick(v);
@@ -315,7 +320,8 @@ final class MenuBar implements HostLink.Listener {
                 "TabletDesk",
                 "\uD83D\uDCBB  " + pcInfo(st) + "|local:none",
                 "-",
-                "\u2328  Keyboard & Trackpad|local:trackpad",
+                "\u2328  Floating keyboard (with numpad)|local:floatkb",
+                "\uD83D\uDDB1  Full-screen keyboard & trackpad|local:trackpad",
                 "\u2630  Control Center…|local:cc",
                 "-",
                 check(mode.equals("extend")) + "Extend (second screen)|local:mode:extend",
@@ -380,6 +386,9 @@ final class MenuBar implements HostLink.Listener {
                     ctx.startActivity(i);
                     break;
                 }
+                case "floatkb":
+                    OverlayService.toggleKeyboard(ctx);
+                    break;
                 case "cc":
                     ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
                     break;

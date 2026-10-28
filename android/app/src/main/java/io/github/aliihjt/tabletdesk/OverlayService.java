@@ -17,6 +17,7 @@ import android.view.WindowManager;
 /** Keeps the menu bar and Touch Bar floating above every app (including the VNC viewer). */
 public class OverlayService extends Service {
     static final String ACTION_STOP = "io.github.aliihjt.tabletdesk.STOP";
+    static final String ACTION_KEYBOARD = "io.github.aliihjt.tabletdesk.KEYBOARD";
     static final String PREFS = "tabletdesk";
     private static final String CHANNEL = "tabletdesk";
     static volatile boolean running;
@@ -26,9 +27,15 @@ public class OverlayService extends Service {
     private MenuBar menuBar;
     private TouchBar touchBar;
     private PointerOverlay pointer;
+    private FloatingKeyboard keyboard;
 
     static void start(Context c) {
         c.startForegroundService(new Intent(c, OverlayService.class));
+    }
+
+    /** Show or hide the floating keyboard (starts the bars first if needed). */
+    static void toggleKeyboard(Context c) {
+        c.startForegroundService(new Intent(c, OverlayService.class).setAction(ACTION_KEYBOARD));
     }
 
     static void stop(Context c) {
@@ -55,6 +62,11 @@ public class OverlayService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        boolean keyboardRequest = intent != null && ACTION_KEYBOARD.equals(intent.getAction());
+        if (keyboardRequest && pointer != null) {  // bars already up: just toggle
+            toggleKeyboardNow();
+            return START_STICKY;
+        }
         removeBars();
         Ui.loadScale(this);
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -74,11 +86,25 @@ public class OverlayService extends Service {
             });
             wm.addView(menuBar.view(), menuBar.params());
         }
+        if (keyboardRequest) toggleKeyboardNow();
         return START_STICKY;
+    }
+
+    private void toggleKeyboardNow() {
+        if (keyboard != null) {
+            keyboard.destroy();
+            wm.removeView(keyboard.view());
+            keyboard = null;
+            return;
+        }
+        Ui.loadScale(this);
+        keyboard = new FloatingKeyboard(this, wm);
+        wm.addView(keyboard.view(), keyboard.params());
     }
 
     @Override
     public void onDestroy() {
+        if (keyboard != null) toggleKeyboardNow();  // removes it
         removeBars();
         running = false;
         instance = null;

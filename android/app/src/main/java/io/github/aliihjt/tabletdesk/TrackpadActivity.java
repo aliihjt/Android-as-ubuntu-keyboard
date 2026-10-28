@@ -144,6 +144,8 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         root.addView(buttons, blp);
 
         setContentView(root);
+        getWindow().setStatusBarColor(0);
+        getWindow().setNavigationBarColor(0xFF0E2A33);
     }
 
     @Override

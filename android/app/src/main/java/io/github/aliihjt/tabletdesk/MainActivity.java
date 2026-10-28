@@ -3,30 +3,46 @@ package io.github.aliihjt.tabletdesk;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.Gravity;
 import android.view.View;
-import android.widget.CheckBox;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
-/** Home screen: start the Mac bars, open the trackpad, open the desktop screen. */
+/**
+ * Home screen: a glass dashboard with connection status, quick actions and all
+ * settings, in the same Liquid Glass style as the menu bar and Touch Bar.
+ */
 public class MainActivity extends Activity implements HostLink.Listener {
-    private static final int FG = 0xFF1D1D1F;
-    private static final int MUTED = 0xFF6E6E73;
+    private static final int ACCENT = 0xFF0A84FF;
     private static final String AVNC = "com.gaurav.avnc";
     /** RDP clients, best first: Microsoft "Windows App", then aFreeRDP. */
     private static final String[] RDP = {"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"};
 
-    private TextView status;
-    private TextView barsButton;
     private SharedPreferences prefs;
+    private boolean dark;
+    private int fg;
+    private int muted;
+    private TextView statusTitle;
+    private TextView statusText;
+    private View statusDot;
+    private TextView startButton;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -42,99 +58,96 @@ public class MainActivity extends Activity implements HostLink.Listener {
             return;
         }
 
+        dark = Ui.isDark(this);
+        fg = dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
+        muted = dark ? 0x99EBEBF5 : 0x993C3C43;
+
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        int m = Ui.dp(this, 24);
-        col.setPadding(m, Ui.dp(this, 48), m, m);
+        int m = Ui.dp(this, 18);
+        col.setPadding(m, Ui.dp(this, 36), m, Ui.dp(this, 40));
 
-        col.addView(Ui.label(this, "TabletDesk", 30, FG, true));
-        col.addView(Ui.label(this, "Build " + buildNumber(), 13, MUTED, false));
-        TextView sub = Ui.label(this, "Your tablet as Fedora's screen, keyboard, trackpad & Touch Bar — over one USB-C cable",
-                15, MUTED, false);
-        sub.setSingleLine(false);
-        col.addView(sub);
-        status = Ui.label(this, "", 15, FG, true);
-        status.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 8));
-        col.addView(status);
+        col.addView(header());
+        col.addView(statusCard(), block(18));
+        col.addView(quickTiles(), block(14));
 
-        col.addView(section("Mode (used every time you plug in)"));
-        col.addView(modePicker());
+        col.addView(section("Screen"));
+        col.addView(card(segmented(new String[][]{
+                {"extend", "🖥🖥  Extend"}, {"mirror", "🪞  Mirror"},
+                {"input", "⌨  Input only"}}, prefs.getString("mode", "extend"), mode -> {
+            prefs.edit().putString("mode", mode).apply();
+            HostLink.get().mode(mode);
+        }), hint("Extend = second screen · Mirror = same picture · Input = keyboard & trackpad only")));
 
-        barsButton = button("", v -> toggleBars());
-        col.addView(barsButton);
-        col.addView(button("⌨  Keyboard & Trackpad",
-                v -> startActivity(new Intent(this, TrackpadActivity.class))));
-        col.addView(button("🖥  Open desktop screen (RDP — Fedora / Wayland)", v -> openRdp()));
-        col.addView(button("🖥  Open desktop screen (VNC — Xorg session)", v -> openVnc()));
+        col.addView(section("Laptop"));
+        col.addView(card(
+                toggle("Laptop keyboard off while connected", "The tablet becomes your keyboard",
+                        !HostLink.get().lastState().optBoolean("laptopkbd", false),
+                        on -> HostLink.get().set("laptopkbd", on ? 0 : 1)),
+                toggle("Touch screen", "Touch the Fedora picture directly",
+                        HostLink.get().lastState().optBoolean("touch", true),
+                        on -> HostLink.get().set("touch", on ? 1 : 0))));
 
-        col.addView(section("Options"));
-        col.addView(sizePicker());
-        col.addView(check("Show macOS menu bar (top)", "menubar"));
-        col.addView(check("Show Touch Bar (bottom)", "touchbar"));
-        col.addView(check("Auto-hide bars when not used (like macOS full screen)", "autohide"));
-        TextView offsetLabel = Ui.label(this, "", 15, FG, false);
-        col.addView(offsetLabel);
-        SeekBar offset = new SeekBar(this);
-        offset.setMax(120);
-        offset.setProgress(prefs.getInt("menuoffset", 0));
-        offsetLabel.setText("Menu bar position: " + prefs.getInt("menuoffset", 0) + " dp from top");
-        offset.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar s, int p, boolean user) {
-                offsetLabel.setText("Menu bar position: " + p + " dp from top");
-            }
+        col.addView(section("Bars"));
+        col.addView(card(
+                prefToggle("Menu bar", "macOS-style menus at the top", "menubar", false),
+                prefToggle("Touch Bar", "Context keys at the bottom", "touchbar", false),
+                prefToggle("Auto-hide", "Bars tuck away when not used", "autohide", false)));
 
-            @Override
-            public void onStartTrackingTouch(SeekBar s) {
-            }
+        col.addView(section("Look"));
+        col.addView(card(
+                label("Size"),
+                segmented(new String[][]{{"100", "A  Normal"}, {"135", "A  Large"}, {"165", "A  Extra large"}},
+                        String.valueOf(prefs.getInt("uiscale", 135)), v -> {
+                            prefs.edit().putInt("uiscale", Integer.parseInt(v)).apply();
+                            restyle();
+                        }),
+                gap(),
+                label("Theme"),
+                segmented(new String[][]{{"auto", "◐  Auto"}, {"light", "☀️  Light"},
+                        {"dark", "🌙  Dark"}}, prefs.getString("theme", "auto"), v -> {
+                    prefs.edit().putString("theme", v).apply();
+                    restyle();
+                })));
 
-            @Override
-            public void onStopTrackingTouch(SeekBar s) {
-                prefs.edit().putInt("menuoffset", s.getProgress()).apply();
-                if (OverlayService.running) OverlayService.start(MainActivity.this);  // move it now
-            }
-        });
-        col.addView(offset);
+        col.addView(section("Trackpad"));
+        col.addView(card(
+                slider("Speed", "speed", 50, 300, "%"),
+                prefToggle("Natural scrolling", "Content follows your fingers", "natural", false),
+                prefToggle("Vibrate on tap", "Feel each key and click", "haptics", true)));
 
-        TextView speedLabel = Ui.label(this, "", 15, FG, false);
-        col.addView(speedLabel);
-        SeekBar speed = new SeekBar(this);
-        speed.setMax(250);
-        speed.setProgress(prefs.getInt("speed", 100) - 50);
-        speedLabel.setText("Trackpad speed: " + prefs.getInt("speed", 100) + "%");
-        speed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar s, int p, boolean user) {
-                prefs.edit().putInt("speed", p + 50).apply();
-                speedLabel.setText("Trackpad speed: " + (p + 50) + "%");
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar s) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar s) {
-            }
-        });
-        col.addView(speed);
-
-        col.addView(section("Setup (once)"));
+        col.addView(section("First-time setup"));
         TextView help = Ui.label(this,
-                "1. Tablet: Settings › About › tap Build number 7×, then Developer options › USB debugging ON.\n"
-                        + "2. Fedora: run host/setup.sh, then log out and back in.\n"
-                        + "3. Connect the USB-C cable (it charges the tablet and carries all data). Accept “Allow USB debugging”.\n"
-                        + "4. Fedora: host/connect.sh extend   (or mirror / input).\n"
-                        + "5. Install “Windows App” (or aFreeRDP) and add PC 127.0.0.1 with the user/password setup.sh printed.",
-                14, MUTED, false);
+                "1  Tablet: Settings › About › tap Build number 7×, then Developer options › USB debugging on.\n"
+                        + "2  Fedora: run host/setup.sh, then log out and back in.\n"
+                        + "3  Plug in the USB-C cable and allow USB debugging (tick “Always allow”).\n"
+                        + "4  Install “Windows App” and add the PC 127.0.0.1 with the password setup.sh printed.\n"
+                        + "From then on everything starts by itself when you plug in.",
+                13.5f, muted, false);
         help.setSingleLine(false);
-        help.setLineSpacing(0, 1.25f);
-        col.addView(help);
+        help.setLineSpacing(0, 1.35f);
+        col.addView(card(help));
+
+        // keep it readable on wide tablets: centered column, at most ~760dp wide
+        FrameLayout center = new FrameLayout(this);
+        int maxWidth = Math.round(760 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+                Math.min(maxWidth, getResources().getDisplayMetrics().widthPixels),
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL);
+        center.addView(col, clp);
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(0xFFF5F5F7);
-        scroll.addView(col);
+        scroll.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR, dark
+                ? new int[]{0xFF0F172A, 0xFF231A3A, 0xFF0B2B33}
+                : new int[]{0xFFE8EEFB, 0xFFF5E9F3, 0xFFE4F3F0}));
+        scroll.addView(center);
         setContentView(scroll);
+        // let the gradient run under a see-through status bar with matching icons
+        getWindow().setStatusBarColor(0);
+        getWindow().setNavigationBarColor(0);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | (dark ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR));
 
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -145,7 +158,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
     protected void onResume() {
         super.onResume();
         HostLink.get().addListener(this);
-        refreshBarsButton();
+        refreshStart();
     }
 
     @Override
@@ -157,44 +170,140 @@ public class MainActivity extends Activity implements HostLink.Listener {
     @Override
     public void onStatus(boolean connected, String host) {
         if (connected && prefs.contains("mode")) HostLink.get().mode(prefs.getString("mode", "extend"));
-        status.setText(connected ? "● Connected to " + host + " (USB-C)"
-                : "○ Waiting for Fedora — plug in the cable and run host/connect.sh");
-        status.setTextColor(connected ? 0xFF1E8E3E : 0xFFC5221F);
+        statusTitle.setText(connected ? "Connected to " + host : "Waiting for Fedora");
+        statusText.setText(connected
+                ? "USB-C · charging and sharing input"
+                : "Plug in the USB-C cable — Fedora starts everything by itself");
+        statusDot.setBackground(Ui.rounded(connected ? 0xFF30D158 : 0xFFFF9F0A, Ui.dp(this, 6)));
     }
 
     @Override
     public void onApp(String name) {
     }
 
-    /** Same number as the GitHub Actions build that made this APK. */
-    private String buildNumber() {
-        try {
-            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return String.valueOf(Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
-        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
-            return "?";
-        }
+    // ---- sections ----
+
+    private View header() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_launcher);
+        row.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 52), Ui.dp(this, 52)));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        TextView title = Ui.label(this, "TabletDesk", 28, fg, true);
+        titles.addView(title);
+        titles.addView(Ui.label(this, "Fedora on your tablet · Build " + buildNumber(), 13, muted, false));
+        row.addView(titles);
+        return row;
     }
+
+    private View statusCard() {
+        LinearLayout card = cardBase();
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        statusDot = new View(this);
+        top.addView(statusDot, new LinearLayout.LayoutParams(Ui.dp(this, 12), Ui.dp(this, 12)));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        statusTitle = Ui.label(this, "", 19, fg, true);
+        statusText = Ui.label(this, "", 13, muted, false);
+        statusText.setSingleLine(false);
+        texts.addView(statusTitle);
+        texts.addView(statusText);
+        top.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        card.addView(top);
+
+        LinearLayout buttons = new LinearLayout(this);
+        startButton = pill("", true, v -> toggleBars());
+        buttons.addView(startButton, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
+        View g = new View(this);
+        buttons.addView(g, new LinearLayout.LayoutParams(Ui.dp(this, 10), 1));
+        TextView screen = pill("🖥  Open screen", false, v -> openRdp());
+        screen.setOnLongClickListener(v -> {  // Xorg sessions use VNC instead
+            openVnc();
+            return true;
+        });
+        buttons.addView(screen, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
+        card.addView(buttons, block(14));
+        onStatus(HostLink.get().isConnected(), HostLink.get().host());
+        return card;
+    }
+
+    private View quickTiles() {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout r1 = new LinearLayout(this);
+        r1.addView(tile("⌨️", "Keyboard & Trackpad", "Type and move the mouse",
+                v -> startActivity(new Intent(this, TrackpadActivity.class))), weighted(false));
+        r1.addView(tile("🎛️", "Control Center", "Volume, brightness, switches",
+                v -> openControlCenter()), weighted(true));
+        LinearLayout r2 = new LinearLayout(this);
+        r2.addView(tile("📋", "Send clipboard", "Tablet → PC, paste with Ctrl+V",
+                v -> sendClipboard()), weighted(false));
+        r2.addView(tile("📥", "Get clipboard", "PC → tablet",
+                v -> getClipboard()), weighted(true));
+        grid.addView(r1);
+        grid.addView(r2, block(10));
+        return grid;
+    }
+
+    // ---- actions ----
 
     private void toggleBars() {
         if (OverlayService.running) {
             OverlayService.stop(this);
-            barsButton.postDelayed(this::refreshBarsButton, 300);
+            startButton.postDelayed(this::refreshStart, 300);
             return;
         }
         if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Allow “Display over other apps” for TabletDesk", Toast.LENGTH_LONG).show();
             startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName())));
             return;
         }
         OverlayService.start(this);
-        barsButton.postDelayed(this::refreshBarsButton, 300);
+        startButton.postDelayed(this::refreshStart, 300);
     }
 
-    private void refreshBarsButton() {
-        barsButton.setText(OverlayService.running
-                ? "■  Hide menu bar & Touch Bar"
-                : "▶  Show macOS menu bar & Touch Bar");
+    private void refreshStart() {
+        if (startButton != null) {
+            startButton.setText(OverlayService.running ? "■  Stop desktop bars" : "▶  Start desktop bars");
+        }
+    }
+
+    /** Rebuild the bars and this screen after a look change. */
+    private void restyle() {
+        if (OverlayService.running) OverlayService.start(this);
+        recreate();
+    }
+
+    private void openControlCenter() {
+        if (!Settings.canDrawOverlays(this)) {
+            toggleBars();  // asks for the permission
+            return;
+        }
+        ControlCenter.toggle(this, dark, () -> { }, null);
+    }
+
+    private void sendClipboard() {
+        ClipboardManager cm = getSystemService(ClipboardManager.class);
+        ClipData clip = cm.getPrimaryClip();
+        if (clip == null || clip.getItemCount() == 0) {
+            Toast.makeText(this, "Tablet clipboard is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        HostLink.get().setClip(clip.getItemAt(0).coerceToText(this).toString());
+        Toast.makeText(this, "Copied to the PC — paste with Ctrl+V", Toast.LENGTH_SHORT).show();
+    }
+
+    private void getClipboard() {
+        HostLink.get().requestClip(text -> {
+            getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("PC", text));
+            Toast.makeText(this, "PC clipboard copied to the tablet", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void openVnc() {
@@ -225,100 +334,207 @@ public class MainActivity extends Activity implements HostLink.Listener {
         }
     }
 
-    private TextView button(String text, View.OnClickListener l) {
-        TextView b = Ui.label(this, text, 16, FG, false);
+    /** Same number as the GitHub Actions build that made this APK. */
+    private String buildNumber() {
+        try {
+            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return String.valueOf(Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return "?";
+        }
+    }
+
+    // ---- building blocks ----
+
+    private LinearLayout cardBase() {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
         int p = Ui.dp(this, 16);
-        b.setPadding(p, p, p, p);
-        b.setBackground(Ui.pressable(0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
-        b.setElevation(Ui.dp(this, 1));
-        b.setOnClickListener(l);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
-        b.setLayoutParams(lp);
-        return b;
+        c.setPadding(p, p, p, p);
+        c.setBackground(Glass.surface(this, dark, Ui.dp(this, 22), true));
+        c.setElevation(Ui.dp(this, 2));
+        return c;
     }
 
-    /** Interface size for the bars, menus, Control Center and trackpad. */
-    private LinearLayout sizePicker() {
-        int[] sizes = {100, 135, 165};
-        String[] names = {"A  Normal", "A  Large", "A  Extra large"};
-        LinearLayout row = new LinearLayout(this);
-        int current = prefs.getInt("uiscale", 135);
-        for (int i = 0; i < sizes.length; i++) {
-            int size = sizes[i];
-            TextView t = Ui.label(this, names[i], 12 + i * 2, size == current ? 0xFFFFFFFF : FG, true);
-            t.setGravity(android.view.Gravity.CENTER);
-            int p = Ui.dp(this, 10);
-            t.setPadding(p, p, p, p);
-            t.setBackground(Ui.pressable(size == current ? 0xFF0A84FF : 0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
-            t.setOnClickListener(v -> {
-                prefs.edit().putInt("uiscale", size).apply();
-                if (OverlayService.running) OverlayService.start(this);  // rebuild the bars
-                recreate();
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), Ui.dp(this, 8));
-            row.addView(t, lp);
+    private View card(View... children) {
+        LinearLayout c = cardBase();
+        for (int i = 0; i < children.length; i++) {
+            c.addView(children[i], block(i == 0 ? 0 : 6));
         }
-        return row;
-    }
-
-    private LinearLayout modePicker() {
-        String[][] modes = {
-                {"extend", "\uD83D\uDDA5\uD83D\uDDA5  Extend", "2nd screen"},
-                {"mirror", "\uD83E\uDE9E  Mirror", "same picture"},
-                {"input", "\u2328  Input only", "keyboard + trackpad"}};
-        LinearLayout row = new LinearLayout(this);
-        TextView[] cells = new TextView[modes.length];
-        for (int i = 0; i < modes.length; i++) {
-            String m = modes[i][0];
-            TextView t = Ui.label(this, modes[i][1] + "\n" + modes[i][2], 14, FG, false);
-            t.setSingleLine(false);
-            t.setGravity(android.view.Gravity.CENTER);
-            int p = Ui.dp(this, 12);
-            t.setPadding(p, p, p, p);
-            t.setOnClickListener(v -> {
-                prefs.edit().putString("mode", m).apply();
-                HostLink.get().mode(m);
-                paintModes(cells, modes);
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
-            row.addView(t, lp);
-            cells[i] = t;
-        }
-        paintModes(cells, modes);
-        return row;
-    }
-
-    private void paintModes(TextView[] cells, String[][] modes) {
-        String current = prefs.getString("mode", "extend");
-        for (int i = 0; i < cells.length; i++) {
-            boolean on = modes[i][0].equals(current);
-            cells[i].setBackground(Ui.pressable(on ? 0xFF0A84FF : 0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
-            cells[i].setTextColor(on ? 0xFFFFFFFF : FG);
-        }
+        return c;
     }
 
     private TextView section(String title) {
-        TextView t = Ui.label(this, title, 18, FG, true);
-        t.setPadding(0, Ui.dp(this, 24), 0, Ui.dp(this, 8));
+        TextView t = Ui.label(this, title.toUpperCase(java.util.Locale.ROOT), 12.5f, muted, true);
+        t.setLetterSpacing(0.08f);
+        t.setPadding(Ui.dp(this, 6), Ui.dp(this, 22), 0, Ui.dp(this, 8));
         return t;
     }
 
-    private CheckBox check(String text, String key) {
-        CheckBox c = new CheckBox(this);
-        c.setText(text);
-        c.setTextSize(15 * Ui.scale);
-        c.setTextColor(FG);
-        c.setChecked(prefs.getBoolean(key, true));
-        c.setOnCheckedChangeListener((v, on) -> {
-            prefs.edit().putBoolean(key, on).apply();
-            if (OverlayService.running) OverlayService.start(this);  // re-apply
+    private TextView label(String text) {
+        return Ui.label(this, text, 14, fg, true);
+    }
+
+    private TextView hint(String text) {
+        TextView t = Ui.label(this, text, 12.5f, muted, false);
+        t.setSingleLine(false);
+        return t;
+    }
+
+    private View gap() {
+        View v = new View(this);
+        v.setMinimumHeight(Ui.dp(this, 6));
+        return v;
+    }
+
+    private TextView pill(String text, boolean primary, View.OnClickListener l) {
+        TextView t = Ui.label(this, text, 15, primary ? 0xFFFFFFFF : fg, true);
+        t.setGravity(Gravity.CENTER);
+        t.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),
+                primary ? Ui.rounded(ACCENT, Ui.dp(this, 24)) : Glass.chip(this, dark, Ui.dp(this, 24), false),
+                null));
+        t.setOnClickListener(v -> {
+            Ui.haptic(v);
+            l.onClick(v);
         });
-        return c;
+        return t;
+    }
+
+    private View tile(String icon, String title, String subtitle, View.OnClickListener l) {
+        LinearLayout t = cardBase();
+        t.addView(Ui.label(this, icon, 24, fg, false));
+        TextView name = Ui.label(this, title, 15, fg, true);
+        name.setPadding(0, Ui.dp(this, 8), 0, 0);
+        t.addView(name);
+        TextView sub = Ui.label(this, subtitle, 12, muted, false);
+        sub.setSingleLine(false);
+        t.addView(sub);
+        t.setForeground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(0x33808080),
+                null, Ui.rounded(0xFFFFFFFF, Ui.dp(this, 22))));
+        t.setOnClickListener(v -> {
+            Ui.haptic(v);
+            l.onClick(v);
+        });
+        return t;
+    }
+
+    /** Glass segmented control; the selected chip is blue. */
+    private View segmented(String[][] options, String current, java.util.function.Consumer<String> pick) {
+        LinearLayout row = new LinearLayout(this);
+        int p = Ui.dp(this, 4);
+        row.setPadding(p, p, p, p);
+        row.setBackground(Glass.chip(this, dark, Ui.dp(this, 16), false));
+        TextView[] chips = new TextView[options.length];
+        String[] selected = {current};
+        Runnable paint = () -> {
+            for (int i = 0; i < chips.length; i++) {
+                boolean on = options[i][0].equals(selected[0]);
+                chips[i].setBackground(on ? Ui.rounded(ACCENT, Ui.dp(this, 12)) : null);
+                chips[i].setTextColor(on ? 0xFFFFFFFF : fg);
+            }
+        };
+        for (int i = 0; i < options.length; i++) {
+            String value = options[i][0];
+            TextView c = Ui.label(this, options[i][1], 13.5f, fg, true);
+            c.setGravity(Gravity.CENTER);
+            c.setPadding(Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10));
+            c.setOnClickListener(v -> {
+                Ui.haptic(v);
+                selected[0] = value;
+                paint.run();
+                pick.accept(value);
+            });
+            chips[i] = c;
+            row.addView(c, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        paint.run();
+        return row;
+    }
+
+    private View toggle(String title, String subtitle, boolean on,
+                        java.util.function.Consumer<Boolean> change) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 4));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.addView(Ui.label(this, title, 15, fg, true));
+        TextView sub = Ui.label(this, subtitle, 12.5f, muted, false);
+        sub.setSingleLine(false);
+        texts.addView(sub);
+        row.addView(texts, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Switch s = new Switch(this);
+        s.setChecked(on);
+        int[][] states = {{android.R.attr.state_checked}, {}};
+        s.setThumbTintList(new ColorStateList(states, new int[]{0xFFFFFFFF, 0xFFF2F2F7}));
+        s.setTrackTintList(new ColorStateList(states, new int[]{0xFF30D158, dark ? 0x66787880 : 0x33787880}));
+        s.setScaleX(Ui.scale);
+        s.setScaleY(Ui.scale);
+        s.setOnCheckedChangeListener((v, checked) -> {
+            Ui.haptic(v);
+            change.accept(checked);
+        });
+        row.addView(s);
+        row.setOnClickListener(v -> s.toggle());
+        return row;
+    }
+
+    /** A switch stored in the app settings; restyle=true redraws everything. */
+    private View prefToggle(String title, String subtitle, String key, boolean restyle) {
+        return toggle(title, subtitle, prefs.getBoolean(key, true), on -> {
+            prefs.edit().putBoolean(key, on).apply();
+            Ui.loadScale(this);
+            if (restyle) restyle();
+            else if (OverlayService.running) OverlayService.start(this);
+        });
+    }
+
+    private View slider(String title, String key, int min, int max, String unit) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout head = new LinearLayout(this);
+        head.addView(Ui.label(this, title, 15, fg, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        int value = prefs.getInt(key, 100);
+        TextView shown = Ui.label(this, value + unit, 14, muted, false);
+        head.addView(shown);
+        box.addView(head);
+        SeekBar bar = new SeekBar(this);
+        bar.setMax(max - min);
+        bar.setProgress(value - min);
+        bar.setProgressTintList(ColorStateList.valueOf(ACCENT));
+        bar.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        bar.setProgressBackgroundTintList(ColorStateList.valueOf(dark ? 0x40FFFFFF : 0x26000000));
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar s, int p, boolean user) {
+                prefs.edit().putInt(key, p + min).apply();
+                shown.setText((p + min) + unit);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar s) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar s) {
+            }
+        });
+        box.addView(bar);
+        return box;
+    }
+
+    private LinearLayout.LayoutParams weighted(boolean gapBefore) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+        if (gapBefore) lp.leftMargin = Ui.dp(this, 10);
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams block(int topDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = Ui.dp(this, topDp);
+        return lp;
     }
 }

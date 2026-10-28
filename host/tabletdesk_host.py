@@ -374,24 +374,50 @@ class LaptopKeyboard:
         with open(LAPTOP_KBD_FILE, "w") as f:
             f.write("turn-off\n" if turn_off else "keep-on\n")
 
+    @staticmethod
+    def _hardware_of(path):
+        """The physical device behind an input node (shared by e.g. a touchpad
+        and its built-in number pad)."""
+        node = os.path.basename(path)
+        return os.path.realpath(f"/sys/class/input/{node}/device/device")
+
     def _built_in_keyboards(self):
+        """Only the laptop's main keyboard. Never anything that moves a pointer,
+        and never a "keyboard" that shares hardware with a touchpad (ASUS
+        NumberPad, Elan/Synaptics hotkeys): turning that off kills the touchpad."""
+        devices = []
         for path in list_devices():
             try:
-                d = InputDevice(path)
+                devices.append(InputDevice(path))
             except OSError:
-                continue
+                pass
+        pointer_hw = set()
+        for d in devices:
             caps = d.capabilities()
             keys = caps.get(e.EV_KEY, [])
+            if e.EV_ABS in caps or e.EV_REL in caps or e.BTN_LEFT in keys or e.BTN_TOUCH in keys:
+                pointer_hw.add(self._hardware_of(d.path))
+        candidates = []
+        for d in devices:
+            caps = d.capabilities()
+            keys = caps.get(e.EV_KEY, [])
+            name = d.name.lower()
             letters = all(k in keys for k in (e.KEY_A, e.KEY_Q, e.KEY_Z, e.KEY_SPACE, e.KEY_ENTER))
-            # anything that moves a pointer (touchpad, mouse, touchscreen) is never touched
-            pointer = e.EV_ABS in caps or e.EV_REL in caps or e.BTN_LEFT in keys \
-                or e.BTN_TOUCH in keys or "touchpad" in d.name.lower()
+            pointer = (e.EV_ABS in caps or e.EV_REL in caps or e.BTN_LEFT in keys
+                       or e.BTN_TOUCH in keys
+                       or any(w in name for w in ("touchpad", "numberpad", "numpad", "mouse")))
             if (letters and not pointer
                     and d.info.bustype not in self.EXTERNAL_BUSES
-                    and not d.name.startswith("TabletDesk")):
-                yield d
-            else:
+                    and not d.name.startswith("TabletDesk")
+                    and self._hardware_of(d.path) not in pointer_hw):
+                candidates.append(d)
+        # the classic built-in keyboard (i8042 / "AT Translated Set 2") wins if present
+        main = [d for d in candidates if d.info.bustype == 0x11]
+        chosen = main or candidates
+        for d in devices:
+            if d not in chosen:
                 d.close()
+        return chosen
 
     def turn_off(self):
         with self.lock:

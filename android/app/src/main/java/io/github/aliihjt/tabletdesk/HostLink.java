@@ -40,6 +40,11 @@ public final class HostLink {
         void onPointer(float x, float y);
     }
 
+    /** Text from the PC clipboard. */
+    public interface ClipListener {
+        void onClip(String text);
+    }
+
     public static final int PORT = 7777;
     private static final HostLink INSTANCE = new HostLink();
 
@@ -56,6 +61,7 @@ public final class HostLink {
     private volatile String app = "Fedora";
     private volatile StateListener stateListener;
     private volatile PointerListener pointerListener;
+    private volatile ClipListener clipListener;
     /** last laptop settings received (volume, laptopkbd, touch, ...) */
     private volatile JSONObject lastState = new JSONObject();
     /** favourite Fedora apps for the Dock: {id, name} */
@@ -134,6 +140,17 @@ public final class HostLink {
 
     public void requestApps() {
         send("{\"t\":\"apps?\"}");
+    }
+
+    /** Fetch the PC clipboard; the answer arrives once at l. */
+    public void requestClip(ClipListener l) {
+        clipListener = l;
+        send("{\"t\":\"clip?\"}");
+    }
+
+    /** Put text on the PC clipboard. */
+    public void setClip(String text) {
+        send(obj("t", "setclip", "s", text));
     }
 
     public JSONObject lastState() {
@@ -242,6 +259,11 @@ public final class HostLink {
                     setConnected(true);
                     requestApps();
                     requestState();
+                } else if ("clip".equals(t)) {
+                    ClipListener l = clipListener;
+                    clipListener = null;
+                    String text = msg.optString("s");
+                    if (l != null) main.post(() -> l.onClip(text));
                 } else if ("ptr".equals(t)) {
                     PointerListener l = pointerListener;
                     float x = (float) msg.optDouble("x", -1), y = (float) msg.optDouble("y", -1);

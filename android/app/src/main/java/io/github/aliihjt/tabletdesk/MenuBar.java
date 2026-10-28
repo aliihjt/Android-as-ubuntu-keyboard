@@ -121,10 +121,16 @@ final class MenuBar implements HostLink.Listener {
         });
         // every TabletDesk option in one menu
         TextView settings = menuTitle("TabletDesk", true, null);
-        settings.setOnClickListener(v -> showMenu(v, tabletDeskMenu()));
+        settings.setOnClickListener(v -> {
+            HostLink.get().requestState();  // fresh PC info for next time
+            showMenu(v, tabletDeskMenu());
+        });
         menus.addView(settings);
         menus.addView(appName);
         for (String[] m : MENUS) menus.addView(menuTitle(m[0], false, m));
+        TextView tools = menuTitle("Tools", false, null);
+        tools.setOnClickListener(v -> showMenu(v, toolsMenu()));
+        menus.addView(tools);
         android.widget.HorizontalScrollView menuScroll = new android.widget.HorizontalScrollView(ctx);
         menuScroll.setHorizontalScrollBarEnabled(false);
         menuScroll.setFillViewport(true);
@@ -304,8 +310,11 @@ final class MenuBar implements HostLink.Listener {
         boolean touch = st.optBoolean("touch", true);
         int size = p.getInt("uiscale", 135);
         int speed = p.getInt("speed", 100);
+        String theme = p.getString("theme", "auto");
         return new String[]{
                 "TabletDesk",
+                "\uD83D\uDCBB  " + pcInfo(st) + "|local:none",
+                "-",
                 "\u2328  Keyboard & Trackpad|local:trackpad",
                 "\u2630  Control Center…|local:cc",
                 "-",
@@ -324,8 +333,17 @@ final class MenuBar implements HostLink.Listener {
                 check(size == 135) + "Size: Large|local:size:135",
                 check(size == 165) + "Size: Extra large|local:size:165",
                 "-",
+                "-",
+                check(theme.equals("auto")) + "Theme: Automatic|local:theme:auto",
+                check(theme.equals("light")) + "Theme: Light|local:theme:light",
+                check(theme.equals("dark")) + "Theme: Dark|local:theme:dark",
+                "-",
                 "     Trackpad faster|local:faster|" + speed + "%",
                 "     Trackpad slower|local:slower",
+                check(p.getBoolean("natural", true)) + "Natural scrolling|local:natural",
+                check(p.getBoolean("haptics", true)) + "Vibrate on tap|local:haptics",
+                "-",
+                "     Reconnect screen|local:reconnect",
                 "-",
                 "     Open TabletDesk app…|local:app",
                 "     Hide bars until next plug-in|local:stop",
@@ -336,7 +354,17 @@ final class MenuBar implements HostLink.Listener {
         android.content.SharedPreferences p = prefs();
         org.json.JSONObject st = HostLink.get().lastState();
         boolean rebuild = false;  // settings that change how the bars look
-        if (name.startsWith("mode:")) {
+        if (name.startsWith("t:")) {  // on/off switch on the PC
+            String key = name.substring(2);
+            HostLink.get().set(key, st.optBoolean(key, false) ? 0 : 1);
+            HostLink.get().requestState();
+        } else if (name.startsWith("power:")) {
+            HostLink.get().set("power", Integer.parseInt(name.substring(6)));
+            HostLink.get().requestState();
+        } else if (name.startsWith("theme:")) {
+            p.edit().putString("theme", name.substring(6)).apply();
+            rebuild = true;
+        } else if (name.startsWith("mode:")) {
             String m = name.substring(5);
             p.edit().putString("mode", m).apply();
             HostLink.get().mode(m);
@@ -381,6 +409,23 @@ final class MenuBar implements HostLink.Listener {
                     p.edit().putInt("speed", Math.max(50, Math.min(300, s))).apply();
                     break;
                 }
+                case "natural":
+                case "haptics":
+                    p.edit().putBoolean(name, !p.getBoolean(name, true)).apply();
+                    rebuild = true;
+                    break;
+                case "clip":
+                    HostLink.get().requestClip(text -> {
+                        android.content.ClipboardManager cm =
+                                ctx.getSystemService(android.content.ClipboardManager.class);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("PC", text));
+                        android.widget.Toast.makeText(ctx, "PC clipboard copied to the tablet",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                    break;
+                case "reconnect":
+                    openRdpApp();
+                    break;
                 case "stop":
                     OverlayService.stop(ctx);
                     break;
@@ -389,6 +434,57 @@ final class MenuBar implements HostLink.Listener {
             }
         }
         if (rebuild) OverlayService.start(ctx);
+    }
+
+    private static String pcInfo(org.json.JSONObject st) {
+        StringBuilder sb = new StringBuilder("PC");
+        if (st.has("cpu")) sb.append("  \u00B7  CPU ").append(st.optInt("cpu")).append('%');
+        if (st.has("ram")) sb.append("  \u00B7  RAM ").append(st.optInt("ram")).append('%');
+        if (st.has("battery")) {
+            sb.append("  \u00B7  ").append(st.optBoolean("charging") ? "\u26A1" : "\uD83D\uDD0B")
+                    .append(st.optInt("battery")).append('%');
+        }
+        return sb.toString();
+    }
+
+    /** PC switches and handy tools; ✓ marks what is on. */
+    private String[] toolsMenu() {
+        HostLink.get().requestState();
+        org.json.JSONObject st = HostLink.get().lastState();
+        int power = st.optInt("power", -1);
+        return new String[]{
+                "Tools",
+                "\uD83D\uDCF7  Screenshot…|print|Print",
+                "     Screenshot of whole screen|shift+print|Shift+Print",
+                "     Screenshot of window|alt+print|Alt+Print",
+                "\uD83C\uDFA5  Start / stop screen recording|ctrl+shift+alt+r|Ctrl+Shift+Alt+R",
+                "-",
+                "\uD83D\uDCCB  Copy PC clipboard to tablet|local:clip",
+                "\uD83D\uDE00  Emoji & symbols|ctrl+dot|Ctrl+.",
+                "-",
+                check(st.optBoolean("wifi")) + "Wi-Fi|local:t:wifi",
+                check(st.optBoolean("bluetooth")) + "Bluetooth|local:t:bluetooth",
+                check(st.optBoolean("micmute")) + "Mute microphone|local:t:micmute",
+                check(st.optBoolean("nightlight")) + "Night Light|local:t:nightlight",
+                check(st.optBoolean("dark")) + "Dark mode (PC)|local:t:dark",
+                check(st.optBoolean("dnd")) + "Do Not Disturb|local:t:dnd",
+                check(st.optBoolean("awake")) + "Keep PC awake|local:t:awake",
+                "-",
+                check(power == 0) + "Power: Battery saver|local:power:0",
+                check(power == 1) + "Power: Balanced|local:power:1",
+                check(power == 2) + "Power: Performance|local:power:2",
+        };
+    }
+
+    private void openRdpApp() {
+        for (String pkg : new String[]{"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"}) {
+            Intent i = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i != null) {
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+                return;
+            }
+        }
     }
 
     /** Fedora's favourite apps (the ones pinned in the dash) as a glass menu. */

@@ -33,6 +33,8 @@ public class TrackpadView extends View {
     private final float slop;
     private TypingListener typing;
     float sensitivity = 1f;
+    /** natural = content follows the fingers (like a Mac); off = classic wheel direction */
+    boolean naturalScroll = true;
 
     private float lastX, lastY, startX, startY;
     private int lastCount, maxPointers;
@@ -102,7 +104,8 @@ public class TrackpadView extends View {
                     float gain = sensitivity * (1.2f + Math.min(speed / 6f, 2.5f));
                     link.move(ddx * gain, ddy * gain);
                 } else if (count == 2) {
-                    link.scroll(dx / density * 1.4f, dy / density * 1.4f);
+                    float dir = naturalScroll ? 1.4f : -1.4f;
+                    link.scroll(dx / density * dir, dy / density * dir);
                 } else if (count >= 3 && !gestureFired) {
                     float tx = (cx - startX) / density, ty = (cy - startY) / density;
                     if (ty < -80) fire("super");

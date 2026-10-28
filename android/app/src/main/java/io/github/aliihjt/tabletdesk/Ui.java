@@ -19,9 +19,14 @@ final class Ui {
     /** User-chosen interface size (Settings: Normal / Large / Extra large). */
     static float scale = 1.35f;
 
+    /** Vibrate on key taps (Settings). */
+    static boolean haptics = true;
+
     static void loadScale(Context c) {
-        scale = c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
-                .getInt("uiscale", 135) / 100f;
+        android.content.SharedPreferences p =
+                c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE);
+        scale = p.getInt("uiscale", 135) / 100f;
+        haptics = p.getBoolean("haptics", true);
     }
 
     static int dp(Context c, float v) {
@@ -51,12 +56,17 @@ final class Ui {
         return t;
     }
 
+    /** Theme setting: auto (follow the tablet), light or dark. */
     static boolean isDark(Context c) {
+        String theme = c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE)
+                .getString("theme", "auto");
+        if (theme.equals("dark")) return true;
+        if (theme.equals("light")) return false;
         return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
     }
 
     static void haptic(View v) {
-        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        if (haptics) v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
     }
 }

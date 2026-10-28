@@ -86,6 +86,8 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
                 {"\u21C4 Switch app", "alt+tab"}, {"\u25A6 Activities", "super"},
                 {"\uD83D\uDCF7 Screenshot", "print"}, {"\uD83D\uDD12 Lock", "super+l"}};
         LinearLayout shortcutRow = new LinearLayout(this);
+        shortcutRow.addView(key("\uD83D\uDCF1\u2192\uD83D\uDCBB Send clipboard", v -> sendClipboard()));
+        shortcutRow.addView(key("\uD83D\uDCBB\u2192\uD83D\uDCF1 Get clipboard", v -> getClipboard()));
         for (String[] sc : shortcuts) {
             String combo = sc[1];
             shortcutRow.addView(key(sc[0], v -> link.combo(combo)));
@@ -149,6 +151,8 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         super.onResume();
         pad.sensitivity = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
                 .getInt("speed", 100) / 100f;
+        pad.naturalScroll = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
+                .getBoolean("natural", true);
         link.addListener(this);
         OverlayService.setBarsHidden(true);
     }
@@ -202,6 +206,26 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         if (ev.getAction() == KeyEvent.ACTION_DOWN && ev.getRepeatCount() == 0) link.key(name, "down");
         else if (ev.getAction() == KeyEvent.ACTION_UP) link.key(name, "up");
         return true;
+    }
+
+    private void sendClipboard() {
+        android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+        android.content.ClipData clip = cm.getPrimaryClip();
+        if (clip == null || clip.getItemCount() == 0) {
+            android.widget.Toast.makeText(this, "Tablet clipboard is empty", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        CharSequence text = clip.getItemAt(0).coerceToText(this);
+        link.setClip(text.toString());
+        android.widget.Toast.makeText(this, "Copied to the PC \u2014 paste with Ctrl+V", android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void getClipboard() {
+        link.requestClip(text -> {
+            android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("PC", text));
+            android.widget.Toast.makeText(this, "PC clipboard copied to the tablet", android.widget.Toast.LENGTH_SHORT).show();
+        });
     }
 
     private String modPrefix() {

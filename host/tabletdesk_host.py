@@ -17,6 +17,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd 0|1
   {"t":"state?"}                           ask for the values above
   {"t":"cursor"}                           make a hidden mouse pointer visible again
+  {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
 
@@ -29,6 +30,7 @@ Host -> tablet messages:
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
@@ -550,6 +552,86 @@ def set_value(what, value):
     elif what == "dnd":
         _run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners",
               "false" if v else "true"])
+    elif what == "nightlight":
+        _run(["gsettings", "set", "org.gnome.settings-daemon.plugins.color",
+              "night-light-enabled", "true" if v else "false"])
+    elif what == "wifi":
+        _run(["nmcli", "radio", "wifi", "on" if v else "off"])
+    elif what == "bluetooth":
+        _run(["bluetoothctl", "power", "on" if v else "off"])
+    elif what == "micmute":
+        _run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "1" if v else "0"])
+    elif what == "power":  # 0 saver, 1 balanced, 2 performance
+        _run(["powerprofilesctl", "set",
+              ("power-saver", "balanced", "performance")[min(v, 2)]])
+    elif what == "awake":  # keep the PC from going idle / locking
+        set_keep_awake(bool(v))
+
+
+AWAKE_FILE = os.path.expanduser("~/.config/tabletdesk/idle-delay")
+
+
+def set_keep_awake(on):
+    """idle-delay 0 = never blank; the old value is remembered and restored."""
+    key = ["org.gnome.desktop.session", "idle-delay"]
+    if on:
+        old = _run(["gsettings", "get"] + key).split()[-1:] or ["300"]
+        if old[0] != "0":
+            os.makedirs(os.path.dirname(AWAKE_FILE), exist_ok=True)
+            with open(AWAKE_FILE, "w") as f:
+                f.write(old[0])
+        _run(["gsettings", "set"] + key + ["0"])
+    else:
+        try:
+            with open(AWAKE_FILE) as f:
+                old = int(f.read().strip())
+        except (OSError, ValueError):
+            old = 300
+        _run(["gsettings", "set"] + key + [str(old or 300)])
+
+
+def pc_info():
+    """CPU load, memory use and laptop battery for the menu header."""
+    info = {}
+    try:
+        with open("/proc/loadavg") as f:
+            load = float(f.read().split()[0])
+        info["cpu"] = min(100, round(load / (os.cpu_count() or 1) * 100))
+    except (OSError, ValueError):
+        pass
+    try:
+        mem = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1)
+                mem[k] = int(v.split()[0])
+        info["ram"] = round(100 - mem["MemAvailable"] * 100 / mem["MemTotal"])
+    except (OSError, ValueError, KeyError):
+        pass
+    for bat in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+        try:
+            with open(bat + "/capacity") as f:
+                info["battery"] = int(f.read())
+            with open(bat + "/status") as f:
+                info["charging"] = f.read().strip() in ("Charging", "Full")
+        except (OSError, ValueError):
+            pass
+        break
+    return info
+
+
+def get_clipboard():
+    out = _run(["wl-paste", "--no-newline", "--type", "text"]) if os.environ.get(
+        "WAYLAND_DISPLAY") else _run(["xclip", "-o", "-selection", "clipboard"])
+    return out[:65536]
+
+
+def set_clipboard(text):
+    argv = ["wl-copy"] if os.environ.get("WAYLAND_DISPLAY") else ["xclip", "-selection", "clipboard"]
+    try:
+        subprocess.run(argv, input=text[:65536], text=True, timeout=2)
+    except (subprocess.SubprocessError, OSError):
+        pass
 
 
 def read_state():
@@ -573,6 +655,17 @@ def read_state():
         state["touch"] = "view-only: no" in grd
     state["dnd"] = _run(["gsettings", "get", "org.gnome.desktop.notifications",
                          "show-banners"]).strip() == "false"
+    state["nightlight"] = _run(["gsettings", "get", "org.gnome.settings-daemon.plugins.color",
+                                "night-light-enabled"]).strip() == "true"
+    state["wifi"] = _run(["nmcli", "radio", "wifi"]).strip() == "enabled"
+    state["bluetooth"] = "powered: yes" in _run(["bluetoothctl", "show"]).lower()
+    state["micmute"] = "MUTED" in _run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"])
+    profile = _run(["powerprofilesctl", "get"]).strip()
+    if profile in ("power-saver", "balanced", "performance"):
+        state["power"] = ("power-saver", "balanced", "performance").index(profile)
+    state["awake"] = _run(["gsettings", "get", "org.gnome.desktop.session",
+                           "idle-delay"]).split()[-1:] == ["0"]
+    state.update(pc_info())
     return state
 
 
@@ -650,7 +743,12 @@ def handle(inj, msg, reply=None):
     elif t == "set":
         set_value(str(msg.get("what", "")), msg.get("value", 0))
     elif t == "state?" and reply:
-        reply(read_state())
+        # several helper programs: don't hold up keys and mouse meanwhile
+        threading.Thread(target=lambda: reply(read_state()), daemon=True).start()
+    elif t == "clip?" and reply:
+        reply({"t": "clip", "s": get_clipboard()})
+    elif t == "setclip":
+        set_clipboard(str(msg.get("s", "")))
     elif t == "cursor":
         inj.nudge()
     elif t == "apps?" and reply:
@@ -677,8 +775,11 @@ def make_handler(inj, clients):
                 self.wfile.flush()
                 def reply(obj):
                     with clients.lock:  # don't interleave with focus broadcasts
-                        self.wfile.write((json.dumps(obj) + "\n").encode())
-                        self.wfile.flush()
+                        try:
+                            self.wfile.write((json.dumps(obj) + "\n").encode())
+                            self.wfile.flush()
+                        except (OSError, ValueError):  # tablet already gone
+                            pass
 
                 for line in self.rfile:
                     try:

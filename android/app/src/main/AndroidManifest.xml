@@ -50,6 +50,10 @@
         <activity android:name=".PresenterActivity" android:exported="false" />
         <activity android:name=".ButtonsActivity" android:exported="false" />
         <activity android:name=".WindowsActivity" android:exported="false" />
+        <activity android:name=".NotesActivity" android:exported="false" />
+        <activity android:name=".TerminalActivity" android:exported="false" />
+        <activity android:name=".AmbientActivity" android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <activity android:name=".SpotlightActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize|stateVisible" />
 

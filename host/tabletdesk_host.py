@@ -21,7 +21,10 @@ Tablet -> host messages (one JSON object per line):
   {"t":"media?"} / {"t":"mediactl","a":"next"}  what's playing / play-pause, next, previous
   {"t":"stats?"}                           CPU, RAM, temperature, disk, network, battery
   {"t":"allapps?"} / {"t":"url","u":"https://…"}  Stream Deck: installed apps / open a website
-  {"t":"windows?"} / {"t":"winfocus"|"winclose","id":"123"}  window switcher
+  {"t":"windows?"} / {"t":"winfocus"|"winclose"|"wintablet"|"winlaptop","id":"123"}  windows
+  {"t":"notes?"} / {"t":"setnotes","list":[…]}  sticky notes
+  {"t":"termlist?"} / {"t":"termrun","name":"…"} / {"t":"termstop"}  Terminal Pad
+  {"t":"ambient?"}                         screen colours for ambient light
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -75,6 +78,10 @@ COMMANDS = {
     "restart": ["gnome-session-quit", "--reboot"],
     # AI assistant (Newelle / Alpaca / Claude on the web), see host/ai-setup.sh
     "ai": [os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai-open.sh")],
+    # sticky notes window on the Fedora desktop
+    "notes": [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sticky_notes.py")],
+    # Terminal Pad: edit the list of commands
+    "editcommands": ["xdg-open", os.path.expanduser("~/.config/tabletdesk/commands.json")],
 }
 
 KEY_ALIASES = {
@@ -890,6 +897,114 @@ def shell_call(method, arg=None):
         return None
 
 
+NOTES_FILE = os.path.expanduser("~/.config/tabletdesk/notes.json")
+NOTES_MD = os.path.expanduser("~/Documents/Fedora Pad Notes.md")
+
+
+def load_notes():
+    try:
+        with open(NOTES_FILE) as f:
+            notes = json.load(f)
+        return notes if isinstance(notes, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def save_notes(notes):
+    """Notes from the tablet: kept as JSON for the sticky window, plus a readable copy."""
+    clean = []
+    for n in notes[:200]:
+        if isinstance(n, dict):
+            clean.append({"id": str(n.get("id", ""))[:40], "text": str(n.get("text", ""))[:5000],
+                          "color": str(n.get("color", "yellow"))[:16]})
+    os.makedirs(os.path.dirname(NOTES_FILE), exist_ok=True)
+    tmp = NOTES_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(clean, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, NOTES_FILE)
+    try:
+        os.makedirs(os.path.dirname(NOTES_MD), exist_ok=True)
+        with open(NOTES_MD, "w") as f:
+            f.write("# Fedora Pad Notes\n\n" + "\n\n---\n\n".join(n["text"] for n in clean) + "\n")
+    except OSError:
+        pass
+
+
+# Terminal Pad: the commands live on Fedora; the tablet can only run them by name.
+COMMANDS_FILE = os.path.expanduser("~/.config/tabletdesk/commands.json")
+DEFAULT_COMMANDS = [
+    {"name": "System info", "icon": "\U0001F4BB", "cmd": "fastfetch --pipe 2>/dev/null || (uname -a; uptime)"},
+    {"name": "Disk space", "icon": "\U0001F4BE", "cmd": "df -h / /home 2>/dev/null"},
+    {"name": "Busiest programs", "icon": "\U0001F525", "cmd": "ps -eo comm,%cpu,%mem --sort=-%cpu | head -12"},
+    {"name": "Network address", "icon": "\U0001F310", "cmd": "ip -br -4 addr"},
+    {"name": "Update apps (Flatpak)", "icon": "\U0001F4E6", "cmd": "flatpak update -y --noninteractive"},
+    {"name": "Update system", "icon": "\u2B06\uFE0F",
+     "cmd": "pkexec dnf upgrade -y --refresh   # asks for your password on Fedora"},
+    {"name": "Update Fedora Pad", "icon": "\U0001F504",
+     "cmd": "git -C " + os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + " pull --ff-only"},
+]
+_term = {"proc": None}
+
+
+def load_commands():
+    if not os.path.exists(COMMANDS_FILE):
+        os.makedirs(os.path.dirname(COMMANDS_FILE), exist_ok=True)
+        with open(COMMANDS_FILE, "w") as f:
+            json.dump(DEFAULT_COMMANDS, f, ensure_ascii=False, indent=2)
+    try:
+        with open(COMMANDS_FILE) as f:
+            cmds = json.load(f)
+        return [c for c in cmds if isinstance(c, dict) and c.get("name") and c.get("cmd")]
+    except (OSError, ValueError):
+        return []
+
+
+def run_terminal(name, reply):
+    """Runs one saved command and streams its output to the tablet."""
+    cmd = next((c["cmd"] for c in load_commands() if c["name"] == name), None)
+    if cmd is None or (_term["proc"] and _term["proc"].poll() is None):
+        reply({"t": "termout", "line": "Another command is still running." if cmd else "Unknown command."})
+        reply({"t": "termdone", "code": -1})
+        return
+
+    def worker():
+        try:
+            proc = subprocess.Popen(["bash", "-lc", cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL, text=True, errors="replace",
+                                    start_new_session=True)
+        except OSError as err:
+            reply({"t": "termout", "line": str(err)})
+            reply({"t": "termdone", "code": -1})
+            return
+        _term["proc"] = proc
+        for line in proc.stdout:
+            reply({"t": "termout", "line": line.rstrip("\n")[:2000]})
+        reply({"t": "termdone", "code": proc.wait()})
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def stop_terminal():
+    proc = _term["proc"]
+    if proc and proc.poll() is None:
+        try:
+            os.killpg(proc.pid, 15)
+        except OSError:
+            pass
+
+
+def ambient_colors():
+    raw = shell_call("Ambient")
+    try:
+        colors = json.loads(raw or "[]")
+    except ValueError:
+        colors = []
+    # newer GNOME reports 0..1 instead of 0..255
+    if colors and all(v <= 1 for c in colors for v in c):
+        colors = [[round(v * 255) for v in c] for c in colors]
+    return {"t": "ambient", "colors": colors}
+
+
 def windows_list():
     raw = shell_call("Windows")
     if raw is None:
@@ -994,10 +1109,23 @@ def handle(inj, msg, reply=None):
         open_url(msg.get("u", ""))
     elif t == "windows?" and reply:
         reply(windows_list())
-    elif t in ("winfocus", "winclose"):
+    elif t in ("winfocus", "winclose", "wintablet", "winlaptop"):
         wid = str(msg.get("id", ""))
         if wid.isdigit():
-            shell_call("Activate" if t == "winfocus" else "Close", wid)
+            shell_call({"winfocus": "Activate", "winclose": "Close", "wintablet": "MoveToTablet",
+                        "winlaptop": "MoveToLaptop"}[t], wid)
+    elif t == "notes?" and reply:
+        reply({"t": "notes", "list": load_notes()})
+    elif t == "setnotes":
+        save_notes(msg.get("list", []) if isinstance(msg.get("list"), list) else [])
+    elif t == "termlist?" and reply:
+        reply({"t": "termlist", "list": load_commands(), "file": COMMANDS_FILE})
+    elif t == "termrun" and reply:
+        run_terminal(str(msg.get("name", "")), reply)
+    elif t == "termstop":
+        stop_terminal()
+    elif t == "ambient?" and reply:
+        reply(ambient_colors())
     elif t == "launch":
         launch_app(str(msg.get("id", "")))
 

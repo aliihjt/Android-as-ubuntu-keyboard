@@ -2,6 +2,7 @@
 // bus so tabletdesk_host.py can read them on Wayland, where other programs
 // cannot see other windows or the pointer.
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -25,6 +26,15 @@ const IFACE = `
     <method name="Close">
       <arg type="s" direction="in" name="id"/>
     </method>
+    <method name="MoveToTablet">
+      <arg type="s" direction="in" name="id"/>
+    </method>
+    <method name="MoveToLaptop">
+      <arg type="s" direction="in" name="id"/>
+    </method>
+    <method name="Ambient">
+      <arg type="s" direction="out" name="json"/>
+    </method>
   </interface>
 </node>`;
 
@@ -37,6 +47,75 @@ export default class TabletDeskExtension extends Extension {
     disable() {
         this._dbus?.unexport();
         this._dbus = null;
+        if (this._ambientTimer)
+            GLib.source_remove(this._ambientTimer);
+        this._ambientTimer = 0;
+    }
+
+    // Move a window to the tablet's screen (the non-primary monitor) and fill it,
+    // or back to the laptop.
+    _moveTo(id, toTablet) {
+        const w = this._find(id);
+        const monitors = Main.layoutManager.monitors;
+        if (!w || monitors.length < 2)
+            return;
+        const primary = Main.layoutManager.primaryIndex;
+        const target = toTablet ? monitors.findIndex((m, i) => i !== primary) : primary;
+        w.move_to_monitor(target);
+        try {
+            w.maximize(Meta.MaximizeFlags.BOTH);
+        } catch (e) {
+            w.maximize();  // newer GNOME: no flags
+        }
+        Main.activateWindow(w);
+    }
+
+    MoveToTablet(id) {
+        this._moveTo(id, true);
+    }
+
+    MoveToLaptop(id) {
+        this._moveTo(id, false);
+    }
+
+    // Ambient light: colours of the laptop screen at 3 x 3 points, sampled
+    // a few times a second while the tablet keeps asking (stops 5 s after).
+    Ambient() {
+        this._ambientAsked = Date.now();
+        if (!this._ambientTimer) {
+            this._ambientTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                if (Date.now() - this._ambientAsked > 5000) {
+                    this._ambientTimer = 0;
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._sample();
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
+        return JSON.stringify(this._ambient ?? []);
+    }
+
+    async _sample() {
+        if (this._sampling)
+            return;
+        this._sampling = true;
+        try {
+            const m = Main.layoutManager.primaryMonitor;
+            const shot = new Shell.Screenshot();
+            const colors = [];
+            for (const fy of [0.2, 0.5, 0.8]) {
+                for (const fx of [0.15, 0.5, 0.85]) {
+                    const [c] = await shot.pick_color(m.x + Math.round(m.width * fx),
+                        m.y + Math.round(m.height * fy));
+                    colors.push([c.red, c.green, c.blue]);
+                }
+            }
+            this._ambient = colors;
+        } catch (e) {
+            this._ambient = [];
+        } finally {
+            this._sampling = false;
+        }
     }
 
     FocusedApp() {

@@ -9,7 +9,7 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Every open Fedora window as a card: tap to jump to it, ✕ to close it. */
+/** Every open Fedora window as a card: tap to jump to it, ✕ to close it, or send it to the tablet. */
 public class WindowsActivity extends Page {
     private static final int[] COLORS = {Theme.BLUE, Theme.PURPLE, Theme.PINK, Theme.ORANGE,
             Theme.GREEN, Theme.TEAL, Theme.INDIGO, Theme.RED};
@@ -35,6 +35,7 @@ public class WindowsActivity extends Page {
         quick.addView(th.secondaryButton("🖥  Mission Control", v -> link.combo("super")), th.weighted(0));
         quick.addView(th.secondaryButton("⇄  Previous app", v -> link.combo("alt+tab")), th.weighted(10));
         add(quick, 6);
+        add(th.caption("📱 To tablet puts one window full size on the tablet. Needs Second screen mode."), 8);
         grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         add(grid, 18);
@@ -100,6 +101,11 @@ public class WindowsActivity extends Page {
         TextView t = th.caption(title);
         t.setMaxLines(2);
         c.addView(t, th.fullWidth(10));
+        // send just this window to the tablet (needs "Second screen" mode)
+        LinearLayout move = new LinearLayout(this);
+        move.addView(small("📱 To tablet", () -> link.moveWindow(id, true)), th.weighted(0));
+        move.addView(small("💻 To laptop", () -> link.moveWindow(id, false)), th.weighted(8));
+        c.addView(move, th.fullWidth(10));
         c.setForeground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(th.dark ? 0x33FFFFFF : 0x1F000000),
                 null, Theme.round(0xFFFFFFFF, th.dp(18))));
@@ -108,6 +114,16 @@ public class WindowsActivity extends Page {
             last = "";
         });
         return c;
+    }
+
+    private TextView small(String label, Runnable r) {
+        TextView b = th.secondaryButton(label, v -> {
+            r.run();
+            last = "";
+        });
+        b.setTextSize(13 * Ui.scale);
+        b.setMinHeight(th.dp(36));
+        return b;
     }
 
     @Override

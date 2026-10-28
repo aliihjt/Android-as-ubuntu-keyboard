@@ -226,6 +226,26 @@ public final class HostLink {
         send(obj("t", close ? "winclose" : "winfocus", "id", id));
     }
 
+    /** Moves a Fedora window to the tablet's screen, or back to the laptop. */
+    public void moveWindow(String id, boolean toTablet) {
+        send(obj("t", toTablet ? "wintablet" : "winlaptop", "id", id));
+    }
+
+    /** Terminal Pad: runs one of the saved commands on Fedora by its name. */
+    public void runCommand(String name) {
+        send(obj("t", "termrun", "name", name));
+    }
+
+    /** Terminal Pad: stops the command that is running. */
+    public void stopCommand() {
+        send("{\"t\":\"termstop\"}");
+    }
+
+    /** Sends any message, e.g. the whole notes list. */
+    public void send(JSONObject o) {
+        send(o.toString());
+    }
+
     /** play-pause, next or previous on the PC's media player. */
     public void media(String action) {
         send(obj("t", "mediactl", "a", action));

@@ -31,7 +31,15 @@ update_app() {
     adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow 2>/dev/null
     echo "[tabletdesk] Tablet app updated to build $latest."
   else
-    echo "[tabletdesk] App install failed: $out"
+    local why="$out"
+    case "$out" in
+      *USER_RESTRICTED*|*"Install canceled by user"*)
+        why="the tablet blocked it. Xiaomi/Redmi/POCO: Developer options > turn ON 'Install via USB' (and 'USB debugging (Security settings)'), then plug in again." ;;
+      *VERIFICATION_FAILURE*|*"verifier"*)
+        why="Play Protect blocked it. Watch the tablet screen and tap 'Install anyway', or turn off Developer options > 'Verify apps over USB'." ;;
+    esac
+    echo "[tabletdesk] App install failed: $why"
+    command -v notify-send >/dev/null && notify-send -a TabletDesk "TabletDesk app update failed" "$why"
     return 1
   fi
 }

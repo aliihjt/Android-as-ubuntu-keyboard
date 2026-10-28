@@ -86,7 +86,9 @@ abstract class Page extends Activity implements HostLink.Listener {
             window.addView(body, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
             FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT);
-            int m = th.dp(12);
+            boolean upright = getResources().getConfiguration().screenHeightDp
+                    > getResources().getConfiguration().screenWidthDp;
+            int m = th.dp(upright ? 6 : 12);  // more room for content when the tablet is upright
             wlp.setMargins(m, m, m, m);
             desktop.addView(window, wlp);
             top = window;

@@ -30,7 +30,7 @@ import java.util.Locale;
  * Fedora Pad home, laid out like a macOS desktop: menu bar on top, a widget
  * for the connection, Launchpad-style icons, and the Dock at the bottom.
  */
-public class MainActivity extends Page {
+public class MainActivity extends Page implements HostLink.StateListener {
     /** RDP apps that show the Fedora screen, best first. */
     static final String[] RDP = {"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"};
 
@@ -98,19 +98,32 @@ public class MainActivity extends Page {
         middle.setOrientation(LinearLayout.VERTICAL);
         int side = th.dp(24);
         middle.setPadding(side, th.dp(20), side, th.dp(20));
+        int screenW = getResources().getDisplayMetrics().widthPixels;
         middle.addView(widget(), new LinearLayout.LayoutParams(
-                Math.min(th.dp(460), getResources().getDisplayMetrics().widthPixels - 2 * side),
+                portrait() ? screenW - 2 * side : Math.min(th.dp(460), screenW - 2 * side),
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         middle.addView(launchpad(), th.fullWidth(28));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(middle);
         content.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        // Control Center at the bottom, above the Dock
+        LinearLayout ccRow = new LinearLayout(this);
+        ccRow.setPadding(th.dp(12), 0, th.dp(12), th.dp(8));
+        ccRow.addView(controlCenter(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        content.addView(ccRow, th.fullWidth(0));
+
+        // the Dock scrolls sideways if a narrow (portrait) screen can't fit it
+        HorizontalScrollView dockScroll = new HorizontalScrollView(this);
+        dockScroll.setHorizontalScrollBarEnabled(false);
+        dockScroll.setFillViewport(true);
         LinearLayout dockRow = new LinearLayout(this);
         dockRow.setGravity(Gravity.CENTER);
         dockRow.setPadding(th.dp(8), 0, th.dp(8), th.dp(10));
         dockRow.addView(dock());
-        content.addView(dockRow, th.fullWidth(0));
+        dockScroll.addView(dockRow);
+        content.addView(dockScroll, th.fullWidth(0));
 
         onStatus(link.isConnected(), link.host());
     }
@@ -252,7 +265,8 @@ public class MainActivity extends Page {
                 {"🔍", Theme.GRAY, "Spotlight", SpotlightActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
-        int columns = getResources().getConfiguration().screenWidthDp >= 700 ? 7 : 4;
+        int w = getResources().getConfiguration().screenWidthDp;
+        int columns = w >= 900 ? 7 : w >= 600 ? 5 : 4;  // fewer, bigger icons when upright
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = null;
@@ -336,12 +350,179 @@ public class MainActivity extends Page {
     protected void onResume() {
         super.onResume();
         handler.post(tick);
+        link.setStateListener(this);
+        link.requestState();
+        link.on("media", this::showMedia);
+        handler.post(mediaTick);
     }
 
     @Override
     protected void onPause() {
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(mediaTick);
+        link.setStateListener(null);
+        link.on("media", null);
         super.onPause();
+    }
+
+    private boolean portrait() {
+        return getResources().getConfiguration().screenHeightDp > getResources().getConfiguration().screenWidthDp;
+    }
+
+    // ---- Control Center (bottom of the home screen) ----
+
+    private static final String[][] TOGGLES = {
+            {"wifi", "\uD83D\uDCF6", "Wi-Fi"}, {"bluetooth", "\uD83D\uDD35", "Bluetooth"},
+            {"dnd", "\uD83C\uDF19", "Focus"}, {"dark", "\u25D0", "Dark"},
+            {"nightlight", "\uD83C\uDF05", "Night Light"}, {"micmute", "\uD83C\uDF99", "Mic off"}};
+    private final java.util.Map<String, TextView> toggleViews = new java.util.HashMap<>();
+    private android.widget.SeekBar brightnessBar, volumeBar;
+    private TextView songTitle, playButton;
+    private boolean applying;
+    private final Runnable mediaTick = new Runnable() {
+        @Override
+        public void run() {
+            link.ask("media");
+            handler.postDelayed(this, 2500);
+        }
+    };
+
+    private View controlCenter() {
+        LinearLayout cc = new LinearLayout(this);
+        cc.setOrientation(LinearLayout.VERTICAL);
+        cc.setBackground(th.frosted(th.dp(22)));
+        int p = th.dp(12);
+        cc.setPadding(p, th.dp(4), p, p);
+
+        // handle: tap to fold the panel away, like pulling a sheet down
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        boolean open = prefs.getBoolean("cc_open", true);
+        body.setVisibility(open ? View.VISIBLE : View.GONE);
+        TextView handle = th.text(open ? "\u2304  Control Center" : "\u2303  Control Center", 12.5f, th.secondary, true);
+        handle.setGravity(Gravity.CENTER);
+        handle.setPadding(0, th.dp(6), 0, th.dp(6));
+        th.click(handle, v -> {
+            boolean show = body.getVisibility() != View.VISIBLE;
+            body.setVisibility(show ? View.VISIBLE : View.GONE);
+            prefs.edit().putBoolean("cc_open", show).apply();
+            handle.setText(show ? "\u2304  Control Center" : "\u2303  Control Center");
+        });
+        cc.addView(handle);
+
+        // round toggles; upright screens get two rows of three
+        int perRow = portrait() ? 3 : TOGGLES.length;
+        LinearLayout row = null;
+        for (int i = 0; i < TOGGLES.length; i++) {
+            if (i % perRow == 0) {
+                row = new LinearLayout(this);
+                body.addView(row, th.fullWidth(i == 0 ? 2 : 10));
+            }
+            row.addView(roundToggle(TOGGLES[i][0], TOGGLES[i][1], TOGGLES[i][2]), th.weighted(0));
+        }
+
+        // sliders: side by side when wide, stacked when upright
+        brightnessBar = th.slider(100, link.lastState().optInt("brightness", 50), v -> {
+            if (!applying) link.set("brightness", v);
+        });
+        volumeBar = th.slider(100, link.lastState().optInt("volume", 50), v -> {
+            if (!applying) link.set("volume", v);
+        });
+        LinearLayout sliders = new LinearLayout(this);
+        sliders.setOrientation(portrait() ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        sliders.addView(sliderPill("\u2600\uFE0F", brightnessBar), portrait() ? th.fullWidth(0) : th.weighted(0));
+        sliders.addView(sliderPill("\uD83D\uDD0A", volumeBar), portrait() ? th.fullWidth(8) : th.weighted(10));
+        body.addView(sliders, th.fullWidth(12));
+
+        // now playing
+        LinearLayout media = new LinearLayout(this);
+        media.setGravity(Gravity.CENTER_VERTICAL);
+        media.setBackground(Theme.round(th.dark ? 0x33FFFFFF : 0x80FFFFFF, th.dp(16)));
+        media.setPadding(th.dp(12), th.dp(6), th.dp(6), th.dp(6));
+        media.addView(th.text("\uD83C\uDFB5", 18, th.text, false));
+        songTitle = th.text("Nothing playing", 14, th.text, true);
+        songTitle.setSingleLine(true);
+        songTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        songTitle.setPadding(th.dp(10), 0, th.dp(6), 0);
+        th.click(songTitle, v -> startActivity(new Intent(this, MediaActivity.class)));
+        media.addView(songTitle, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        media.addView(mediaButton("\u23EE", () -> link.media("previous")));
+        playButton = mediaButton("\u25B6", () -> link.media("play-pause"));
+        media.addView(playButton);
+        media.addView(mediaButton("\u23ED", () -> link.media("next")));
+        body.addView(media, th.fullWidth(10));
+
+        cc.addView(body);
+        paintToggles(link.lastState());
+        return cc;
+    }
+
+    private View roundToggle(String key, String symbol, String label) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView circle = th.text(symbol, 20, th.text, false);
+        circle.setGravity(Gravity.CENTER);
+        box.addView(circle, new LinearLayout.LayoutParams(th.dp(52), th.dp(52)));
+        TextView name = th.caption(label);
+        name.setGravity(Gravity.CENTER);
+        name.setSingleLine(true);
+        box.addView(name, th.fullWidth(5));
+        toggleViews.put(key, circle);
+        th.click(box, v -> {
+            boolean on = !link.lastState().optBoolean(key, false);
+            try {
+                link.lastState().put(key, on);  // show it at once; the PC confirms shortly
+            } catch (org.json.JSONException ignored) {
+            }
+            paintToggles(link.lastState());
+            link.set(key, on ? 1 : 0);
+            handler.postDelayed(link::requestState, 800);
+        });
+        return box;
+    }
+
+    private View sliderPill(String symbol, android.widget.SeekBar bar) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setGravity(Gravity.CENTER_VERTICAL);
+        pill.setBackground(Theme.round(th.dark ? 0x33FFFFFF : 0x80FFFFFF, th.dp(16)));
+        pill.setPadding(th.dp(12), th.dp(4), th.dp(4), th.dp(4));
+        pill.addView(th.text(symbol, 18, th.text, false));
+        pill.addView(bar, new LinearLayout.LayoutParams(0, th.dp(40), 1f));
+        return pill;
+    }
+
+    private TextView mediaButton(String glyph, Runnable action) {
+        TextView t = th.text(glyph, 20, th.text, false);
+        t.setGravity(Gravity.CENTER);
+        t.setBackground(th.pressable(0x00000000, th.dp(20)));
+        th.click(t, v -> action.run());
+        t.setLayoutParams(new LinearLayout.LayoutParams(th.dp(44), th.dp(40)));
+        return t;
+    }
+
+    private void paintToggles(org.json.JSONObject st) {
+        for (java.util.Map.Entry<String, TextView> e : toggleViews.entrySet()) {
+            boolean on = st.optBoolean(e.getKey(), false);
+            e.getValue().setBackground(Theme.round(on ? th.accent : (th.dark ? 0x40FFFFFF : 0xB3FFFFFF), th.dp(26)));
+            e.getValue().setTextColor(on ? 0xFFFFFFFF : th.text);
+        }
+    }
+
+    @Override
+    public void onState(org.json.JSONObject st) {
+        paintToggles(st);
+        applying = true;
+        if (st.has("brightness") && brightnessBar != null) brightnessBar.setProgress(st.optInt("brightness"));
+        if (st.has("volume") && volumeBar != null) volumeBar.setProgress(st.optInt("volume"));
+        applying = false;
+    }
+
+    private void showMedia(org.json.JSONObject m) {
+        if (songTitle == null) return;
+        String title = m.optString("title"), artist = m.optString("artist");
+        songTitle.setText(artist.isEmpty() ? title : title + "  \u00B7  " + artist);
+        playButton.setText("Playing".equals(m.optString("status")) ? "\u23F8" : "\u25B6");
     }
 
     @Override

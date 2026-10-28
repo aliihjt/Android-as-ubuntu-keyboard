@@ -35,6 +35,7 @@ final class TouchBar implements HostLink.Listener {
             "◀|alt+left", "▶|alt+right", "↑ Up|alt+up", "📁 New Folder|ctrl+shift+n",
             "Rename|f2", "Hidden|ctrl+h", "🔍|ctrl+f"};
     private static final String[] DESKTOP = {
+            "\u2728 AI|cmd:ai",
             "Activities|super", "Apps|super+a", "📁 Files|cmd:files", "⌨ Terminal|cmd:terminal",
             "📷 Screenshot|print", "⚙ Settings|cmd:settings", "Undo|ctrl+z",
             "Copy|ctrl+c", "Paste|ctrl+v"};

@@ -63,6 +63,8 @@ COMMANDS = {
     "logout": ["gnome-session-quit", "--logout"],
     "poweroff": ["gnome-session-quit", "--power-off"],
     "restart": ["gnome-session-quit", "--reboot"],
+    # AI assistant (Newelle / Alpaca / Claude on the web), see host/ai-setup.sh
+    "ai": [os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai-open.sh")],
 }
 
 KEY_ALIASES = {

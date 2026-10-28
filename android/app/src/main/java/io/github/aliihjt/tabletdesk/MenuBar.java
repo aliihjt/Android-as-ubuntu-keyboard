@@ -145,6 +145,7 @@ final class MenuBar implements HostLink.Listener {
         line2.setGravity(Gravity.CENTER_VERTICAL);
         bar.addView(line2, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         // labelled buttons, so it is obvious what each one does
+        line2.addView(iconButton("\u2728 AI", v -> HostLink.get().command("ai")));  // AI assistant
         line2.addView(iconButton("\uD83D\uDE80 Apps", this::showDock));  // favourite apps
         line2.addView(iconButton("\uD83D\uDD0D Search", v -> HostLink.get().combo("super")));
         line2.addView(iconButton("\u2328 Keyboard", v -> OverlayService.toggleKeyboard(ctx)));  // floating
@@ -463,6 +464,8 @@ final class MenuBar implements HostLink.Listener {
         int power = st.optInt("power", -1);
         return new String[]{
                 "Tools",
+                "\u2728  Ask AI…|cmd:ai|Ctrl+Alt+Space",
+                "-",
                 "\uD83D\uDCF7  Screenshot…|print|Print",
                 "     Screenshot of whole screen|shift+print|Shift+Print",
                 "     Screenshot of window|alt+print|Alt+Print",

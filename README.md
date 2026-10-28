@@ -30,6 +30,7 @@ Turn an Android tablet into a **second screen, keyboard, trackpad and Touch Bar*
 | 🧰 | **Tools menu** | Screenshots, screen recording, clipboard, emoji, Wi-Fi, Bluetooth, microphone, Night Light, dark mode, Do Not Disturb, keep PC awake, power profile. |
 | 🎛 | **Control Center** | Brightness and volume sliders, switches and quick buttons, like macOS. |
 | ▭ | **Touch Bar** | Esc, keys that change with the app (browser, terminal, VS Code, Files), an **fn** layer with F1–F12, brightness, volume and media. |
+| ✨ | **AI assistant** | Like Copilot on Windows: **Ctrl+Alt+Space** or the **✨ AI** button opens an AI assistant (Newelle with Claude or a local model). Set it up with `./host/ai-setup.sh`. |
 | 🚀 | **Dock** | Opens the apps pinned in Fedora's dash. |
 | 📋 | **Clipboard** | Copy text from the tablet to the PC and back. |
 | 🎨 | **Liquid Glass** | Frosted, blurred glass design (Android 12+), light and dark themes, three sizes. |

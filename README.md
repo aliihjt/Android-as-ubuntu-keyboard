@@ -1,43 +1,40 @@
-# TabletDesk 💻📱
+# Fedora Pad 📱💻
 
-Turn an Android tablet into a **second screen, keyboard, trackpad and Touch Bar** for your **Fedora** laptop. Everything runs over **one USB-C cable**, which also charges the tablet. A **macOS-style menu bar** with Liquid Glass menus sits at the top of the tablet.
+Your Android tablet as a **second screen, keyboard and trackpad** for your **Fedora** laptop, over **one USB-C cable** that also charges it. Clean iPadOS-style design: a simple home screen with big tiles, and one small floating button over the Fedora screen.
 
 **⬇️ [Download the app (APK)](https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/download/latest-apk/TabletDesk.apk)** · Fedora Workstation 40+ (GNOME) · Android 8+
 
 ```
- ┌──────────────────────────────── tablet ─────────────────────────────────┐
- │ ◆  TabletDesk  Firefox  File  Edit  View  Go  Window  Help  Tools       │  ← menus
- │ 🚀 🔍 ⌨ ☰                                          ●  ⚡92%  Wed 10:42  │  ← icons
- │                                                                         │
- │           Fedora desktop (extended second screen, or mirrored)          │
- │                                                                         │
- │   [esc] [◀][▶][⟳][🔍 Address][＋Tab] … [fn] │ 🔅 🔆 🔇 🔉 🔊 ⏮ ⏯ ⏭ ⌄    │  ← Touch Bar
- └─────────────────────────────────────────────────────────────────────────┘
-                 USB-C  ⇄  power + data (ADB)  ⇄  Fedora laptop
+┌───────────────────── Fedora Pad ─────────────────────┐
+│ Fedora Pad                               ● Connected │
+│ ┌──────────────────────────────────────────────────┐ │
+│ │ 🖥  fedora-laptop                                 │ │
+│ │     Connected with the USB-C cable                │ │
+│ │ [            Show Fedora Screen            ]      │ │
+│ │ ( Second screen | Same picture | Keyboard only )  │ │
+│ └──────────────────────────────────────────────────┘ │
+│ TOOLS                                                │
+│ [⌨ Keyboard] [🖱 Trackpad] [🎵 Media]  [🎛 Controls]   │
+│ [⚡ Shortcuts] [🚀 Apps]   [📊 Stats]  [⚙ Settings]   │
+└──────────────────────────────────────────────────────┘
 ```
 
-## ✨ Features
+## ✨ What's inside
 
-| | Feature | What it does |
+| | Page | What it does |
 |---|---|---|
-| 🖥 | **Second screen** | **Extend** adds the tablet as a real extra monitor (drag windows across), **Mirror** shows the same picture, **Input only** skips the screen. The choice is remembered. |
-| 🖱 | **One desktop** | The laptop touchpad moves the pointer onto the tablet and the tablet draws it there. Touch works directly on the tablet too. |
-| ⌨ | **Keyboard** | Full-screen keyboard & trackpad page with sticky Ctrl / Alt / Super / Shift, arrows and a one-tap shortcut row (copy, paste, undo, save, find, switch app…). Persian and other languages work. A Bluetooth keyboard on the tablet types into Fedora too. |
-| 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is switched off (touchpad stays on). Unplug and it's back. |
-| 👆 | **Trackpad** | 1 finger move · tap click · tap + drag · 2 fingers scroll / right click · 3 fingers Activities and workspaces. Speed and natural scrolling are adjustable. |
-| 🍎 | **Menu bar** | Two lines: menus on top (with the focused app's name), icons, battery and clock below. Glass drop-down menus show the shortcut for every command. |
-| ⚙️ | **TabletDesk menu** | Every setting in one place: mode, laptop keyboard, touch, bars, size, theme, trackpad, PC info (CPU, RAM, battery), reconnect. |
-| 🧰 | **Tools menu** | Screenshots, screen recording, clipboard, emoji, Wi-Fi, Bluetooth, microphone, Night Light, dark mode, Do Not Disturb, keep PC awake, power profile. |
-| 🎛 | **Control Center** | Brightness and volume sliders, switches and quick buttons, like macOS. |
-| ▭ | **Touch Bar** | Esc, keys that change with the app (browser, terminal, VS Code, Files), an **fn** layer with F1–F12, brightness, volume and media. |
-| ✨ | **AI assistant** | Like Copilot on Windows: **Ctrl+Alt+Space** or the **✨ AI** button opens an AI assistant (Newelle with Claude or a local model). Set it up with `./host/ai-setup.sh`. |
-| 🎵 | **Media remote** | Play/pause, next, previous and volume for whatever plays on the PC (Spotify, YouTube in Firefox, VLC...). |
-| 📊 | **PC stats** | Live CPU, memory, temperature, disk, battery and network speed. |
-| 🖐 | **Gestures** | Pinch to zoom, 4-finger swipe to switch apps, up for all apps, down to hide a window. |
-| 🚀 | **Dock** | Opens the apps pinned in Fedora's dash. |
-| 📋 | **Clipboard** | Copy text from the tablet to the PC and back. |
-| 🎨 | **Liquid Glass** | Frosted, blurred glass design (Android 12+), light and dark themes, three sizes. |
-| ⚡ | **Plug & play** | Plug in and everything starts by itself: screen, bars, the right mode, and even **app updates**. |
+| 🖥 | **Show Fedora Screen** | Fedora on the tablet as a **second screen** (drag windows across) or the **same picture**. The laptop's mouse pointer shows on the tablet too. |
+| ⌨ | **Keyboard** | Full laptop keyboard: number row, Ctrl / Alt / ⌘, arrows, a **123 number pad**, and 🌐 for the tablet's own keyboard (Persian and other languages). |
+| 🖱 | **Trackpad** | Big trackpad with click buttons; show the keyboard under it for a laptop layout. Tap, drag, 2-finger scroll / right-click / pinch zoom, 3 and 4-finger swipes. |
+| 🎵 | **Media** | Play / pause, next, previous and volume for whatever plays on the PC. |
+| 🎛 | **Controls** | Brightness, volume, dark mode, Night Light, Do Not Disturb, Wi-Fi, Bluetooth, mic, keep awake, power mode, lock / log out / restart / shut down. |
+| ⚡ | **Shortcuts** | One-tap copy, paste, undo, windows, screenshots, recording, emoji, plus shortcuts for the app you're using (browser, terminal, VS Code). |
+| 🚀 | **Apps** | Opens the apps pinned in Fedora's dash, plus search, all apps and AI. |
+| 📊 | **Stats** | Live CPU, memory, temperature, disk, battery and network speed. |
+| ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
+| ● | **Floating button** | The only thing over the Fedora screen. Drag it anywhere; tap it for a floating **keyboard** or **trackpad**, Media, Shortcuts or Home. |
+| 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is off (touchpad stays on). Unplug and it's back. |
+| ⚡ | **Plug & play** | Plug in and everything starts by itself, including app updates. |
 
 ## 🚀 Setup (once)
 
@@ -61,7 +58,7 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 
 ### 🔌 First connection
 1. Plug in the USB-C cable. On the tablet, tick **Always allow from this computer** and tap **Allow**.
-2. The TabletDesk app installs itself and opens. Windows App opens next.
+2. The Fedora Pad app installs itself and opens. Windows App opens next.
 3. In Windows App, add the PC **`127.0.0.1`** with the user and password from `setup.sh`, and save the password.
 
 **From now on: unlock Fedora and plug in the tablet. That's it.**
@@ -89,7 +86,6 @@ The tablet app also updates itself every time you plug in. The app shows its **B
 | Screen doesn't appear | Unlock Fedora. GNOME only shares an unlocked screen. |
 | App doesn't update | Watch the tablet for an install prompt. Xiaomi: turn on **Install via USB**. |
 | Text on the tablet is tiny | Fedora Settings › Displays › tablet monitor › **Scale 200%** |
-| Menu bar shows "Fedora" instead of the app | Log out and in, then `gnome-extensions enable tabletdesk@aliihjt.github.io` |
 | See what's happening | `journalctl --user -u tabletdesk -f` |
 
 ## 🔧 How it works

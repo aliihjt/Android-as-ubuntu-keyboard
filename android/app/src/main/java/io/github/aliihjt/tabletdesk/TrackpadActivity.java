@@ -2,6 +2,7 @@ package io.github.aliihjt.tabletdesk;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.InputDevice;
@@ -20,9 +21,9 @@ import java.util.Map;
 
 /** Full-screen laptop keyboard + trackpad for the Linux desktop. */
 public class TrackpadActivity extends Activity implements TrackpadView.TypingListener, HostLink.Listener {
-    private static final int BG = 0xFF1C1C1E;
-    private static final int PAD = 0xFF2C2C2E;
-    private static final int KEY = 0xFF3A3A3C;
+    private static final int BG = 0xFF0B0B0D;
+    private static final int PAD = 0xFF1C1C1E;
+    private static final int KEY = 0xFF2C2C2E;
     private static final int ACCENT = 0xFF0A84FF;
 
     private final HostLink link = HostLink.get();
@@ -41,12 +42,17 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        int m = Ui.dp(this, 10);
-        root.setPadding(m, Ui.dp(this, 34), m, m);  // room for the menu bar
+        int m = Ui.dp(this, 16);
+        root.setPadding(m, Ui.dp(this, 40), m, m);  // room for the status bar + menu bar
 
         status = Ui.label(this, "", 13, 0xFFAAAAAA, false);
-        status.setPadding(Ui.dp(this, 4), 0, 0, Ui.dp(this, 6));
-        root.addView(status);
+        status.setPadding(Ui.dp(this, 12), Ui.dp(this, 5), Ui.dp(this, 12), Ui.dp(this, 5));
+        status.setBackground(Ui.rounded(0xFF1C1C1E, Ui.dp(this, 14)));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        slp.gravity = Gravity.CENTER_HORIZONTAL;
+        slp.bottomMargin = Ui.dp(this, 10);
+        root.addView(status, slp);
 
         LinearLayout keys = new LinearLayout(this);
         keys.setOrientation(LinearLayout.HORIZONTAL);
@@ -68,38 +74,53 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         HorizontalScrollView keyScroll = new HorizontalScrollView(this);
         keyScroll.setHorizontalScrollBarEnabled(false);
         keyScroll.addView(keys);
+        int kp = Ui.dp(this, 4);
+        keyScroll.setPadding(kp, kp, kp, kp);
+        keyScroll.setBackground(Ui.rounded(PAD, Ui.dp(this, 14)));
         root.addView(keyScroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 48)));
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 56)));
 
         FrameLayout padFrame = new FrameLayout(this);
-        padFrame.setBackground(Ui.rounded(PAD, Ui.dp(this, 18)));
+        GradientDrawable padBg = Ui.rounded(PAD, Ui.dp(this, 22));
+        padBg.setStroke(Ui.dp(this, 1), 0xFF3A3A3C);
+        padFrame.setBackground(padBg);
         TextView hint = Ui.label(this,
-                "Trackpad\n1 finger: move · tap: click · tap+drag: drag\n"
-                        + "2 fingers: scroll · tap: right click\n"
-                        + "3 fingers: swipe up = Activities · left/right = workspaces",
-                14, 0xFF6E6E73, false);
+                "1 finger: move  \u00B7  tap: click  \u00B7  tap + drag: drag\n"
+                        + "2 fingers: scroll  \u00B7  tap: right click\n"
+                        + "3 fingers \u2191 Activities  \u00B7  \u2190 \u2192 workspaces",
+                13, 0xFF636366, false);
+        hint.setLineSpacing(0, 1.4f);
         hint.setSingleLine(false);
         hint.setGravity(Gravity.CENTER);
         padFrame.addView(hint, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         pad = new TrackpadView(this);
         pad.setTypingListener(this);
+        pad.setOnTouchListener((v, ev) -> {  // fade the help text once the pad is used
+            if (hint.getAlpha() == 1f) hint.animate().alpha(0f).setDuration(400);
+            return false;
+        });
         padFrame.addView(pad, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         LinearLayout.LayoutParams padLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        padLp.setMargins(0, Ui.dp(this, 8), 0, Ui.dp(this, 8));
+        padLp.setMargins(0, Ui.dp(this, 12), 0, Ui.dp(this, 8));
         root.addView(padFrame, padLp);
 
+        // one physical-looking click bar split in two, like a laptop trackpad
         LinearLayout buttons = new LinearLayout(this);
-        buttons.addView(clickButton("left"), new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1f));
+        buttons.setBackground(Ui.rounded(PAD, Ui.dp(this, 16)));
+        buttons.addView(clickButton("left"), new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
         View gap = new View(this);
-        buttons.addView(gap, new LinearLayout.LayoutParams(Ui.dp(this, 8), 1));
-        buttons.addView(clickButton("right"), new LinearLayout.LayoutParams(0, Ui.dp(this, 52), 1f));
+        gap.setBackgroundColor(0xFF3A3A3C);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(Ui.dp(this, 1), Ui.dp(this, 26));
+        glp.gravity = Gravity.CENTER_VERTICAL;
+        buttons.addView(gap, glp);
+        buttons.addView(clickButton("right"), new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f));
         // leave space for the Touch Bar overlay
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.bottomMargin = OverlayService.running ? Ui.dp(this, 56) : 0;
+        blp.bottomMargin = OverlayService.running ? Ui.dp(this, 28) : 0;
         root.addView(buttons, blp);
 
         setContentView(root);
@@ -188,9 +209,9 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
     // ---- widgets ----
 
     private TextView key(String label, View.OnClickListener l) {
-        TextView t = Ui.label(this, label, 15, 0xFFFFFFFF, false);
+        TextView t = Ui.label(this, label, 14, 0xFFF2F2F7, false);
         t.setGravity(Gravity.CENTER);
-        t.setMinWidth(Ui.dp(this, 56));
+        t.setMinWidth(Ui.dp(this, 52));
         t.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);
         t.setBackground(Ui.pressable(KEY, Ui.dp(this, 8), 0x55FFFFFF));
         t.setOnClickListener(v -> {
@@ -219,7 +240,7 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
 
     private TextView clickButton(String which) {
         TextView t = Ui.label(this, "", 14, 0xFFFFFFFF, false);
-        t.setBackground(Ui.pressable(PAD, Ui.dp(this, 14), 0x55FFFFFF));
+        t.setBackground(Ui.pressable(0x00000000, Ui.dp(this, 16), 0x33FFFFFF));
         t.setOnClickListener(v -> {
             Ui.haptic(v);
             link.button(which, "click");

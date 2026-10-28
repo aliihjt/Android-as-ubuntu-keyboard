@@ -79,7 +79,7 @@ For a fully hands-free connection:
 
 To watch what the service is doing: `journalctl --user -u tabletdesk -f`.
 
-To change the default mode, edit `Environment=TABLETDESK_MODE=` in `~/.config/systemd/user/tabletdesk.service`.
+The mode is **remembered**. Pick it once, either in the tablet app (**Extend / Mirror / Input only**) or with `./host/connect.sh mirror`, and every plug-in uses it. Changing it in the app while connected switches right away.
 
 ## How it works
 ```
@@ -98,6 +98,8 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► focused app na
 | RDP app can't connect | Check `grdctl status` shows RDP **enabled**, then run `systemctl --user restart gnome-remote-desktop`. Make sure the screen is unlocked: GNOME only shares an active session. |
 | Tablet screen is not a separate monitor | Make sure the mode is `extend`, then reconnect the RDP app. GNOME applies the mode change on a new connection. |
 | Menu bar always says "Fedora" | The extension isn't active. Log out and back in, run `gnome-extensions enable tabletdesk@aliihjt.github.io`, and check that `gnome-extensions list --enabled` lists it. |
+| Laptop keyboard or mouse stops working | Update (`git pull`, then `systemctl --user restart tabletdesk`). The host now releases every key and click when the tablet connects or disconnects. If it still happens, run `./host/connect.sh input` to test without the screen part. |
+| Fedora text on the tablet is tiny or blurry | Fedora Settings › Displays › select the tablet monitor › **Scale 200%**. GNOME remembers it. |
 | `Cannot open /dev/uinput` | Run `setup.sh`, then log out and back in. |
 | KDE Plasma (Fedora KDE) | Input, the menu bar and the Touch Bar work. For the screen, turn on System Settings › Remote Desktop. It can mirror the screen only, and the menu bar shows "Fedora" instead of the app name. |
 | Tablet charges slowly | Use a USB-C port on the laptop, not a USB-A adapter. |

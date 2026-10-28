@@ -15,12 +15,14 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * MacBook-style Touch Bar along the bottom edge: Esc, buttons that change with
- * the focused desktop app, an Fn layer with F1-F12, and media / brightness keys.
+ * MacBook-style Touch Bar floating above the bottom edge: Esc, buttons that change
+ * with the focused desktop app, an Fn layer with F1-F12, and media / brightness keys.
+ * Shrinks to a small handle when unused so it does not cover the desktop.
  */
 final class TouchBar implements HostLink.Listener {
-    private static final int KEY_BG = 0xFF3A3A3C;
+    private static final int KEY_BG = 0xFF2C2C2E;
     private static final int ACCENT = 0xFF0A84FF;
+    private static final long AUTO_HIDE_MS = 8000;
 
     private static final String[] BROWSER = {
             "◀|alt+left", "▶|alt+right", "⟳|ctrl+r", "🔍 Address|ctrl+l",
@@ -47,27 +49,32 @@ final class TouchBar implements HostLink.Listener {
     private final FrameLayout root;
     private final LinearLayout bar;
     private final LinearLayout contextRow;
-    private final TextView pill;
+    private final View handle;
     private final TextView fnKey;
     private final WindowManager.LayoutParams params;
-    private final Handler repeater = new Handler(Looper.getMainLooper());
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable autoCollapse = () -> setCollapsed(true);
+    private final boolean autoHide;
     private boolean fnMode;
     private boolean collapsed;
     private String app = "";
 
-    TouchBar(Context ctx, WindowManager wm) {
+    @SuppressLint("ClickableViewAccessibility")
+    TouchBar(Context ctx, WindowManager wm, boolean autoHide) {
         this.ctx = ctx;
         this.wm = wm;
+        this.autoHide = autoHide;
         root = new FrameLayout(ctx);
 
         bar = new LinearLayout(ctx);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackground(Ui.rounded(0xF2000000, Ui.dp(ctx, 12)));
+        bar.setBackground(Ui.rounded(0xF0111113, Ui.dp(ctx, 16)));
+        bar.setElevation(Ui.dp(ctx, 6));
         int pad = Ui.dp(ctx, 6);
         bar.setPadding(pad, pad, pad, pad);
 
-        bar.addView(key("esc", "esc", false, 64));
+        bar.addView(key("esc", "esc", false, 58));
         contextRow = new LinearLayout(ctx);
         contextRow.setOrientation(LinearLayout.HORIZONTAL);
         HorizontalScrollView scroller = new HorizontalScrollView(ctx);
@@ -75,48 +82,52 @@ final class TouchBar implements HostLink.Listener {
         scroller.addView(contextRow);
         bar.addView(scroller, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
 
-        fnKey = key("fn", null, false, 52);
+        fnKey = key("fn", null, false, 44);
         fnKey.setOnClickListener(v -> {
+            poke();
             fnMode = !fnMode;
-            fnKey.setBackground(Ui.pressable(fnMode ? ACCENT : KEY_BG, Ui.dp(ctx, 6), 0x55FFFFFF));
+            fnKey.setBackground(Ui.pressable(fnMode ? ACCENT : KEY_BG, Ui.dp(ctx, 8), 0x55FFFFFF));
             rebuildContext();
         });
         bar.addView(fnKey);
         View divider = new View(ctx);
-        divider.setBackgroundColor(0xFF555555);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(Ui.dp(ctx, 1), Ui.dp(ctx, 26));
-        dlp.setMargins(Ui.dp(ctx, 6), 0, Ui.dp(ctx, 6), 0);
+        divider.setBackgroundColor(0xFF48484A);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(Ui.dp(ctx, 1), Ui.dp(ctx, 22));
+        dlp.setMargins(Ui.dp(ctx, 5), 0, Ui.dp(ctx, 5), 0);
         bar.addView(divider, dlp);
         for (String c : CONTROLS) {
             String[] p = c.split("\\|");
-            bar.addView(key(p[0], p[1], true, 48));
+            bar.addView(key(p[0], p[1], true, 40));
         }
-        TextView hide = key("⌄", null, false, 40);
-        hide.setOnClickListener(v -> toggleCollapsed());
+        TextView hide = key("\u2304", null, false, 36);
+        hide.setOnClickListener(v -> setCollapsed(true));
         bar.addView(hide);
         root.addView(bar, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        pill = Ui.label(ctx, "⌃ Touch Bar", 13, 0xFFFFFFFF, true);
-        pill.setGravity(Gravity.CENTER);
-        pill.setPadding(Ui.dp(ctx, 14), 0, Ui.dp(ctx, 14), 0);
-        pill.setBackground(Ui.pressable(0xE6000000, Ui.dp(ctx, 14), 0x55FFFFFF));
-        pill.setOnClickListener(v -> toggleCollapsed());
-        pill.setVisibility(View.GONE);
-        root.addView(pill, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        // small pill shown while collapsed; tap or swipe it to bring the bar back
+        handle = new View(ctx);
+        handle.setBackground(Ui.rounded(0xCC1C1C1E, Ui.dp(ctx, 4)));
+        handle.setElevation(Ui.dp(ctx, 3));
+        handle.setVisibility(View.GONE);
+        root.addView(handle, new FrameLayout.LayoutParams(Ui.dp(ctx, 110), Ui.dp(ctx, 8), Gravity.CENTER));
+        root.setOnTouchListener((v, ev) -> {
+            if (collapsed && ev.getActionMasked() == MotionEvent.ACTION_DOWN) setCollapsed(false);
+            return collapsed;
+        });
 
         params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 52),
+                expandedWidth(), Ui.dp(ctx, 46),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        params.y = Ui.dp(ctx, 4);
+        params.y = Ui.dp(ctx, 8);
 
         rebuildContext();
         HostLink.get().addListener(this);
+        poke();
     }
 
     View view() {
@@ -128,18 +139,36 @@ final class TouchBar implements HostLink.Listener {
     }
 
     void destroy() {
-        repeater.removeCallbacksAndMessages(null);
+        handler.removeCallbacksAndMessages(null);
         HostLink.get().removeListener(this);
     }
 
     void toggleCollapsed() {
-        collapsed = !collapsed;
-        bar.setVisibility(collapsed ? View.GONE : View.VISIBLE);
-        pill.setVisibility(collapsed ? View.VISIBLE : View.GONE);
-        params.width = collapsed ? Ui.dp(ctx, 130) : WindowManager.LayoutParams.MATCH_PARENT;
-        params.height = collapsed ? Ui.dp(ctx, 30) : Ui.dp(ctx, 52);
-        params.gravity = Gravity.BOTTOM | (collapsed ? Gravity.END : Gravity.CENTER_HORIZONTAL);
+        setCollapsed(!collapsed);
+    }
+
+    /** Touch Bar is as wide as a MacBook's: never wider than 860dp. */
+    private int expandedWidth() {
+        int screen = ctx.getResources().getDisplayMetrics().widthPixels;
+        return Math.min(screen - Ui.dp(ctx, 24), Ui.dp(ctx, 860));
+    }
+
+    private void setCollapsed(boolean c) {
+        collapsed = c;
+        bar.setVisibility(c ? View.GONE : View.VISIBLE);
+        handle.setVisibility(c ? View.VISIBLE : View.GONE);
+        params.width = c ? Ui.dp(ctx, 160) : expandedWidth();
+        params.height = c ? Ui.dp(ctx, 22) : Ui.dp(ctx, 46);
+        params.y = c ? Ui.dp(ctx, 2) : Ui.dp(ctx, 8);
         if (root.isAttachedToWindow()) wm.updateViewLayout(root, params);
+        if (c) handler.removeCallbacks(autoCollapse);
+        else poke();
+    }
+
+    /** Restart the idle timer after any interaction. */
+    private void poke() {
+        handler.removeCallbacks(autoCollapse);
+        if (autoHide) handler.postDelayed(autoCollapse, AUTO_HIDE_MS);
     }
 
     @Override
@@ -156,7 +185,7 @@ final class TouchBar implements HostLink.Listener {
     private void rebuildContext() {
         contextRow.removeAllViews();
         if (fnMode) {
-            for (int i = 1; i <= 12; i++) contextRow.addView(key("F" + i, "f" + i, false, 52));
+            for (int i = 1; i <= 12; i++) contextRow.addView(key("F" + i, "f" + i, false, 46));
             return;
         }
         for (String c : contextFor(app)) {
@@ -179,11 +208,11 @@ final class TouchBar implements HostLink.Listener {
     /** A Touch Bar key. repeat=true keeps firing while held (volume, arrows). */
     @SuppressLint("ClickableViewAccessibility")
     private TextView key(String label, String action, boolean repeat, int minWidthDp) {
-        TextView t = Ui.label(ctx, label, 14, 0xFFFFFFFF, false);
+        TextView t = Ui.label(ctx, label, 13, 0xFFF2F2F7, false);
         t.setGravity(Gravity.CENTER);
-        t.setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0);
+        t.setPadding(Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10), 0);
         if (minWidthDp > 0) t.setMinWidth(Ui.dp(ctx, minWidthDp));
-        t.setBackground(Ui.pressable(KEY_BG, Ui.dp(ctx, 6), 0x55FFFFFF));
+        t.setBackground(Ui.pressable(KEY_BG, Ui.dp(ctx, 8), 0x55FFFFFF));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
         lp.setMargins(Ui.dp(ctx, 3), 0, Ui.dp(ctx, 3), 0);
@@ -192,6 +221,7 @@ final class TouchBar implements HostLink.Listener {
         if (!repeat) {
             t.setOnClickListener(v -> {
                 Ui.haptic(v);
+                poke();
                 HostLink.get().action(action);
             });
             return t;
@@ -200,7 +230,7 @@ final class TouchBar implements HostLink.Listener {
             @Override
             public void run() {
                 HostLink.get().action(action);
-                repeater.postDelayed(this, 110);
+                handler.postDelayed(this, 110);
             }
         };
         t.setOnTouchListener((v, ev) -> {
@@ -208,13 +238,14 @@ final class TouchBar implements HostLink.Listener {
                 case MotionEvent.ACTION_DOWN:
                     v.setPressed(true);
                     Ui.haptic(v);
+                    poke();
                     HostLink.get().action(action);
-                    repeater.postDelayed(again, 400);
+                    handler.postDelayed(again, 400);
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     v.setPressed(false);
-                    repeater.removeCallbacks(again);
+                    handler.removeCallbacks(again);
                     return true;
                 default:
                     return true;

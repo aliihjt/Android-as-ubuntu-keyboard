@@ -55,11 +55,11 @@ public class OverlayService extends Service {
         removeBars();
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         if (prefs.getBoolean("touchbar", true)) {
-            touchBar = new TouchBar(this, wm);
+            touchBar = new TouchBar(this, wm, prefs.getBoolean("autohide", true));
             wm.addView(touchBar.view(), touchBar.params());
         }
         if (prefs.getBoolean("menubar", true)) {
-            menuBar = new MenuBar(this, () -> {
+            menuBar = new MenuBar(this, wm, prefs.getBoolean("autohide", true), () -> {
                 if (touchBar != null) touchBar.toggleCollapsed();
             });
             wm.addView(menuBar.view(), menuBar.params());

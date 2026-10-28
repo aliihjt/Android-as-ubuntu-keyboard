@@ -1,9 +1,11 @@
 package io.github.aliihjt.tabletdesk;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
@@ -11,8 +13,10 @@ import android.os.Looper;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.Menu;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
@@ -21,10 +25,12 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/** macOS-style menu bar pinned to the top of the tablet screen. */
+/**
+ * macOS-style menu bar pinned to the top of the tablet screen. Like macOS in
+ * full screen it can auto-hide to a thin strip; touching the strip brings it back.
+ */
 final class MenuBar implements HostLink.Listener {
-    private static final int BG = 0xEBF4F4F6;
-    private static final int FG = 0xFF1D1D1F;
+    private static final long AUTO_HIDE_MS = 4000;
 
     // First entry is the menu title; then "Label|action|shortcut hint", "-" = separator.
     // Actions: plain key combo, "cmd:<name>" (whitelisted on host) or "text:<chars>".
@@ -58,14 +64,22 @@ final class MenuBar implements HostLink.Listener {
     };
 
     private final Context ctx;
+    private final WindowManager wm;
+    private final boolean dark;
+    private final int fg;
     private final Context popupTheme;
-    private final LinearLayout root;
+    private final FrameLayout root;
+    private final LinearLayout bar;
+    private final View strip;
     private final TextView appName;
     private final TextView status;
     private final TextView battery;
     private final TextView clock;
+    private final WindowManager.LayoutParams params;
+    private final boolean autoHide;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat clockFormat = new SimpleDateFormat("EEE d MMM  HH:mm", Locale.getDefault());
+    private final Runnable hide = this::collapse;
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
@@ -73,47 +87,85 @@ final class MenuBar implements HostLink.Listener {
             handler.postDelayed(this, 10_000);
         }
     };
+    private boolean collapsed;
 
-    MenuBar(Context ctx, Runnable toggleTouchBar) {
+    @SuppressLint("ClickableViewAccessibility")
+    MenuBar(Context ctx, WindowManager wm, boolean autoHide, Runnable toggleTouchBar) {
         this.ctx = ctx;
-        this.popupTheme = new ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_Light);
-        root = new LinearLayout(ctx);
-        root.setOrientation(LinearLayout.HORIZONTAL);
-        root.setGravity(Gravity.CENTER_VERTICAL);
-        root.setBackgroundColor(BG);
-        root.setPadding(Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10), 0);
+        this.wm = wm;
+        this.autoHide = autoHide;
+        dark = Ui.isDark(ctx);
+        fg = dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
+        popupTheme = new ContextThemeWrapper(ctx, dark
+                ? android.R.style.Theme_DeviceDefault : android.R.style.Theme_DeviceDefault_Light);
 
-        root.addView(menuTitle(SYSTEM_MENU[0], true, SYSTEM_MENU));
+        root = new FrameLayout(ctx);
+        bar = new LinearLayout(ctx);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(dark ? 0xE01C1C1E : 0xE6F6F6F8);
+        bar.setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 10), 0);
+        bar.setElevation(Ui.dp(ctx, 2));
+
+        TextView logo = menuTitle(SYSTEM_MENU[0], true, SYSTEM_MENU);
+        logo.setTextSize(14);
+        bar.addView(logo);
         appName = menuTitle("Fedora", true, null);
         appName.setOnClickListener(v -> {
             String[] items = APP_MENU.clone();
             items[0] = HostLink.get().app();
             showMenu(v, items);
         });
-        root.addView(appName);
-        for (String[] m : MENUS) root.addView(menuTitle(m[0], false, m));
+        bar.addView(appName);
+        for (String[] m : MENUS) bar.addView(menuTitle(m[0], false, m));
 
-        View spacer = new View(ctx);
-        root.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+        bar.addView(new View(ctx), new LinearLayout.LayoutParams(0, 1, 1f));
 
-        root.addView(iconButton("⌨", v -> {  // keyboard & trackpad
+        bar.addView(iconButton("\u2328", v -> {  // keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         }));
-        root.addView(iconButton("▭", v -> toggleTouchBar.run()));  // Touch Bar on/off
-        status = Ui.label(ctx, "", 13, FG, false);
-        status.setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 8), 0);
-        root.addView(status);
-        battery = Ui.label(ctx, "", 13, FG, false);
-        battery.setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 8), 0);
-        root.addView(battery);
-        clock = Ui.label(ctx, "", 13, FG, false);
-        clock.setPadding(Ui.dp(ctx, 8), 0, 0, 0);
-        root.addView(clock);
+        bar.addView(iconButton("\u25AD", v -> toggleTouchBar.run()));  // Touch Bar on/off
+        status = small("");
+        bar.addView(status);
+        battery = small("");
+        bar.addView(battery);
+        clock = small("");
+        clock.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        bar.addView(clock);
+        root.addView(bar, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // thin handle shown while hidden
+        strip = new View(ctx);
+        strip.setBackground(Ui.rounded(dark ? 0x99FFFFFF : 0x80000000, Ui.dp(ctx, 3)));
+        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(Ui.dp(ctx, 120), Ui.dp(ctx, 4),
+                Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        slp.topMargin = Ui.dp(ctx, 3);
+        strip.setVisibility(View.GONE);
+        root.addView(strip, slp);
+        root.setOnTouchListener((v, ev) -> {
+            if (collapsed && ev.getActionMasked() == MotionEvent.ACTION_DOWN) expand();
+            return collapsed;
+        });
+
+        params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 26),
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        params.gravity = Gravity.TOP | Gravity.START;
+        if (Build.VERSION.SDK_INT >= 28) {
+            params.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
 
         HostLink.get().addListener(this);
         handler.post(tick);
+        scheduleHide();
     }
 
     View view() {
@@ -121,30 +173,18 @@ final class MenuBar implements HostLink.Listener {
     }
 
     WindowManager.LayoutParams params() {
-        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 28),
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT);
-        p.gravity = Gravity.TOP | Gravity.START;
-        if (Build.VERSION.SDK_INT >= 28) {
-            p.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        }
-        return p;
+        return params;
     }
 
     void destroy() {
-        handler.removeCallbacks(tick);
+        handler.removeCallbacksAndMessages(null);
         HostLink.get().removeListener(this);
     }
 
     @Override
     public void onStatus(boolean connected, String host) {
-        status.setText(connected ? "● " + host : "○ Not connected");
-        status.setTextColor(connected ? 0xFF1E8E3E : 0xFFC5221F);
+        status.setText(connected ? "\u25CF " + host : "\u25CB Offline");
+        status.setTextColor(connected ? (dark ? 0xFF30D158 : 0xFF1E8E3E) : (dark ? 0xFFFF6961 : 0xFFC5221F));
     }
 
     @Override
@@ -152,25 +192,62 @@ final class MenuBar implements HostLink.Listener {
         appName.setText(name);
     }
 
+    private void scheduleHide() {
+        handler.removeCallbacks(hide);
+        if (autoHide) handler.postDelayed(hide, AUTO_HIDE_MS);
+    }
+
+    private void collapse() {
+        if (collapsed) return;
+        collapsed = true;
+        bar.setVisibility(View.GONE);
+        strip.setVisibility(View.VISIBLE);
+        params.height = Ui.dp(ctx, 12);
+        if (root.isAttachedToWindow()) wm.updateViewLayout(root, params);
+    }
+
+    private void expand() {
+        collapsed = false;
+        bar.setVisibility(View.VISIBLE);
+        strip.setVisibility(View.GONE);
+        params.height = Ui.dp(ctx, 26);
+        if (root.isAttachedToWindow()) wm.updateViewLayout(root, params);
+        scheduleHide();
+    }
+
     private TextView menuTitle(String title, boolean bold, String[] items) {
-        TextView t = Ui.label(ctx, title, 13.5f, FG, bold);
-        int pad = Ui.dp(ctx, 9);
+        TextView t = Ui.label(ctx, title, 13, fg, false);
+        t.setTypeface(Typeface.create(bold ? "sans-serif" : "sans-serif-medium",
+                bold ? Typeface.BOLD : Typeface.NORMAL));
+        int pad = Ui.dp(ctx, 8);
         t.setPadding(pad, 0, pad, 0);
-        t.setBackground(Ui.pressable(0x00000000, Ui.dp(ctx, 5), 0x33000000));
-        t.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        t.setBackground(Ui.pressable(0x00000000, Ui.dp(ctx, 5), dark ? 0x40FFFFFF : 0x26000000));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+        lp.setMargins(0, Ui.dp(ctx, 2), 0, Ui.dp(ctx, 2));
+        t.setLayoutParams(lp);
         if (items != null) t.setOnClickListener(v -> showMenu(v, items));
         return t;
     }
 
     private TextView iconButton(String glyph, View.OnClickListener l) {
         TextView t = menuTitle(glyph, false, null);
-        t.setTextSize(15);
-        t.setOnClickListener(l);
+        t.setTextSize(14);
+        t.setOnClickListener(v -> {
+            scheduleHide();
+            l.onClick(v);
+        });
+        return t;
+    }
+
+    private TextView small(String text) {
+        TextView t = Ui.label(ctx, text, 12.5f, fg, false);
+        t.setPadding(Ui.dp(ctx, 7), 0, Ui.dp(ctx, 7), 0);
         return t;
     }
 
     private void showMenu(View anchor, String[] items) {
+        handler.removeCallbacks(hide);  // stay visible while a menu is open
         PopupMenu popup = new PopupMenu(popupTheme, anchor);
         Menu menu = popup.getMenu();
         int group = 0;
@@ -189,6 +266,7 @@ final class MenuBar implements HostLink.Listener {
             HostLink.get().action(parts[1]);
             return true;
         });
+        popup.setOnDismissListener(p -> scheduleHide());
         popup.show();
     }
 
@@ -200,7 +278,7 @@ final class MenuBar implements HostLink.Listener {
         int scale = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
         boolean charging = b.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
         if (level >= 0) {
-            battery.setText((charging ? "⚡" : "🔋") + " " + (level * 100 / scale) + "%");
+            battery.setText((charging ? "\u26A1" : "") + (level * 100 / scale) + "%");
         }
     }
 }

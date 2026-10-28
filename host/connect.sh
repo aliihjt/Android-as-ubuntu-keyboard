@@ -15,10 +15,11 @@ PKG=io.github.aliihjt.tabletdesk
 PORT="${TABLETDESK_PORT:-7777}"
 VNC_PORT=5900
 MODE="${TABLETDESK_MODE:-extend}"
+MODE_FILE="$HOME/.config/tabletdesk/mode"   # remembered mode, also set from the tablet app
 WATCH=0
 for arg in "$@"; do
   case "$arg" in
-    extend|mirror|input) MODE="$arg" ;;
+    extend|mirror|input) MODE="$arg"; mkdir -p "${MODE_FILE%/*}"; echo "$arg" >"$MODE_FILE" ;;
     --watch) WATCH=1 ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
@@ -169,7 +170,15 @@ open_viewer() {
   fi
 }
 
+# the remembered mode wins over the service default
+load_mode() {
+  local saved
+  saved=$(cat "$MODE_FILE" 2>/dev/null)
+  case "$saved" in extend|mirror|input) MODE=$saved ;; esac
+}
+
 session_once() {
+  load_mode
   log "Waiting for tablet on USB (enable USB debugging, accept the prompt)..."
   adb wait-for-usb-device
   local model
@@ -185,7 +194,17 @@ session_once() {
   adb shell am start -n "$PKG/.MainActivity" --ez autostart true 2>&1 \
     | grep -q Error && log "TabletDesk app not installed: adb install TabletDesk.apk"
   open_viewer
-  while [ "$(adb get-state 2>/dev/null)" = "device" ]; do sleep 2; done
+  while [ "$(adb get-state 2>/dev/null)" = "device" ]; do
+    sleep 2
+    # mode changed from the tablet app: switch right away
+    local old=$MODE
+    load_mode
+    if [ "$MODE" != "$old" ]; then
+      notify "Switching to $MODE mode."
+      cleanup_screen
+      [ "$MODE" != "input" ] && start_screen && open_viewer
+    fi
+  done
   notify "Tablet unplugged."
   cleanup_screen
 }

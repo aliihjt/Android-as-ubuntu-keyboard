@@ -55,6 +55,9 @@ public class MainActivity extends Activity implements HostLink.Listener {
         status.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 8));
         col.addView(status);
 
+        col.addView(section("Mode (used every time you plug in)"));
+        col.addView(modePicker());
+
         barsButton = button("", v -> toggleBars());
         col.addView(barsButton);
         col.addView(button("⌨  Keyboard & Trackpad",
@@ -65,6 +68,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
         col.addView(section("Options"));
         col.addView(check("Show macOS menu bar (top)", "menubar"));
         col.addView(check("Show Touch Bar (bottom)", "touchbar"));
+        col.addView(check("Auto-hide bars when not used (like macOS full screen)", "autohide"));
         TextView speedLabel = Ui.label(this, "", 15, FG, false);
         col.addView(speedLabel);
         SeekBar speed = new SeekBar(this);
@@ -125,6 +129,7 @@ public class MainActivity extends Activity implements HostLink.Listener {
 
     @Override
     public void onStatus(boolean connected, String host) {
+        if (connected && prefs.contains("mode")) HostLink.get().mode(prefs.getString("mode", "extend"));
         status.setText(connected ? "● Connected to " + host + " (USB-C)"
                 : "○ Waiting for Fedora — plug in the cable and run host/connect.sh");
         status.setTextColor(connected ? 0xFF1E8E3E : 0xFFC5221F);
@@ -195,6 +200,44 @@ public class MainActivity extends Activity implements HostLink.Listener {
         lp.setMargins(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
         b.setLayoutParams(lp);
         return b;
+    }
+
+    private LinearLayout modePicker() {
+        String[][] modes = {
+                {"extend", "\uD83D\uDDA5\uD83D\uDDA5  Extend", "2nd screen"},
+                {"mirror", "\uD83E\uDE9E  Mirror", "same picture"},
+                {"input", "\u2328  Input only", "keyboard + trackpad"}};
+        LinearLayout row = new LinearLayout(this);
+        TextView[] cells = new TextView[modes.length];
+        for (int i = 0; i < modes.length; i++) {
+            String m = modes[i][0];
+            TextView t = Ui.label(this, modes[i][1] + "\n" + modes[i][2], 14, FG, false);
+            t.setSingleLine(false);
+            t.setGravity(android.view.Gravity.CENTER);
+            int p = Ui.dp(this, 12);
+            t.setPadding(p, p, p, p);
+            t.setOnClickListener(v -> {
+                prefs.edit().putString("mode", m).apply();
+                HostLink.get().mode(m);
+                paintModes(cells, modes);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+            row.addView(t, lp);
+            cells[i] = t;
+        }
+        paintModes(cells, modes);
+        return row;
+    }
+
+    private void paintModes(TextView[] cells, String[][] modes) {
+        String current = prefs.getString("mode", "extend");
+        for (int i = 0; i < cells.length; i++) {
+            boolean on = modes[i][0].equals(current);
+            cells[i].setBackground(Ui.pressable(on ? 0xFF0A84FF : 0xFFFFFFFF, Ui.dp(this, 12), 0x22000000));
+            cells[i].setTextColor(on ? 0xFFFFFFFF : FG);
+        }
     }
 
     private TextView section(String title) {

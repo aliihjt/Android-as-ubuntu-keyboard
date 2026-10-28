@@ -107,6 +107,11 @@ public final class HostLink {
         if (!s.isEmpty()) send(obj("t", "text", "s", s));
     }
 
+    /** extend / mirror / input: remembered on the laptop for every connection. */
+    public void mode(String m) {
+        send(obj("t", "mode", "m", m));
+    }
+
     public void command(String name) {
         send(obj("t", "cmd", "name", name));
     }

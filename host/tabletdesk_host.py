@@ -13,6 +13,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"key","k":"ctrl","s":"down|up"}     hold / release a single key
   {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
   {"t":"cmd","name":"settings"}            run a whitelisted desktop command
+  {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
   {"t":"ping"}
 
 Host -> tablet messages:
@@ -108,6 +109,8 @@ class Injector:
         self.lock = threading.Lock()
         self.scroll_acc = [0.0, 0.0]
         self.move_acc = [0.0, 0.0]
+        self.held_keys = set()     # keys pressed by the tablet and not released yet
+        self.held_buttons = set()
         if self.dry_run:
             self.kbd = self.mouse = None
             return
@@ -129,6 +132,10 @@ class Injector:
         return code
 
     def _key(self, name, value):
+        if value:
+            self.held_keys.add(name)
+        else:
+            self.held_keys.discard(name)
         if self.dry_run:
             print("key", name, value)
             return
@@ -180,6 +187,19 @@ class Injector:
         self._key("KEY_SPACE", 1)
         self._key("KEY_SPACE", 0)
 
+    def release_all(self):
+        """Let go of everything, so a dropped cable never leaves Ctrl / a click stuck."""
+        with self.lock:
+            for k in list(self.held_keys):
+                self._key(k, 0)
+            for b in list(self.held_buttons):
+                self.held_buttons.discard(b)
+                if self.dry_run:
+                    print("btn", b, 0)
+                else:
+                    self.mouse.write(e.EV_KEY, self._code(b), 0)
+                    self.mouse.syn()
+
     def move(self, dx, dy):
         # keep sub-pixel remainders so slow finger motion is not lost
         self.move_acc[0] += dx
@@ -205,6 +225,10 @@ class Injector:
         with self.lock:
             for value in ((1, 0) if state == "click" else
                           (1,) if state == "down" else (0,)):
+                if value:
+                    self.held_buttons.add(name)
+                else:
+                    self.held_buttons.discard(name)
                 if self.dry_run:
                     print("btn", name, value)
                     continue
@@ -338,6 +362,18 @@ def run_command(name):
         print("command failed:", name, err, file=sys.stderr)
 
 
+MODE_FILE = os.path.expanduser("~/.config/tabletdesk/mode")
+
+
+def save_mode(mode):
+    """Remember the screen mode; connect.sh applies it now and on every plug-in."""
+    if mode not in ("extend", "mirror", "input"):
+        return
+    os.makedirs(os.path.dirname(MODE_FILE), exist_ok=True)
+    with open(MODE_FILE, "w") as f:
+        f.write(mode + "\n")
+
+
 def handle(inj, msg):
     t = msg.get("t")
     if t == "move":
@@ -354,6 +390,8 @@ def handle(inj, msg):
         inj.text(str(msg.get("s", "")))
     elif t == "cmd":
         run_command(str(msg.get("name", "")))
+    elif t == "mode":
+        save_mode(str(msg.get("m", "")))
 
 
 def make_handler(inj, clients):
@@ -361,6 +399,7 @@ def make_handler(inj, clients):
         def handle(self):
             self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             clients.add(self.wfile)
+            inj.release_all()
             print("tablet connected", flush=True)
             hello = {"t": "hello", "host": socket.gethostname(),
                      "session": os.environ.get("XDG_SESSION_TYPE", "unknown")}
@@ -379,6 +418,7 @@ def make_handler(inj, clients):
                 pass
             finally:
                 clients.remove(self.wfile)
+                inj.release_all()
                 print("tablet disconnected", flush=True)
 
     return Handler

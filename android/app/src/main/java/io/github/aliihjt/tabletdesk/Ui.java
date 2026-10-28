@@ -1,6 +1,7 @@
 package io.github.aliihjt.tabletdesk;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
@@ -40,6 +41,11 @@ final class Ui {
         t.setSingleLine(true);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         return t;
+    }
+
+    static boolean isDark(Context c) {
+        return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
     }
 
     static void haptic(View v) {

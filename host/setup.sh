@@ -9,7 +9,7 @@ mkdir -p "$CONF"
 echo "==> Installing packages"
 if command -v dnf >/dev/null; then
   # android-tools = adb (+ udev rules), x11vnc only used on Xorg sessions
-  sudo dnf install -y android-tools python3-evdev openssl gnome-remote-desktop brightnessctl wl-clipboard \
+  sudo dnf install -y android-tools python3-evdev openssl gnome-remote-desktop brightnessctl wl-clipboard playerctl \
     xprop xrandr x11vnc || sudo dnf install -y android-tools python3-evdev openssl gnome-remote-desktop
 elif command -v apt-get >/dev/null; then
   sudo apt-get update

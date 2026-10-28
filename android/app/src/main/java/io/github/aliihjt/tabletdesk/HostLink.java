@@ -62,6 +62,9 @@ public final class HostLink {
     private volatile StateListener stateListener;
     private volatile PointerListener pointerListener;
     private volatile ClipListener clipListener;
+    /** one listener per reply type ("media", "stats", ...) for the live panels */
+    private final java.util.Map<String, java.util.function.Consumer<JSONObject>> typed =
+            new java.util.concurrent.ConcurrentHashMap<>();
     /** last laptop settings received (volume, laptopkbd, touch, ...) */
     private volatile JSONObject lastState = new JSONObject();
     /** favourite Fedora apps for the Dock: {id, name} */
@@ -151,6 +154,22 @@ public final class HostLink {
     /** Put text on the PC clipboard. */
     public void setClip(String text) {
         send(obj("t", "setclip", "s", text));
+    }
+
+    /** Listen for replies of one type; null stops listening. */
+    public void on(String type, java.util.function.Consumer<JSONObject> l) {
+        if (l == null) typed.remove(type);
+        else typed.put(type, l);
+    }
+
+    /** Ask the PC for a reply of this type, e.g. ask("stats"). */
+    public void ask(String type) {
+        send(obj("t", type + "?"));
+    }
+
+    /** play-pause, next or previous on the PC's media player. */
+    public void media(String action) {
+        send(obj("t", "mediactl", "a", action));
     }
 
     public JSONObject lastState() {
@@ -252,6 +271,8 @@ public final class HostLink {
             while ((line = in.readLine()) != null) {
                 JSONObject msg = new JSONObject(line);
                 String t = msg.optString("t");
+                java.util.function.Consumer<JSONObject> typedListener = typed.get(t);
+                if (typedListener != null) main.post(() -> typedListener.accept(msg));
                 if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
                     // adb accepts the tunnel even if nothing listens on the laptop,

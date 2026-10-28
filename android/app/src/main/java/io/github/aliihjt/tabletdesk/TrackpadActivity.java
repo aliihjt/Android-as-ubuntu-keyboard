@@ -145,7 +145,8 @@ public class TrackpadActivity extends Activity implements TrackpadView.TypingLis
         TextView hint = Ui.label(this,
                 "1 finger: move  \u00B7  tap: click  \u00B7  tap + drag: drag\n"
                         + "2 fingers: scroll  \u00B7  tap: right click\n"
-                        + "3 fingers \u2191 Activities  \u00B7  \u2190 \u2192 workspaces",
+                        + "2 fingers pinch: zoom  \u00B7  3 fingers \u2191 Activities  \u00B7  \u2190 \u2192 workspaces\n"
+                        + "4 fingers \u2190 \u2192 switch app  \u00B7  \u2191 all apps  \u00B7  \u2193 hide window",
                 13, 0xFF636366, false);
         hint.setLineSpacing(0, 1.4f);
         hint.setSingleLine(false);

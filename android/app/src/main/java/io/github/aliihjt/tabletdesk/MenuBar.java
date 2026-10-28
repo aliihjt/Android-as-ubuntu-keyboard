@@ -144,21 +144,30 @@ final class MenuBar implements HostLink.Listener {
         LinearLayout line2 = new LinearLayout(ctx);
         line2.setGravity(Gravity.CENTER_VERTICAL);
         bar.addView(line2, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-        // labelled buttons, so it is obvious what each one does
-        line2.addView(iconButton("\u2728 AI", v -> HostLink.get().command("ai")));  // AI assistant
-        line2.addView(iconButton("\uD83D\uDE80 Apps", this::showDock));  // favourite apps
-        line2.addView(iconButton("\uD83D\uDD0D Search", v -> HostLink.get().combo("super")));
-        line2.addView(iconButton("\u2328 Keyboard", v -> OverlayService.toggleKeyboard(ctx)));  // floating
-        line2.addView(iconButton("\uD83D\uDDB1 Trackpad", v -> {  // full-screen keyboard & trackpad
+        // labelled buttons, so it is obvious what each one does (scroll if they don't fit)
+        LinearLayout btns = new LinearLayout(ctx);
+        btns.setGravity(Gravity.CENTER_VERTICAL);
+        btns.addView(iconButton("\u2728 AI", v -> HostLink.get().command("ai")));  // AI assistant
+        btns.addView(iconButton("\uD83D\uDE80 Apps", this::showDock));  // favourite apps
+        btns.addView(iconButton("\uD83D\uDD0D Search", v -> HostLink.get().combo("super")));
+        btns.addView(iconButton("\u2328 Keyboard", v -> OverlayService.toggleKeyboard(ctx)));  // floating
+        btns.addView(iconButton("\uD83D\uDDB1 Trackpad", v -> {  // full-screen keyboard & trackpad
             Intent i = new Intent(ctx, TrackpadActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         }));
-        line2.addView(iconButton("\u2630 Control", v -> {  // Control Center
+        btns.addView(iconButton("\u2630 Control", v -> {  // Control Center
             handler.removeCallbacks(hide);
             ControlCenter.toggle(ctx, dark, toggleTouchBar, this::scheduleHide);
         }));
-        line2.addView(new View(ctx), new LinearLayout.LayoutParams(0, 1, 1f));
+        btns.addView(iconButton("\uD83C\uDFB5 Media", v -> LivePanels.media(ctx, dark)));
+        btns.addView(iconButton("\uD83D\uDCCA Stats", v -> LivePanels.stats(ctx, dark)));
+        android.widget.HorizontalScrollView btnScroll = new android.widget.HorizontalScrollView(ctx);
+        btnScroll.setHorizontalScrollBarEnabled(false);
+        btnScroll.addView(btns, new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        line2.addView(btnScroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
         status = small("");
         line2.addView(status);
         battery = small("");
@@ -219,6 +228,7 @@ final class MenuBar implements HostLink.Listener {
     }
 
     void destroy() {
+        LivePanels.dismiss();
         GlassMenu.dismiss();
         ControlCenter.dismiss();
         handler.removeCallbacksAndMessages(null);

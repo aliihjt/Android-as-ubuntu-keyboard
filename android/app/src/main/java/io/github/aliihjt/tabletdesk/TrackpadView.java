@@ -15,7 +15,9 @@ import android.view.inputmethod.InputConnection;
  *
  * 1 finger move = pointer, tap = click, tap then hold-and-drag = drag
  * 2 fingers move = scroll, tap = right click
+ * 2 fingers pinch = zoom in / out (Ctrl + / Ctrl -)
  * 3 fingers tap = middle click, swipe up = Activities, swipe left/right = workspaces
+ * 4 fingers swipe left/right = switch app, up = all apps, down = hide window
  */
 public class TrackpadView extends View {
     /** Called for typed text so the activity can apply sticky modifiers. */
@@ -39,7 +41,8 @@ public class TrackpadView extends View {
     private float lastX, lastY, startX, startY;
     private int lastCount, maxPointers;
     private long downTime, lastTapUp;
-    private boolean moved, dragging, gestureFired;
+    private boolean moved, dragging, gestureFired, pinching;
+    private float pinchBase;
 
     public TrackpadView(Context c) {
         super(c);
@@ -87,6 +90,8 @@ public class TrackpadView extends View {
             case MotionEvent.ACTION_MOVE: {
                 if (count != lastCount) {  // finger added/removed: re-anchor, no jump
                     lastCount = count;
+                    pinchBase = count == 2 ? spread(ev) : 0;
+                    pinching = false;
                     lastX = cx;
                     lastY = cy;
                     startX = cx;
@@ -104,9 +109,23 @@ public class TrackpadView extends View {
                     float gain = sensitivity * (1.2f + Math.min(speed / 6f, 2.5f));
                     link.move(ddx * gain, ddy * gain);
                 } else if (count == 2) {
-                    float dir = naturalScroll ? 1.4f : -1.4f;
-                    link.scroll(dx / density * dir, dy / density * dir);
-                } else if (count >= 3 && !gestureFired) {
+                    float ratio = pinchBase > 0 ? spread(ev) / pinchBase : 1f;
+                    if (ratio > 1.35f || ratio < 0.74f) {  // fingers apart / together = zoom
+                        link.combo(ratio > 1 ? "ctrl+equal" : "ctrl+minus");
+                        pinchBase = spread(ev);
+                        pinching = true;
+                        moved = true;
+                    } else if (!pinching) {
+                        float dir = naturalScroll ? 1.4f : -1.4f;
+                        link.scroll(dx / density * dir, dy / density * dir);
+                    }
+                } else if (count >= 4 && !gestureFired) {
+                    float tx = (cx - startX) / density, ty = (cy - startY) / density;
+                    if (tx < -100) fire("alt+tab");
+                    else if (tx > 100) fire("alt+shift+tab");
+                    else if (ty < -80) fire("super+a");
+                    else if (ty > 80) fire("super+h");
+                } else if (count == 3 && !gestureFired) {
                     float tx = (cx - startX) / density, ty = (cy - startY) / density;
                     if (ty < -80) fire("super");
                     else if (tx < -100) fire("ctrl+alt+right");
@@ -136,6 +155,12 @@ public class TrackpadView extends View {
             default:
                 return true;
         }
+    }
+
+    /** Distance between the first two fingers, for pinch-to-zoom. */
+    private static float spread(MotionEvent ev) {
+        if (ev.getPointerCount() < 2) return 0;
+        return (float) Math.hypot(ev.getX(0) - ev.getX(1), ev.getY(0) - ev.getY(1));
     }
 
     private void fire(String combo) {

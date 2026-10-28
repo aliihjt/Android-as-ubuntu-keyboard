@@ -31,6 +31,9 @@ Turn an Android tablet into a **second screen, keyboard, trackpad and Touch Bar*
 | 🎛 | **Control Center** | Brightness and volume sliders, switches and quick buttons, like macOS. |
 | ▭ | **Touch Bar** | Esc, keys that change with the app (browser, terminal, VS Code, Files), an **fn** layer with F1–F12, brightness, volume and media. |
 | ✨ | **AI assistant** | Like Copilot on Windows: **Ctrl+Alt+Space** or the **✨ AI** button opens an AI assistant (Newelle with Claude or a local model). Set it up with `./host/ai-setup.sh`. |
+| 🎵 | **Media remote** | Play/pause, next, previous and volume for whatever plays on the PC (Spotify, YouTube in Firefox, VLC...). |
+| 📊 | **PC stats** | Live CPU, memory, temperature, disk, battery and network speed. |
+| 🖐 | **Gestures** | Pinch to zoom, 4-finger swipe to switch apps, up for all apps, down to hide a window. |
 | 🚀 | **Dock** | Opens the apps pinned in Fedora's dash. |
 | 📋 | **Clipboard** | Copy text from the tablet to the PC and back. |
 | 🎨 | **Liquid Glass** | Frosted, blurred glass design (Android 12+), light and dark themes, three sizes. |
@@ -62,6 +65,14 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 3. In Windows App, add the PC **`127.0.0.1`** with the user and password from `setup.sh`, and save the password.
 
 **From now on: unlock Fedora and plug in the tablet. That's it.**
+
+## 🧰 Fedora extras (optional)
+| Script | What it does |
+|---|---|
+| `./host/macos-look.sh` | Makes Fedora look like macOS: dock at the bottom, window buttons on the left, blur, macOS-style icons. `--undo` puts it back. |
+| `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
+| `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
+| `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
 
 ## 🔄 Update
 ```bash

@@ -18,6 +18,8 @@ Tablet -> host messages (one JSON object per line):
   {"t":"state?"}                           ask for the values above
   {"t":"cursor"}                           make a hidden mouse pointer visible again
   {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
+  {"t":"media?"} / {"t":"mediactl","a":"next"}  what's playing / play-pause, next, previous
+  {"t":"stats?"}                           CPU, RAM, temperature, disk, network, battery
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
 
@@ -592,6 +594,89 @@ def set_keep_awake(on):
         _run(["gsettings", "set"] + key + [str(old or 300)])
 
 
+MEDIA_ACTIONS = ("play-pause", "next", "previous")
+
+
+def media_state():
+    """What is playing (Spotify, Firefox, VLC...) via MPRIS / playerctl."""
+    if not shutil.which("playerctl"):
+        return {"t": "media", "status": "Missing", "title": "Install playerctl",
+                "artist": "sudo dnf install playerctl", "player": ""}
+    out = _run(["playerctl", "metadata", "--format",
+                "{{status}}\t{{title}}\t{{artist}}\t{{playerName}}"]).rstrip("\n")
+    parts = out.split("\t")
+    if len(parts) < 4:
+        return {"t": "media", "status": "Stopped", "title": "Nothing playing",
+                "artist": "", "player": ""}
+    status, title, artist, player = parts[:4]
+    return {"t": "media", "status": status, "title": title or "Unknown title",
+            "artist": artist, "player": player}
+
+
+_cpu_last = [0, 0]      # idle, total
+_net_last = [0, 0, 0.0]  # rx, tx, time
+
+
+def _cpu_percent():
+    with open("/proc/stat") as f:
+        values = [int(v) for v in f.readline().split()[1:]]
+    idle, total = values[3] + values[4], sum(values)
+    d_idle, d_total = idle - _cpu_last[0], total - _cpu_last[1]
+    _cpu_last[0], _cpu_last[1] = idle, total
+    return round(100 * (1 - d_idle / d_total)) if d_total > 0 else 0
+
+
+def stats():
+    """Live PC numbers for the tablet's stats widget (only /proc and /sys reads)."""
+    out = {"t": "stats"}
+    out.update(pc_info())
+    try:
+        out["cpu"] = _cpu_percent()
+    except (OSError, ValueError, IndexError):
+        pass
+    temps = []
+    for zone in glob.glob("/sys/class/thermal/thermal_zone*/temp"):
+        try:
+            with open(zone) as f:
+                t = int(f.read()) / 1000
+            if 0 < t < 120:
+                temps.append(t)
+        except (OSError, ValueError):
+            pass
+    if temps:
+        out["temp"] = round(max(temps))
+    try:
+        du = shutil.disk_usage("/")
+        out["disk"] = round(du.used * 100 / du.total)
+        out["disk_free_gb"] = round(du.free / 1e9)
+    except OSError:
+        pass
+    try:
+        rx = tx = 0
+        with open("/proc/net/dev") as f:
+            for line in f.readlines()[2:]:
+                name, data = line.split(":", 1)
+                if name.strip() == "lo":
+                    continue
+                fields = data.split()
+                rx += int(fields[0])
+                tx += int(fields[8])
+        now = time.time()
+        if _net_last[2]:
+            dt = max(now - _net_last[2], 0.1)
+            out["down_kbs"] = round((rx - _net_last[0]) / 1024 / dt)
+            out["up_kbs"] = round((tx - _net_last[1]) / 1024 / dt)
+        _net_last[:] = [rx, tx, now]
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        with open("/proc/uptime") as f:
+            out["uptime_min"] = int(float(f.read().split()[0]) // 60)
+    except (OSError, ValueError):
+        pass
+    return out
+
+
 def pc_info():
     """CPU load, memory use and laptop battery for the menu header."""
     info = {}
@@ -747,6 +832,13 @@ def handle(inj, msg, reply=None):
     elif t == "state?" and reply:
         # several helper programs: don't hold up keys and mouse meanwhile
         threading.Thread(target=lambda: reply(read_state()), daemon=True).start()
+    elif t == "media?" and reply:
+        reply(media_state())
+    elif t == "mediactl":
+        if msg.get("a") in MEDIA_ACTIONS:
+            _run(["playerctl", msg["a"]])
+    elif t == "stats?" and reply:
+        reply(stats())
     elif t == "clip?" and reply:
         reply({"t": "clip", "s": get_clipboard()})
     elif t == "setclip":

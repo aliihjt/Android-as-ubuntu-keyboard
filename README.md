@@ -78,6 +78,7 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+| `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 
 ## 📶 Wi-Fi mode (no cable)
 1. On Fedora: `./host/wifi-setup.sh`. It explains the one firewall command needed and asks you to run it yourself.

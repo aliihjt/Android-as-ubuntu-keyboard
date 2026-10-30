@@ -130,6 +130,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/webcam-setup.sh` | Makes the phone or tablet a webcam and microphone on Fedora: virtual camera driver (with the Secure Boot step if needed) and scrcpy. `--undo` removes it. |
 | `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
+| `./host/chrome-safari.sh` | Makes Google Chrome look and feel like Safari: Safari Light / Dark themes (with the macOS wallpaper on new tabs), two-finger swipe for back / forward, and a short list of Safari-like settings. `--undo` puts Chrome back. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 
 ## 📶 Wi-Fi mode (no cable)

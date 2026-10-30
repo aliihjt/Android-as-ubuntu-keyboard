@@ -105,7 +105,7 @@ Safari can't do a few things the Android app does: the floating button over othe
 Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), trackpad, Media, Controls, Shortcuts, Apps, Stream Deck, Windows switcher, Notes, Terminal Pad, Send Files, Text & Clipboard, Stats and Ambient Light.
 
 1. Download **[the project as a ZIP](https://github.com/aliihjt/Android-as-ubuntu-keyboard/archive/refs/heads/main.zip)** and unzip it.
-2. Open the `windows` folder and double-click **`Setup.bat`**. It installs Python, the Android tools and Git (with winget), starts Fedora Pad at every log-in, and can add the Persian keyboard.
+2. Open the `windows` folder and double-click **`Setup.bat`** (if Windows says *"Windows protected your PC"*, click **More info › Run anyway**). It gets Python and the Android tools (with winget, or straight from python.org and Google when winget is missing or fails), Git if it can, starts Fedora Pad at every log-in, and can add the Persian keyboard. Everything is logged in `%LOCALAPPDATA%\FedoraPad\setup-log.txt`.
 3. Plug in the tablet and tap **Allow** on it. The app installs or updates itself and opens.
 4. **Screen:** Windows shows its screen on the tablet with **spacedesk** (free for personal use; works on Windows Home): install the *spacedesk Windows driver* on the PC (Setup opens the page) and *spacedesk* on the tablet. Fedora Pad's **Show Screen** button opens it. Connect them over Wi-Fi.
 

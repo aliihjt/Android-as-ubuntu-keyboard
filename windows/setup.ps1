@@ -1,83 +1,193 @@
-﻿# Fedora Pad for Windows: one-time setup (double-click Setup.bat).
-# Installs Python, the Android tools (adb) and Git with winget, gets Fedora Pad,
+﻿﻿# Fedora Pad for Windows: one-time setup (double-click Setup.bat).
+# Gets Python and the Android tools (adb) - with winget when it works, otherwise
+# straight from python.org and Google - puts Fedora Pad in your user folder,
 # starts it at every log-in, and helps you set up the screen (spacedesk).
-$ErrorActionPreference = 'Continue'  # git and pip print progress on stderr
+# Everything it does is written to %LOCALAPPDATA%\FedoraPad\setup-log.txt
+$ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'  # makes downloads much faster in Windows PowerShell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$Data = Join-Path $env:LOCALAPPDATA 'FedoraPad'
+New-Item -ItemType Directory -Force $Data | Out-Null
+Start-Transcript -Path (Join-Path $Data 'setup-log.txt') -Force | Out-Null
+
 $Repo = Join-Path $HOME 'Android-as-ubuntu-keyboard'
 $RepoUrl = 'https://github.com/aliihjt/Android-as-ubuntu-keyboard.git'
+$PyVersion = '3.12.8'
+$problems = @()
 
 function Step($m) { Write-Host ""; Write-Host "==> $m" -ForegroundColor Cyan }
-function Has($c) { [bool](Get-Command $c -ErrorAction SilentlyContinue) }
+function Ok($m) { Write-Host "    OK: $m" -ForegroundColor Green }
+function Warn($m) { Write-Host "    $m" -ForegroundColor Yellow }
 function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('Path', 'User') + ";$env:LOCALAPPDATA\Microsoft\WinGet\Links"
 }
-function Install($id, $name) {
-    Write-Host "    $name..."
-    winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Null
+$HasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+function Winget-Install($id) {
+    if (-not $HasWinget) { return $false }
+    Write-Host "    winget install $id ..."
+    # Out-Host: show winget's messages without making them this function's result
+    winget install --id $id -e --scope user --silent --accept-source-agreements --accept-package-agreements | Out-Host
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) {  # no per-user installer: the normal one
+        winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Host
+    }
+    # 0 = installed, -1978335189 = already installed
+    return ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189)
 }
 
-if (-not (Has winget)) {
-    Write-Host "winget is missing. Install 'App Installer' from the Microsoft Store, then run Setup again." -ForegroundColor Red
-    exit 1
+# A real Python (not the Microsoft Store shortcut that only opens the Store)
+function Find-Python {
+    $found = @()
+    foreach ($n in 'pythonw.exe', 'pyw.exe') {
+        $c = Get-Command $n -ErrorAction SilentlyContinue
+        if ($c -and $c.Source -notlike '*WindowsApps*') { $found += $c.Source }
+    }
+    foreach ($pattern in "$env:LOCALAPPDATA\Programs\Python\Python3*\pythonw.exe",
+                         "$env:ProgramFiles\Python3*\pythonw.exe", "C:\Python3*\pythonw.exe") {
+        $found += (Get-ChildItem $pattern -ErrorAction SilentlyContinue | Sort-Object FullName -Descending |
+                   ForEach-Object FullName)
+    }
+    foreach ($p in ($found | Where-Object { $_ })) {
+        if ($p -like '*pyw.exe') { return $p }  # the launcher picks the newest Python itself
+        $py = Join-Path (Split-Path $p) 'python.exe'
+        $v = & $py -c "import sys; print(sys.version_info >= (3, 8))" 2>$null
+        if ($v -eq 'True') { return $p }
+    }
+    return $null
 }
 
-Step 'Installing Python, Android tools (adb) and Git'
-Refresh-Path
-if (-not (Has pyw)) { Install 'Python.Python.3.12' 'Python' }
-if (-not (Has adb)) { Install 'Google.PlatformTools' 'Android tools (adb)' }
-if (-not (Has git)) { Install 'Git.Git' 'Git' }
-Refresh-Path
-if (-not (Has pyw)) { throw 'Python did not install. Install it from python.org and run Setup again.' }
+Write-Host "Fedora Pad for Windows setup" -ForegroundColor Cyan
+if (-not $HasWinget) { Warn 'winget is not on this PC: downloading everything directly instead.' }
 
-Step 'Getting Fedora Pad'
+# ---------------------------------------------------------------- Python
+Step 'Python'
+$pyw = Find-Python
+if (-not $pyw) {
+    if (Winget-Install 'Python.Python.3.12') { Refresh-Path; $pyw = Find-Python }
+}
+if (-not $pyw) {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+    $exe = Join-Path $Data "python-$PyVersion-$arch.exe"
+    Write-Host "    downloading Python $PyVersion from python.org ..."
+    try {
+        Invoke-WebRequest "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-$arch.exe" -OutFile $exe -UseBasicParsing
+        Write-Host '    installing (about a minute) ...'
+        Start-Process $exe -ArgumentList '/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 InstallLauncherAllUsers=0 Include_test=0' -Wait | Out-Null
+        Remove-Item $exe -ErrorAction SilentlyContinue
+    } catch { Warn "Python download failed: $($_.Exception.Message)" }
+    Refresh-Path
+    $pyw = Find-Python
+}
+if ($pyw) { Ok $pyw } else { $problems += 'Python' ; Warn 'Python is missing. Install it from https://www.python.org/downloads/ and run Setup again.' }
+
+# ---------------------------------------------------------------- adb
+Step 'Android tools (adb)'
+$adb = $null
+$own = Join-Path $Data 'platform-tools\adb.exe'
+if (Test-Path $own) { $adb = $own }
+if (-not $adb) {
+    $c = Get-Command adb.exe -ErrorAction SilentlyContinue
+    if ($c) { $adb = $c.Source }
+}
+if (-not $adb) {
+    Write-Host '    downloading from Google ...'
+    try {
+        $zip = Join-Path $Data 'platform-tools.zip'
+        Invoke-WebRequest 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' -OutFile $zip -UseBasicParsing
+        Expand-Archive $zip -DestinationPath $Data -Force
+        Remove-Item $zip -ErrorAction SilentlyContinue
+        if (Test-Path $own) { $adb = $own }
+    } catch { Warn "adb download failed: $($_.Exception.Message)" }
+}
+if ($adb) { Ok $adb } else { $problems += 'adb' ; Warn 'adb is missing (download blocked?). Check the internet connection and run Setup again.' }
+
+# ---------------------------------------------------------------- Git (optional)
+Step 'Git (optional: easy updates, and the phone web app)'
+Refresh-Path
+if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) {
+    if (Winget-Install 'Git.Git') { Refresh-Path }
+}
+$git = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+if ($git) { Ok $git } else { Warn 'skipped: Update.bat will download the newest version instead.' }
+
+# ---------------------------------------------------------------- Fedora Pad itself
+Step 'Fedora Pad files'
 $here = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (Test-Path (Join-Path $here '.git')) {
-    $Repo = $here  # running from a clone already
-} elseif (Test-Path (Join-Path $Repo '.git')) {
-    git -C $Repo pull --ff-only
-} else {
-    git clone $RepoUrl $Repo
+    $Repo = $here
+} elseif ($git -and (Test-Path (Join-Path $Repo '.git'))) {
+    & $git -C $Repo pull --ff-only
+} elseif ($git) {
+    & $git clone $RepoUrl $Repo
+} elseif ($here -ne $Repo) {
+    # no Git: keep a copy of the unzipped folder in a fixed place
+    New-Item -ItemType Directory -Force $Repo | Out-Null
+    Copy-Item (Join-Path $here '*') $Repo -Recurse -Force
 }
+if (-not (Test-Path (Join-Path $Repo 'windows\fedorapad_host.py'))) {
+    $Repo = $here  # clone failed: run from where Setup.bat is
+}
+Ok $Repo
 
-Step 'Exact volume control (optional)'
-try { py -3 -m pip install --user --quiet --upgrade pycaw comtypes } catch { Write-Host '    skipped' }
+# remember the tools for FedoraPad.ps1
+$openssl = (Get-Command openssl.exe -ErrorAction SilentlyContinue).Source
+foreach ($p in "$env:ProgramFiles\Git\usr\bin\openssl.exe", "$env:LOCALAPPDATA\Programs\Git\usr\bin\openssl.exe") {
+    if (-not $openssl -and (Test-Path $p)) { $openssl = $p }
+}
+@{ python = $pyw; adb = $adb; git = $git; openssl = $openssl; repo = $Repo } |
+    ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $Data 'tools.json')
+
+# ---------------------------------------------------------------- extras
+if ($pyw) {
+    Step 'Exact volume control (optional)'
+    $py = if ($pyw -like '*pyw.exe') { $pyw -replace 'pyw\.exe$', 'py.exe' } else { Join-Path (Split-Path $pyw) 'python.exe' }
+    & $py -m pip install --user --quiet --disable-pip-version-check pycaw comtypes
+    if ($LASTEXITCODE -eq 0) { Ok 'pycaw' } else { Warn 'skipped (volume then moves in 2 % steps)' }
+}
 
 Step 'Persian keyboard'
-$langs = Get-WinUserLanguageList
-if (-not ($langs | Where-Object LanguageTag -like 'fa*')) {
-    $a = Read-Host '    Add the Persian keyboard to Windows for the tablet''s فا key? (Y/n)'
-    if ($a -ne 'n') {
-        $langs.Add('fa-IR')
-        Set-WinUserLanguageList $langs -Force
-        Write-Host '    Added. Switch with Win+Space.'
-    }
-} else {
-    Write-Host '    already there'
-}
+try {
+    $langs = Get-WinUserLanguageList
+    if (-not ($langs | Where-Object LanguageTag -like 'fa*')) {
+        $a = Read-Host '    Add the Persian keyboard to Windows for the tablet''s فا key? (Y/n)'
+        if ($a -ne 'n') {
+            $langs.Add('fa-IR')
+            Set-WinUserLanguageList $langs -Force
+            Ok 'added (switch with Win+Space)'
+        }
+    } else { Ok 'already there' }
+} catch { Warn 'skipped' }
 
-Step 'Start Fedora Pad at every log-in'
-$runner = Join-Path $Repo 'windows\FedoraPad.ps1'
-$startup = [Environment]::GetFolderPath('Startup')
-$shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut((Join-Path $startup 'Fedora Pad.lnk'))
-$lnk.TargetPath = 'powershell.exe'
-$lnk.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`""
-$lnk.WindowStyle = 7
-$lnk.Description = 'Fedora Pad: tablet keyboard, trackpad and tools'
-$lnk.Save()
-Start-Process powershell.exe -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WindowStyle Hidden
-Write-Host '    running now'
+# ---------------------------------------------------------------- start at log-in
+if ($pyw -and $adb) {
+    Step 'Start Fedora Pad at every log-in'
+    $runner = Join-Path $Repo 'windows\FedoraPad.ps1'
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Startup')) 'Fedora Pad.lnk'))
+    $lnk.TargetPath = 'powershell.exe'
+    $lnk.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`""
+    $lnk.WindowStyle = 7
+    $lnk.Description = 'Fedora Pad: tablet keyboard, trackpad and tools'
+    $lnk.Save()
+    Start-Process powershell.exe -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WindowStyle Hidden
+    Ok 'running now'
 
-Step 'Second screen (spacedesk)'
-Write-Host @'
+    Step 'Second screen (spacedesk)'
+    Write-Host @'
     Windows shows its screen on the tablet with spacedesk (free for personal use):
       1. On this PC: install the "spacedesk Windows DRIVER" from the page that opens now.
-      2. On the tablet: install "spacedesk" from the Play Store
-         (Fedora Pad's "Show Screen" button opens it).
-      3. Connect them over the same Wi-Fi. The screen appears as a second monitor.
+      2. On the tablet: install "spacedesk" from the Play Store.
+      3. Connect them over the same Wi-Fi (not spacedesk's USB mode).
 '@
-Start-Process 'https://www.spacedesk.net/#download'
+    Start-Process 'https://www.spacedesk.net/#download'
+}
 
 Write-Host ""
-Write-Host 'Done! Plug in the tablet (USB debugging on, tap Allow on the tablet).' -ForegroundColor Green
-Write-Host "Fedora Pad installs itself on the tablet and opens. Log: $env:LOCALAPPDATA\FedoraPad\fedorapad.log"
+if ($problems.Count -eq 0) {
+    Write-Host 'Done! Plug in the tablet (USB debugging on, tap Allow on the tablet).' -ForegroundColor Green
+    Write-Host 'Fedora Pad installs itself on the tablet and opens.'
+} else {
+    Write-Host "Not finished: $($problems -join ', ') could not be installed (see above)." -ForegroundColor Red
+}
+Write-Host "Setup log: $Data\setup-log.txt   Fedora Pad log: $Data\fedorapad.log"
+Stop-Transcript | Out-Null

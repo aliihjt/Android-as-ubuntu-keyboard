@@ -14,7 +14,9 @@ function Restart-Host {
 if ($what -eq 'off') { Remove-Item $flag -ErrorAction SilentlyContinue; Restart-Host; Write-Host 'The web app is off.'; exit }
 if ($what -eq 'forget') { Remove-Item (Join-Path $conf 'web-devices.json') -ErrorAction SilentlyContinue
     Write-Host 'All phones and iPads are unpaired.'; exit }
-if (-not (Get-Command openssl -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:ProgramFiles\Git\usr\bin\openssl.exe")) {
+$hasSsl = (Get-Command openssl -ErrorAction SilentlyContinue) -or (Test-Path "$env:ProgramFiles\Git\usr\bin\openssl.exe") -or
+          (Test-Path "$env:LOCALAPPDATA\Programs\Git\usr\bin\openssl.exe")
+if (-not $hasSsl) {
     Write-Host 'Git (which brings openssl) is missing. Run Setup.bat first.' -ForegroundColor Red; exit 1
 }
 New-Item -ItemType File -Force $flag | Out-Null

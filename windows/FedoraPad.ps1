@@ -27,8 +27,12 @@ function Find-Exe($names, $search) {
     return $null
 }
 
-$adb = Find-Exe @('adb.exe', 'adb') "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
-$pyw = Find-Exe @('pyw.exe', 'pythonw.exe') $null
+# the tools setup.ps1 found or installed
+$tools = @{}
+try { (Get-Content (Join-Path $Data 'tools.json') -Raw | ConvertFrom-Json).psobject.Properties | ForEach-Object { $tools[$_.Name] = $_.Value } } catch {}
+$adb = if ($tools.adb -and (Test-Path $tools.adb)) { $tools.adb } else { Find-Exe @('adb.exe') "$Data\platform-tools" }
+$pyw = if ($tools.python -and (Test-Path $tools.python)) { $tools.python } else { Find-Exe @('pyw.exe', 'pythonw.exe') $null }
+if ($tools.openssl) { $env:Path += ";" + (Split-Path $tools.openssl) }  # for the phone web app
 if (-not $adb -or -not $pyw) {
     Log "missing tools (adb: $adb, python: $pyw). Run windows\Setup.bat again."
     exit 1

@@ -42,13 +42,32 @@ if [ -z "$model" ]; then
   case "${pick:-1}" in 2) model=medium ;; 3) model=base ;; *) model=small ;; esac
 fi
 
+# room for the speech engine (~1 GB) and the model
+need_mb=$(( 1200 + $(case $model in medium) echo 1600 ;; base) echo 200 ;; *) echo 600 ;; esac) ))
+free_mb=$(df -Pm "$HOME" | awk 'NR==2 {print $4}')
+if [ "${free_mb:-0}" -lt "$need_mb" ]; then
+  echo "Not enough free space: ${free_mb} MB free in your home folder, about ${need_mb} MB needed."
+  echo "Free some space (see below), or pick a smaller model:  ./host/voice-setup.sh base"
+  echo "Biggest folders in your home:"
+  du -xsh "$HOME"/* "$HOME"/.cache "$HOME"/.local/share 2>/dev/null | sort -rh | head -8
+  exit 1
+fi
+
 echo "==> Tools for recording, the clipboard and typing"
 sudo dnf install -y python3-evdev wl-clipboard pipewire-utils libnotify python3-pip
 
 echo "==> Whisper speech recognition (runs on this laptop, nothing is sent online)"
 python3 -m venv --system-site-packages "$VENV"
-"$VENV/bin/pip" install -q --upgrade pip
-"$VENV/bin/pip" install -q faster-whisper
+# build in the home folder (not the small RAM-backed /tmp) and keep no download cache
+mkdir -p "$DATA/tmp"
+export TMPDIR="$DATA/tmp" PIP_NO_CACHE_DIR=1
+if ! "$VENV/bin/pip" install -q faster-whisper; then
+  rm -rf "$DATA/tmp"
+  echo "Couldn't install the speech engine. If it says 'Disk quota exceeded' or 'No space left',"
+  echo "free some space and run this again. Check with:  df -h ~"
+  exit 1
+fi
+rm -rf "$DATA/tmp"
 
 mkdir -p "$(dirname "$CONFIG")"
 [ -f "$CONFIG" ] || echo '{"model": "small", "language": "auto"}' >"$CONFIG"

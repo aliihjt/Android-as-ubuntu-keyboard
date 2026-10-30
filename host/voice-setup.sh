@@ -43,7 +43,12 @@ if [ -z "$model" ]; then
 fi
 
 # room for the speech engine (~1 GB) and the model
-need_mb=$(( 1200 + $(case $model in medium) echo 1600 ;; base) echo 200 ;; *) echo 600 ;; esac) ))
+case $model in
+  medium) model_mb=1600 ;;
+  base) model_mb=200 ;;
+  *) model_mb=600 ;;
+esac
+need_mb=$((1200 + model_mb))
 free_mb=$(df -Pm "$HOME" | awk 'NR==2 {print $4}')
 if [ "${free_mb:-0}" -lt "$need_mb" ]; then
   echo "Not enough free space: ${free_mb} MB free in your home folder, about ${need_mb} MB needed."

@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!-- Android 11+: lets the app find and open the screen viewer apps -->
     <queries>
@@ -72,6 +73,22 @@
         <activity android:name=".NotesActivity" android:exported="false" />
         <activity android:name=".PushToTalkActivity" android:exported="false" />
         <activity android:name=".TabletAppsActivity" android:exported="false" />
+        <activity android:name=".WebcamActivity" android:exported="false" />
+        <activity android:name=".ScanActivity" android:exported="false" />
+        <activity android:name=".FocusActivity" android:exported="false" />
+        <activity android:name=".StandByActivity" android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|screenLayout" />
+        <service
+            android:name=".StandByDream"
+            android:exported="true"
+            android:label="Fedora Pad StandBy"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
         <activity android:name=".BooksActivity" android:exported="false" />
         <activity android:name=".ReaderActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />

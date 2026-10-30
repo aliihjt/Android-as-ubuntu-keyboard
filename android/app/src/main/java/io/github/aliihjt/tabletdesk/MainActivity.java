@@ -264,6 +264,9 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
+                {"🕰", Theme.ORANGE, "StandBy", StandByActivity.class},
+                {"⏱", Theme.RED, "Focus", FocusActivity.class},
+                {"📄", Theme.BLUE, "Scanner", ScanActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
         Object[][] fedora = {
@@ -280,6 +283,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
+                {"📷", Theme.RED, "Webcam", WebcamActivity.class},
                 {">_", 0xFF3A3A3C, "Terminal Pad", TerminalActivity.class},
                 {"🌈", Theme.PINK, "Ambient Light", AmbientActivity.class},
         };

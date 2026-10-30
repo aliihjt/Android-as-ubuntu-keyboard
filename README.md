@@ -55,6 +55,10 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | 🗒 | **Notes** | Sticky notes, also on the Fedora desktop. Book quotes and AI answers can be saved here. |
 | ✨ | **Claude** | Opens the official Claude app (free on the Play Store; Fedora Pad offers to install it). **Ask Claude** in Books, Handwriting and Search sends your question, and a picture of the page or your writing, straight to it; the question is also copied in case you need to paste it. |
 | 🔍 | **Search** | One box for the tablet's apps, notes, books, Fedora Pad pages and Fedora apps, plus Ask Claude and Search the web. |
+| 🕰 | **StandBy** | A big clock while the tablet charges: date, weather (tap to set your city), what's playing on the PC with buttons, PC load, battery and the focus timer. Red and dim at night. Opens by itself when charging starts (Settings › StandBy), or as Android's screen saver. |
+| ⏱ | **Focus** | A 15–90 minute timer; the PC (and, if you allow it, the tablet) stays on Do Not Disturb until it rings. |
+| 📄 | **Scanner** | Photograph pages, drag the corners onto the paper, and get a straight, clean PDF on the PC, in Downloads, or shared to any app. |
+| 📷 | **Webcam** | The tablet's camera and mic become “Fedora Pad Camera” and “Fedora Pad Microphone” on Fedora for Zoom, Meet and OBS (USB cable, Android 12+). The iPhone web app has a Webcam page too (Wi-Fi). Run `./host/webcam-setup.sh` once. |
 | ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
 ## 🚀 Setup (once)
@@ -85,7 +89,7 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 **From now on: unlock Fedora and plug in the tablet. That's it.**
 
 ## 📱 iPhone, iPad and other phones (web app)
-Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter and Stats. Encrypted, and only for devices you pair.
+Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter, Stats and **Webcam** (the phone's camera and mic as the PC's webcam, Fedora). Encrypted, and only for devices you pair.
 
 1. Turn it on: Fedora `./host/webapp-setup.sh` · Windows double-click `windows\WebApp.bat`.
 2. On the iPhone / iPad, open the address it shows in **Safari** (or scan the QR code), and follow the page:
@@ -122,6 +126,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+| `./host/webcam-setup.sh` | Makes the phone or tablet a webcam and microphone on Fedora: virtual camera driver (with the Secure Boot step if needed) and scrcpy. `--undo` removes it. |
 | `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |

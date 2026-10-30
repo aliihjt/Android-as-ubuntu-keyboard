@@ -188,7 +188,7 @@ const TILES = [
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
   ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
   ["notes", "🗒", "Notes", "yellow"], ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
-  ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
+  ["webcam", "📷", "Webcam", "red"], ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
 ];
 const PAGES = {};
 
@@ -640,6 +640,79 @@ PAGES.presenter = () => {
       el("button", {class: "btn2", onclick: () => { combo("f5"); t0 = Date.now(); }}, "▶ Start"),
       el("button", {class: "btn2", onclick: () => combo("b")}, "⬛ Black"),
       el("button", {class: "btn2", onclick: () => { combo("esc"); t0 = 0; clock.textContent = "0:00"; }}, "■ End")));
+};
+
+// ---- webcam: this phone's camera and mic as the PC's webcam (Fedora)
+function b64(buf) {
+  const bytes = new Uint8Array(buf); let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+PAGES.webcam = () => {
+  page("Webcam");
+  const video = el("video", {playsinline: true, autoplay: true,
+    style: "width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;border-radius:16px"});
+  video.muted = true;
+  const state = el("div", {class: "center", style: "font-weight:700;margin:10px 0"}, "Off");
+  const go = el("button", {class: "btn", style: "width:100%;margin-top:14px"}, "Start");
+  let facing = store.get("facing", "user"), useMic = store.get("camMic", true), live = false;
+  let stream = null, timer = null, audio = null, wake = null;
+  const canvas = document.createElement("canvas"); canvas.width = 1280; canvas.height = 720;
+  const g = canvas.getContext("2d");
+  const micToggle = el("div", {class: "toggle" + (useMic ? " on" : "")});
+  const stop = (tell = true) => {
+    if (tell && live) send({t: "webcam", on: false});
+    live = false; clearInterval(timer); timer = null;
+    if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null;
+    if (audio) { audio.close().catch(() => {}); audio = null; }
+    if (wake) { wake.release().catch(() => {}); wake = null; }
+    go.textContent = "Start"; go.style.background = ""; state.textContent = "Off";
+  };
+  const start = async () => {
+    if (link.os === "windows") { state.textContent = "⚠️ Webcam mode works with Fedora for now."; return; }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {facingMode: facing, width: {ideal: 1280}, height: {ideal: 720}},
+        audio: useMic ? {echoCancellation: true, noiseSuppression: true} : false});
+    } catch (e) { state.textContent = "⚠️ Allow the camera for this page (" + e.name + ")"; return; }
+    video.srcObject = stream; video.play().catch(() => {});
+    live = true; go.textContent = "Stop"; go.style.background = "var(--red)"; state.textContent = "Starting…";
+    send({t: "webcam", on: true, src: "web", mic: useMic});
+    timer = setInterval(() => {  // ~15 pictures a second, skipped when the Wi-Fi falls behind
+      if (!video.videoWidth || !link.ws || link.ws.bufferedAmount > 600000) return;
+      const k = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+      const w = video.videoWidth * k, h = video.videoHeight * k;
+      g.fillStyle = "#000"; g.fillRect(0, 0, canvas.width, canvas.height);
+      g.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+      canvas.toBlob(b => b && b.arrayBuffer().then(buf => send({t: "camframe", jpg: b64(buf)})), "image/jpeg", 0.65);
+    }, 66);
+    if (useMic) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audio = new AC();
+      const src = audio.createMediaStreamSource(stream), proc = audio.createScriptProcessor(4096, 1, 1);
+      proc.onaudioprocess = e => {
+        const f = e.inputBuffer.getChannelData(0), pcm = new Int16Array(f.length);
+        for (let i = 0; i < f.length; i++) pcm[i] = Math.max(-1, Math.min(1, f[i])) * 0x7fff;
+        send({t: "micpcm", pcm: b64(pcm.buffer), rate: audio.sampleRate});
+      };
+      src.connect(proc); proc.connect(audio.destination);
+    }
+    try { if (navigator.wakeLock) wake = await navigator.wakeLock.request("screen"); } catch (e) {}
+  };
+  go.addEventListener("click", () => live ? stop() : start());
+  on("webcam", m => {
+    if (m.error) { state.textContent = "⚠️ " + m.error; stop(false); }
+    else if (m.on) state.textContent = "🔴 On: the PC sees this camera";
+  });
+  cleanup.push(() => { stop(); on("webcam", null); });
+  app.append(video, state,
+    seg([["user", "🤳 Front"], ["environment", "📷 Back"]], facing, v => { facing = v; store.set("facing", v); if (live) { stop(); start(); } }),
+    el("div", {class: "group", style: "margin-top:12px"}, el("button", {class: "row", onclick: () => {
+      useMic = !useMic; store.set("camMic", useMic); micToggle.classList.toggle("on", useMic); }},
+      chip("🎤", "red"), el("div", {class: "grow"}, "Use this phone's microphone too"), micToggle)),
+    go,
+    el("p", {class: "sub"}, "In Zoom, Meet or OBS on the PC, choose “Fedora Pad Camera” and “Fedora Pad Microphone”. "
+      + "Keep this page open in front while it's on. First time: run ./host/webcam-setup.sh on Fedora."));
 };
 
 // ---- stats

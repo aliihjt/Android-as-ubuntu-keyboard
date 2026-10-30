@@ -81,7 +81,19 @@ public class OverlayService extends Service {
         HostLink.get().start();
         running = true;
         instance = this;
+        registerReceiver(charging, new android.content.IntentFilter(Intent.ACTION_POWER_CONNECTED));
+        FocusTimer.schedule(this);  // a focus timer keeps running while this service lives
     }
+
+    /** StandBy when charging starts (Settings › StandBy), like an iPhone on its side. */
+    private final android.content.BroadcastReceiver charging = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context c, Intent i) {
+            if (prefs.getBoolean("standby_auto", false)) {
+                startActivity(new Intent(c, StandByActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+        }
+    };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -103,6 +115,10 @@ public class OverlayService extends Service {
 
     @Override
     public void onDestroy() {
+        try {
+            unregisterReceiver(charging);
+        } catch (IllegalArgumentException ignored) {
+        }
         handler.removeCallbacksAndMessages(null);
         closePanel();
         hideMenu();

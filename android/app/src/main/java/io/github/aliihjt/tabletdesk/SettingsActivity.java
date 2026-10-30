@@ -32,6 +32,12 @@ public class SettingsActivity extends Page {
         add(th.caption("Make Fedora Pad the tablet's home screen: Books, Notes, AI, Search and your apps "
                 + "appear when the tablet starts and when you press Home. Choose your old launcher there to undo."), 6);
 
+        section("StandBy");
+        android.widget.Switch auto = th.toggle(prefs.getBoolean("standby_auto", false),
+                on -> prefs.edit().putBoolean("standby_auto", on).apply());
+        add(th.group(th.row("🕰", Theme.ORANGE, "StandBy when charging starts", "Big clock, weather, music, focus timer", auto),
+                screensaverRow()));
+
         section("Laptop keyboard");
         org.json.JSONObject st = link.lastState();
         boolean kbdOn = st == null || st.optBoolean("laptopkbd", true);
@@ -138,6 +144,19 @@ public class SettingsActivity extends Page {
                 startActivity(new android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS));
             } catch (android.content.ActivityNotFoundException e) {
                 startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));
+            }
+        });
+        return r;
+    }
+
+    private LinearLayout screensaverRow() {
+        LinearLayout r = th.row("🌙", Theme.INDIGO, "Use StandBy as the screen saver",
+                "Pick “Fedora Pad StandBy” in Android's screen saver settings", th.chevron());
+        th.click(r, v -> {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_DREAM_SETTINGS));
+            } catch (android.content.ActivityNotFoundException e) {
+                startActivity(new Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS));
             }
         });
         return r;

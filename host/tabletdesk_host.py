@@ -26,6 +26,8 @@ Tablet -> host messages (one JSON object per line):
   {"t":"termlist?"} / {"t":"termrun","name":"…"} / {"t":"termstop"}  Terminal Pad
   {"t":"ambient?"}                         screen colours for ambient light
   {"t":"lang","id":"fa"|"en"}              keyboard language for the Persian keys
+  {"t":"webcam","on":true,"src":"android|web","facing":"front|back","mic":true} / {"t":"webcam?"}
+  {"t":"camframe","jpg":"<base64>"} / {"t":"micpcm","pcm":"<base64 s16>","rate":48000}  web app webcam
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -65,6 +67,11 @@ try:
     from evdev import InputDevice, UInput, ecodes as e, list_devices
 except ImportError:  # allows --dry-run on machines without python3-evdev
     InputDevice = UInput = e = list_devices = None
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import webcam as webcam_module  # noqa: E402
+
+webcam = webcam_module.Webcam()
 
 # Whitelisted commands the tablet's menu bar may trigger. Nothing else runs.
 # A list of lists means "first one that is installed".
@@ -1152,6 +1159,19 @@ def handle(inj, msg, reply=None):
         run_terminal(str(msg.get("name", "")), reply)
     elif t == "termstop":
         stop_terminal()
+    elif t == "webcam":  # phone / tablet as the PC's webcam and mic
+        def go():
+            r = webcam.start(str(msg.get("src", "android")), str(msg.get("facing", "front")),
+                             bool(msg.get("mic", True))) if msg.get("on") else webcam.stop()
+            if reply:
+                reply(r)
+        threading.Thread(target=go, daemon=True).start()
+    elif t == "webcam?" and reply:
+        reply(webcam.status())
+    elif t == "camframe":
+        webcam.frame(str(msg.get("jpg", "")))
+    elif t == "micpcm":
+        webcam.pcm(str(msg.get("pcm", "")), msg.get("rate", 48000))
     elif t == "lang" and msg.get("id") in ("fa", "en"):
         threading.Thread(target=set_keyboard_language, args=(msg["id"],), daemon=True).start()
     elif t == "ambient?" and reply:
@@ -1194,7 +1214,12 @@ def start_web_app(inj, clients):
         if shutil.which("notify-send"):
             subprocess.Popen(["notify-send", "-u", "critical", "-a", "Fedora Pad", title, text])
 
-    webapp.WebApp(CONF_DIR, lambda msg, reply: handle(inj, msg, reply), hello, opened, clients.remove,
+    def closed(ws):
+        clients.remove(ws)
+        if webcam.source == "web":  # the phone that was the webcam went away
+            webcam.stop()
+
+    webapp.WebApp(CONF_DIR, lambda msg, reply: handle(inj, msg, reply), hello, opened, closed,
                   notify, lan_ips).start()
 
 

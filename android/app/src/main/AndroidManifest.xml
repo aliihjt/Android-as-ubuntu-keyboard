@@ -19,6 +19,11 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="vnc" />
         </intent>
+        <!-- the tablet's apps, for the home screen -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <!-- speech recognition for Push to Talk -->
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -37,6 +42,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- can be the tablet's home screen (Settings › Home screen) -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
@@ -58,6 +69,14 @@
         <activity android:name=".WindowsActivity" android:exported="false" />
         <activity android:name=".NotesActivity" android:exported="false" />
         <activity android:name=".PushToTalkActivity" android:exported="false" />
+        <activity android:name=".AiActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".TabletAppsActivity" android:exported="false" />
+        <activity android:name=".BooksActivity" android:exported="false" />
+        <activity android:name=".ReaderActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".SketchActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
         <activity android:name=".TerminalActivity" android:exported="false" />
         <activity android:name=".AmbientActivity" android:exported="false"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />

@@ -25,6 +25,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"notes?"} / {"t":"setnotes","list":[…]}  sticky notes
   {"t":"termlist?"} / {"t":"termrun","name":"…"} / {"t":"termstop"}  Terminal Pad
   {"t":"ambient?"}                         screen colours for ambient light
+  {"t":"lang","id":"fa"|"en"}              keyboard language for the Persian keys
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -44,6 +45,7 @@ import secrets
 import ssl
 import base64
 import glob
+import ast
 import json
 import os
 import shutil
@@ -382,12 +384,13 @@ class LaptopKeyboard:
 
     @staticmethod
     def enabled_by_user():
-        """True = turn the laptop keyboard off when the tablet connects (default)."""
+        """True = turn the laptop keyboard off when the tablet connects.
+        Default: keep it on (Fedora Pad › Settings › Laptop keyboard)."""
         try:
             with open(LAPTOP_KBD_FILE) as f:
-                return f.read().strip() != "keep-on"
+                return f.read().strip() == "turn-off"
         except OSError:
-            return True
+            return False
 
     @staticmethod
     def save_choice(turn_off):
@@ -1001,6 +1004,22 @@ def stop_terminal():
             pass
 
 
+def set_keyboard_language(lang):
+    """Tablet's Persian keys: switch Fedora's keyboard to Persian ('fa') or back ('en').
+    Adds the Persian layout to Fedora the first time."""
+    if lang == "fa":
+        cur = _run(["gsettings", "get", "org.gnome.desktop.input-sources", "sources"]).strip()
+        try:
+            items = ast.literal_eval(cur.replace("@a(ss) ", "")) if cur not in ("", "@a(ss) []") else []
+        except (ValueError, SyntaxError):
+            items = []
+        if not any(t == "xkb" and i.split("+")[0] == "ir" for t, i in items):
+            items = (items or [("xkb", "us")]) + [("xkb", "ir")]
+            _run(["gsettings", "set", "org.gnome.desktop.input-sources", "sources", str(items)])
+            time.sleep(0.6)  # let GNOME load the new layout
+    shell_call("SetInputSource", lang)
+
+
 def ambient_colors():
     raw = shell_call("Ambient")
     try:
@@ -1132,6 +1151,8 @@ def handle(inj, msg, reply=None):
         run_terminal(str(msg.get("name", "")), reply)
     elif t == "termstop":
         stop_terminal()
+    elif t == "lang" and msg.get("id") in ("fa", "en"):
+        threading.Thread(target=set_keyboard_language, args=(msg["id"],), daemon=True).start()
     elif t == "ambient?" and reply:
         reply(ambient_colors())
     elif t == "launch":

@@ -236,6 +236,11 @@ public final class HostLink {
         send(obj("t", "termrun", "name", name));
     }
 
+    /** Fedora's keyboard language for the Persian keys: "fa" or "en". */
+    public void language(String id) {
+        send(obj("t", "lang", "id", id));
+    }
+
     /** Terminal Pad: stops the command that is running. */
     public void stopCommand() {
         send("{\"t\":\"termstop\"}");

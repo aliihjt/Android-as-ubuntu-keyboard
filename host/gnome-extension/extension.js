@@ -6,6 +6,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as Keyboard from 'resource:///org/gnome/shell/ui/status/keyboard.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const IFACE = `
@@ -34,6 +35,9 @@ const IFACE = `
     </method>
     <method name="Ambient">
       <arg type="s" direction="out" name="json"/>
+    </method>
+    <method name="SetInputSource">
+      <arg type="s" direction="in" name="id"/>
     </method>
   </interface>
 </node>`;
@@ -158,6 +162,17 @@ export default class TabletDeskExtension extends Extension {
         const w = this._find(id);
         if (w)
             w.delete(global.get_current_time());
+    }
+
+    // Keyboard language for the tablet's Persian keys: 'fa' = the Persian
+    // layout, 'en' = the first layout that isn't Persian.
+    SetInputSource(id) {
+        const manager = Keyboard.getInputSourceManager();
+        const sources = Object.values(manager.inputSources);
+        const persian = s => s.type === 'xkb' && s.id.split('+')[0] === 'ir';
+        const pick = sources.find(s => (id === 'fa' ? persian(s) : !persian(s)));
+        if (pick && manager.currentSource !== pick)
+            pick.activate(false);
     }
 
     // Where the pointer is on the tablet's screen (the non-primary monitor),

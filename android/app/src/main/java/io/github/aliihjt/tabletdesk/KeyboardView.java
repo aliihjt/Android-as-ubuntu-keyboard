@@ -14,6 +14,7 @@ import java.util.Map;
  * A laptop keyboard that types straight into Fedora: letters with a number row,
  * or a number pad ("123"). Ctrl / Alt / ⌘ are sticky (tap, then a letter),
  * ⇧ is one-shot (double tap = caps lock), arrows and ⌫ repeat while held.
+ * فا switches to the Persian layout (and Fedora's keyboard with it).
  * Used by the Keyboard page, the Trackpad page and the floating keyboard.
  */
 final class KeyboardView extends LinearLayout {
@@ -33,6 +34,28 @@ final class KeyboardView extends LinearLayout {
     };
     private static final String REPEATING = " backspace delete left right up down space ";
 
+    /**
+     * Persian (ISIRI 9147, Fedora's "ir" layout): key -> {normal, with ⇧}.
+     * The tablet presses the same physical keys; Fedora's Persian layout turns
+     * them into these letters, so it works in every app.
+     */
+    private static final Map<String, String[]> PERSIAN = new java.util.HashMap<>();
+
+    static {
+        String keys = "1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./";
+        String[] normal = {"۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹", "۰", "-", "=",
+                "ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "چ", "\\",
+                "ش", "س", "ی", "ب", "ل", "ا", "ت", "ن", "م", "ک", "گ",
+                "ظ", "ط", "ز", "ر", "ذ", "د", "پ", "و", ".", "/"};
+        String[] shifted = {"!", "٬", "٫", "﷼", "٪", "×", "،", "*", ")", "(", "ـ", "+",
+                "◌ْ", "◌ٌ", "◌ٍ", "◌ً", "◌ُ", "◌ِ", "◌َ", "◌ّ", "]", "[", "}", "{", "|",
+                "ؤ", "ئ", "ي", "إ", "أ", "آ", "ة", "»", "«", ":", "؛",
+                "ك", "◌ٓ", "ژ", "◌ٰ", "نیم‌فاصله", "◌ٔ", "ء", ">", "<", "؟"};
+        for (int i = 0; i < keys.length(); i++) {
+            PERSIAN.put(String.valueOf(keys.charAt(i)), new String[]{normal[i], shifted[i]});
+        }
+    }
+
     private final Theme th;
     private final float keyHeightDp;
     private final HostLink link = HostLink.get();
@@ -43,12 +66,17 @@ final class KeyboardView extends LinearLayout {
     private boolean shift, capsLock;
     private long lastShiftTap;
     private TextView shiftKey;
+    private boolean persian;
+    private final Map<TextView, String> letterKeys = new LinkedHashMap<>();
 
     KeyboardView(Theme th, float keyHeightDp) {
         super(th.ctx);
         this.th = th;
         this.keyHeightDp = keyHeightDp;
         setOrientation(VERTICAL);
+        persian = th.ctx.getSharedPreferences(OverlayService.PREFS, android.content.Context.MODE_PRIVATE)
+                .getBoolean("kb_fa", false);
+        if (persian) link.language("fa");  // Fedora may have been switched back meanwhile
         build();
     }
 
@@ -66,6 +94,7 @@ final class KeyboardView extends LinearLayout {
     private void build() {
         removeAllViews();
         mods.clear();
+        letterKeys.clear();
         shiftKey = null;
         for (String[] row : numpad ? NUMPAD : LETTERS) {
             LinearLayout r = new LinearLayout(th.ctx);
@@ -77,8 +106,9 @@ final class KeyboardView extends LinearLayout {
                         || key.equals("tab")) && !numpad ? 1.6f : 1f;
                 r.addView(key(p[0], key), lp(weight));
             }
-            if (systemKeyboard != null && !numpad && row == LETTERS[4]) {
-                r.addView(key("🌐", "ime"), lp(1f));
+            if (!numpad && row == LETTERS[4]) {
+                r.addView(key(persian ? "EN" : "فا", "lang"), lp(1f));
+                if (systemKeyboard != null) r.addView(key("🌐", "ime"), lp(1f));
             }
             addView(r);
         }
@@ -94,7 +124,10 @@ final class KeyboardView extends LinearLayout {
     @SuppressLint("ClickableViewAccessibility")
     private TextView key(String label, String key) {
         boolean special = !key.isEmpty() && label.length() > 1;
-        TextView t = th.key(label, special ? 14 : 19);
+        String[] fa = persian && key.isEmpty() ? PERSIAN.get(label) : null;
+        String shown = fa != null ? fa[shift ? 1 : 0] : key.equals("space") && persian ? "فارسی" : label;
+        TextView t = th.key(shown, special ? 14 : fa != null && shown.length() > 2 ? 11 : 19);
+        if (fa != null) letterKeys.put(t, label);
         if (special || key.equals("shift") || key.equals("super")) {
             t.setBackground(th.pressable(th.dark ? 0xFF2C2C2E : 0xFFD1D3D9, th.dp(9)));
         }
@@ -139,6 +172,13 @@ final class KeyboardView extends LinearLayout {
             case "ime":
                 if (systemKeyboard != null) systemKeyboard.run();
                 return;
+            case "lang":
+                persian = !persian;
+                th.ctx.getSharedPreferences(OverlayService.PREFS, android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("kb_fa", persian).apply();
+                link.language(persian ? "fa" : "en");
+                build();
+                return;
             case "shift": {
                 long now = System.currentTimeMillis();
                 if (now - lastShiftTap < 350) {  // double tap = caps lock
@@ -169,7 +209,11 @@ final class KeyboardView extends LinearLayout {
     private void send(String label, String key) {
         StringBuilder combo = new StringBuilder();
         for (String m : mods.keySet()) combo.append(m).append('+');
-        if (key.isEmpty() && combo.length() == 0) {
+        if (persian && key.isEmpty() && PERSIAN.containsKey(label)) {
+            // press the physical key; Fedora's Persian layout makes the letter
+            if (shift) combo.append("shift+");
+            link.combo(combo + name(label));
+        } else if (key.isEmpty() && combo.length() == 0) {
             link.text(shift ? shifted(label) : label);
         } else {
             if (shift && !key.startsWith("kp")) combo.append("shift+");
@@ -213,6 +257,12 @@ final class KeyboardView extends LinearLayout {
     }
 
     private void paintShift() {
+        for (Map.Entry<TextView, String> e : letterKeys.entrySet()) {  // Persian: show the ⇧ letters
+            String[] fa = PERSIAN.get(e.getValue());
+            String shown = fa[shift ? 1 : 0];
+            e.getKey().setText(shown);
+            e.getKey().setTextSize((shown.length() > 2 ? 11 : 19) * Ui.scale);
+        }
         if (shiftKey == null) return;
         paint(shiftKey, shift);
         shiftKey.setText(capsLock ? "⇪" : "⇧");

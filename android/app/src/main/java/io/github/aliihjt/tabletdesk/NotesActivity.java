@@ -61,6 +61,20 @@ public class NotesActivity extends Page {
         refresh();
     }
 
+    /** Adds a note from another page (AI answers, book highlights). */
+    static void addNote(android.content.Context c, String text) {
+        SharedPreferences p = c.getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        try {
+            JSONArray all = new JSONArray(p.getString("notes", "[]"));
+            all.put(new JSONObject().put("id", Long.toString(System.currentTimeMillis(), 36))
+                    .put("text", text.length() > 5000 ? text.substring(0, 5000) : text)
+                    .put("color", NAMES[all.length() % NAMES.length]));
+            p.edit().putString("notes", all.toString()).apply();
+            HostLink.get().send(new JSONObject().put("t", "setnotes").put("list", all));
+        } catch (JSONException ignored) {
+        }
+    }
+
     /** Fedora's copy wins, unless it has none yet and the tablet does. */
     private void fromFedora(JSONObject msg) {
         JSONArray list = msg.optJSONArray("list");

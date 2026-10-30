@@ -28,7 +28,9 @@ import java.util.Locale;
 
 /**
  * Fedora Pad home, laid out like a macOS desktop: menu bar on top, a widget
- * for the connection, Launchpad-style icons, and the Dock at the bottom.
+ * for the connection, Launchpad-style icons (the tablet's own tools and pinned
+ * apps, then the Fedora tools), and the Dock at the bottom. It can also be the
+ * tablet's home screen (Settings › Home screen).
  */
 public class MainActivity extends Page implements HostLink.StateListener {
     /** RDP apps that show the Fedora screen, best first. */
@@ -248,8 +250,19 @@ public class MainActivity extends Page implements HostLink.StateListener {
 
     // ---- Launchpad ----
 
+    private LinearLayout pinnedBox;
+
     private View launchpad() {
-        Object[][] apps = {
+        Object[][] tablet = {
+                {"📚", Theme.ORANGE, "Books", BooksActivity.class},
+                {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
+                {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
+                {"✨", Theme.PURPLE, "AI Chat", AiActivity.class},
+                {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
+                {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
+                {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
+        };
+        Object[][] fedora = {
                 {"⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class},
                 {"🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class},
                 {"🎵", Theme.PINK, "Media", MediaActivity.class},
@@ -263,14 +276,29 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
-                {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
                 {">_", 0xFF3A3A3C, "Terminal Pad", TerminalActivity.class},
                 {"🌈", Theme.PINK, "Ambient Light", AmbientActivity.class},
-                {"🔍", Theme.GRAY, "Spotlight", SpotlightActivity.class},
-                {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
+        LinearLayout all = new LinearLayout(this);
+        all.setOrientation(LinearLayout.VERTICAL);
+        all.addView(header("This tablet"));
+        all.addView(iconGrid(tablet), th.fullWidth(12));
+        pinnedBox = new LinearLayout(this);
+        pinnedBox.setOrientation(LinearLayout.VERTICAL);
+        all.addView(pinnedBox, th.fullWidth(0));
+        showPinned();
+        all.addView(header("Fedora"), th.fullWidth(28));
+        all.addView(iconGrid(fedora), th.fullWidth(12));
+        return all;
+    }
+
+    private int columns() {
         int w = getResources().getConfiguration().screenWidthDp;
-        int columns = w >= 900 ? 7 : w >= 600 ? 5 : 4;  // fewer, bigger icons when upright
+        return w >= 900 ? 7 : w >= 600 ? 5 : 4;  // fewer, bigger icons when upright
+    }
+
+    private View iconGrid(Object[][] apps) {
+        int columns = columns();
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = null;
@@ -286,6 +314,37 @@ public class MainActivity extends Page implements HostLink.StateListener {
         int rest = apps.length % columns;
         for (int i = rest; rest != 0 && i < columns; i++) row.addView(new View(this), th.weighted(0));
         return grid;
+    }
+
+    /** The tablet apps pinned from Tablet Apps (long-press there), with their real icons. */
+    private void showPinned() {
+        if (pinnedBox == null) return;
+        pinnedBox.removeAllViews();
+        java.util.List<TabletApps.App> pinned = TabletApps.pinnedApps(this);
+        if (pinned.isEmpty()) return;
+        int columns = columns();
+        LinearLayout row = null;
+        for (int i = 0; i < pinned.size(); i++) {
+            if (i % columns == 0) {
+                row = new LinearLayout(this);
+                pinnedBox.addView(row, th.fullWidth(20));
+            }
+            TabletApps.App a = pinned.get(i);
+            row.addView(TabletApps.icon(this, th, a, 64, 0xFFFFFFFF, () -> new android.app.AlertDialog.Builder(this)
+                    .setTitle(a.label).setItems(new String[]{"Unpin from home screen"}, (d, w) -> {
+                        TabletApps.setPinned(this, a, false);
+                        showPinned();
+                    }).show()), th.weighted(0));
+        }
+        int rest = pinned.size() % columns;
+        for (int i = rest; rest != 0 && i < columns; i++) row.addView(new View(this), th.weighted(0));
+    }
+
+    private TextView header(String text) {
+        TextView t = th.text(text.toUpperCase(java.util.Locale.ROOT), 13, 0xE6FFFFFF, true);
+        t.setLetterSpacing(0.08f);
+        t.setShadowLayer(th.dp(3), 0, th.dp(1), 0x99000000);
+        return t;
     }
 
     /** Icon + white label, like Launchpad. */
@@ -314,15 +373,15 @@ public class MainActivity extends Page implements HostLink.StateListener {
         int p = th.dp(8);
         d.setPadding(p, p, p, p);
         Object[][] items = {
+                {"📚", Theme.ORANGE, (Runnable) () -> startActivity(new Intent(this, BooksActivity.class))},
+                {"\uD83D\uDDD2", Theme.YELLOW, (Runnable) () -> startActivity(new Intent(this, NotesActivity.class))},
+                {"✨", Theme.PURPLE, (Runnable) () -> startActivity(new Intent(this, AiActivity.class))},
+                {"▦", Theme.TEAL, (Runnable) () -> startActivity(new Intent(this, TabletAppsActivity.class))},
+                null,
                 {"⌨️", Theme.BLUE, (Runnable) () -> startActivity(new Intent(this, KeyboardActivity.class))},
                 {"🖱", Theme.PURPLE, (Runnable) () -> startActivity(new Intent(this, TrackpadActivity.class))},
-                {"🎵", Theme.PINK, (Runnable) () -> startActivity(new Intent(this, MediaActivity.class))},
-                {"🎛", Theme.ORANGE, (Runnable) () -> startActivity(new Intent(this, ControlsActivity.class))},
-                null,
-                {"🖥", Theme.INDIGO, (Runnable) () -> link.combo("super")},       // Mission Control
-                {"▦", Theme.TEAL, (Runnable) () -> link.combo("super+a")},              // Launchpad on Fedora
+                {"🖥", Theme.INDIGO, (Runnable) () -> link.combo("super")},       // Mission Control on Fedora
                 {"🔍", Theme.GRAY, (Runnable) () -> startActivity(new Intent(this, SpotlightActivity.class))},
-                {"⚙️", Theme.GRAY, (Runnable) () -> startActivity(new Intent(this, SettingsActivity.class))},
         };
         for (Object[] it : items) {
             if (it == null) {  // divider between apps and system items, as in the macOS Dock
@@ -358,6 +417,19 @@ public class MainActivity extends Page implements HostLink.StateListener {
         link.requestState();
         link.on("media", this::showMedia);
         handler.post(mediaTick);
+        showPinned();
+    }
+
+    /** As the tablet's home screen there is nothing to go back to. */
+    @Override
+    public void onBackPressed() {
+        if (!isHomeApp()) super.onBackPressed();
+    }
+
+    private boolean isHomeApp() {
+        android.content.pm.ResolveInfo r = getPackageManager().resolveActivity(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0);
+        return r != null && r.activityInfo != null && getPackageName().equals(r.activityInfo.packageName);
     }
 
     @Override

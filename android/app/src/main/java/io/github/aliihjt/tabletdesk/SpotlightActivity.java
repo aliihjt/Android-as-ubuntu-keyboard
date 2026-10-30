@@ -20,8 +20,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Spotlight: one search box for everything — Fedora Pad pages, shortcuts,
- * your buttons, Fedora apps — or search Fedora itself.
+ * Spotlight: one search box for everything — Fedora Pad pages, the tablet's
+ * apps, notes and books, shortcuts, your buttons, Fedora apps — or ask AI,
+ * search the web, or search Fedora itself.
  */
 public class SpotlightActivity extends Page {
     private final List<Object[]> index = new ArrayList<>();  // {symbol, colour, title, kind, Runnable}
@@ -45,7 +46,7 @@ public class SpotlightActivity extends Page {
         box.setElevation(th.dp(12));
         box.addView(th.text("🔍", 22, th.secondary, false));
         field = new EditText(this);
-        field.setHint("Spotlight Search");
+        field.setHint("Search apps, notes, books, the web…");
         field.setHintTextColor(th.secondary);
         field.setTextColor(th.text);
         field.setTextSize(24 * Ui.scale);
@@ -105,6 +106,10 @@ public class SpotlightActivity extends Page {
                 {"\uD83C\uDF9A", Theme.ORANGE, "Stream Deck", ButtonsActivity.class},
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
+                {"📚", Theme.ORANGE, "Books", BooksActivity.class},
+                {"✨", Theme.PURPLE, "AI Chat", AiActivity.class},
+                {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
+                {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
                 {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
                 {">_", 0xFF3A3A3C, "Terminal Pad", TerminalActivity.class},
@@ -136,6 +141,24 @@ public class SpotlightActivity extends Page {
             }
         } catch (Exception ignored) {
         }
+        // the tablet's own apps, notes and books
+        for (TabletApps.App a : TabletApps.all(this)) {
+            index.add(new Object[]{a.label.isEmpty() ? "?" : a.label.substring(0, 1).toUpperCase(Locale.ROOT),
+                    Theme.BLUE, a.label, "Tablet app", (Runnable) () -> TabletApps.launch(this, a)});
+        }
+        try {
+            JSONArray notes = new JSONArray(getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
+                    .getString("notes", "[]"));
+            for (int i = 0; i < notes.length(); i++) {
+                String text = notes.getJSONObject(i).optString("text").replace('\n', ' ');
+                index.add(new Object[]{"\uD83D\uDDD2", Theme.YELLOW, text.length() > 70 ? text.substring(0, 70) + "…" : text,
+                        "Note", (Runnable) () -> startActivity(new Intent(this, NotesActivity.class))});
+            }
+        } catch (Exception ignored) {
+        }
+        for (BooksActivity.Book b : BooksActivity.library(this)) {
+            index.add(new Object[]{"📖", Theme.ORANGE, b.title, "Book", (Runnable) () -> BooksActivity.open(this, b)});
+        }
         for (String[] app : link.apps()) {
             index.add(new Object[]{app[1].isEmpty() ? "?" : app[1].substring(0, 1).toUpperCase(Locale.ROOT),
                     Theme.TEAL, app[1], "Fedora app", (Runnable) () -> link.action("launch:" + app[0])});
@@ -151,11 +174,19 @@ public class SpotlightActivity extends Page {
             if (!q.isEmpty() && !title.toLowerCase(Locale.ROOT).contains(q)) continue;
             if (q.isEmpty() && !"Fedora Pad".equals(it[3])) continue;  // empty search: just the pages
             rows.add(row((String) it[0], (Integer) it[1], title, (String) it[3], (Runnable) it[4]));
-            if (rows.size() >= 12) break;
+            if (rows.size() >= 14) break;
         }
         if (!q.isEmpty()) {
-            rows.add(row("🔎", Theme.BLUE, "Search Fedora for “" + query.trim() + "”",
-                    "Opens Fedora's search", () -> searchFedora(query.trim())));
+            String words = query.trim();
+            rows.add(row("✨", Theme.PURPLE, "Ask AI: “" + words + "”", "AI Chat",
+                    () -> startActivity(new Intent(this, AiActivity.class).putExtra(AiActivity.EXTRA_ASK, words))));
+            rows.add(row("🌐", Theme.TEAL, "Search the web for “" + words + "”", "Web",
+                    () -> startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
+                            "https://www.google.com/search?q=" + android.net.Uri.encode(words))))));
+            if (link.isConnected()) {
+                rows.add(row("🔎", Theme.BLUE, "Search Fedora for “" + words + "”",
+                        "Opens Fedora's search", () -> searchFedora(words)));
+            }
         }
         LinearLayout list = th.group(rows.toArray(new LinearLayout[0]));
         list.setBackground(th.frosted(th.dp(16)));

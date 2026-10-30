@@ -27,6 +27,18 @@ public class SettingsActivity extends Page {
             link.mode(m);
         }));
 
+        section("Home screen");
+        add(th.group(homeRow()));
+        add(th.caption("Make Fedora Pad the tablet's home screen: Books, Notes, AI, Search and your apps "
+                + "appear when the tablet starts and when you press Home. Choose your old launcher there to undo."), 6);
+
+        section("Laptop keyboard");
+        org.json.JSONObject st = link.lastState();
+        boolean kbdOn = st == null || st.optBoolean("laptopkbd", true);
+        add(th.segmented(new String[][]{{"1", "⌨️ Keep it on"}, {"0", "Off while the tablet is connected"}},
+                kbdOn ? "1" : "0", v -> link.set("laptopkbd", Integer.parseInt(v))));
+        add(th.caption("Keep it on to type on the laptop's own keys and the tablet together."), 6);
+
         section("Floating button");
         add(th.group(
                 th.row("⌨️", Theme.BLUE, "Show floating button", "Over the Fedora screen, for keyboard and trackpad",
@@ -117,5 +129,17 @@ public class SettingsActivity extends Page {
         } catch (android.content.pm.PackageManager.NameNotFoundException e) {
             return "?";
         }
+    }
+
+    private LinearLayout homeRow() {
+        LinearLayout r = th.row("🏠", Theme.BLUE, "Use as the home screen", "Opens Android's Home app setting", th.chevron());
+        th.click(r, v -> {
+            try {
+                startActivity(new android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS));
+            } catch (android.content.ActivityNotFoundException e) {
+                startActivity(new android.content.Intent(android.provider.Settings.ACTION_SETTINGS));
+            }
+        });
+        return r;
     }
 }

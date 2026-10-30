@@ -24,7 +24,7 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | | Page | What it does |
 |---|---|---|
 | 🖥 | **Show Fedora Screen** | Fedora on the tablet as a **second screen** (drag windows across) or the **same picture**. The laptop's mouse pointer shows on the tablet too. |
-| ⌨ | **Keyboard** | Full laptop keyboard: number row, Ctrl / Alt / ⌘, arrows, a **123 number pad**, and 🌐 for the tablet's own keyboard (Persian and other languages). |
+| ⌨ | **Keyboard** | Full laptop keyboard: number row, Ctrl / Alt / ⌘, arrows, a **123 number pad**, a **فا** key for the Persian layout (Fedora switches with it and gets the Persian layout added by itself), and 🌐 for the tablet's own keyboard. |
 | 🖱 | **Trackpad** | Big trackpad with click buttons; show the keyboard under it for a laptop layout. Tap, drag, 2-finger scroll / right-click / pinch zoom, 3 and 4-finger swipes. |
 | 🎵 | **Media** | Play / pause, next, previous and volume for whatever plays on the PC. |
 | 🎛 | **Controls** | Brightness, volume, dark mode, Night Light, Do Not Disturb, Wi-Fi, Bluetooth, mic, keep awake, power mode, lock / log out / restart / shut down. |
@@ -42,8 +42,20 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | 🌈 | **Ambient Light** | The tablet glows in the colours of the Fedora screen, like a bias light behind a TV. |
 | ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
 | ● | **Floating button** | The only thing over the Fedora screen. Drag it anywhere; tap it for a floating **keyboard** or **trackpad**, Media, Shortcuts or Home. |
-| 🚫 | **Laptop keyboard off** | While the tablet is connected, the laptop's own keyboard is off (touchpad stays on). Unplug and it's back. |
+| ⌨️ | **Laptop keyboard** | Stays on by default. Settings › Laptop keyboard can turn it off while the tablet is connected (touchpad stays on); unplug and it's back. |
 | ⚡ | **Plug & play** | Plug in and everything starts by itself, including app updates. |
+
+## 🏠 The tablet on its own
+Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it's useful even without the laptop:
+
+| | Page | What it does |
+|---|---|---|
+| 📚 | **Books** | PDF, EPUB and text books with covers and reading progress. Text size, night mode, swipe to turn pages. Select text to ask AI about it or keep it as a note; on a PDF, AI reads the page picture. |
+| ✍️ | **Handwriting** | Write or draw with a finger or stylus (palm ignored with a stylus): pens, highlighter, eraser, undo, lined or grid paper. Save to the Gallery, send to Fedora, or let AI read it. |
+| 🗒 | **Notes** | Sticky notes, also on the Fedora desktop. Book quotes and AI answers can be saved here. |
+| ✨ | **AI Chat** | Chat with Claude on the tablet, by typing or voice, in English or Persian. Paste your own API key once (from console.anthropic.com); it stays on the tablet. Long-press an answer to copy it, type it on Fedora or save it as a note. |
+| 🔍 | **Search** | One box for the tablet's apps, notes, books, Fedora Pad pages and Fedora apps, plus Ask AI and Search the web. |
+| ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
 ## 🚀 Setup (once)
 

@@ -13,6 +13,7 @@
     <!-- Android 11+: lets the app find and open the screen viewer apps -->
     <queries>
         <package android:name="com.microsoft.rdc.androidx" />
+        <package android:name="ph.spacedesk.beta" />
         <package android:name="com.freerdp.afreerdp" />
         <package android:name="com.gaurav.avnc" />
         <intent>

@@ -84,6 +84,25 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 
 **From now on: unlock Fedora and plug in the tablet. That's it.**
 
+## 🪟 Windows version
+Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), trackpad, Media, Controls, Shortcuts, Apps, Stream Deck, Windows switcher, Notes, Terminal Pad, Send Files, Text & Clipboard, Stats and Ambient Light.
+
+1. Download **[the project as a ZIP](https://github.com/aliihjt/Android-as-ubuntu-keyboard/archive/refs/heads/main.zip)** and unzip it.
+2. Open the `windows` folder and double-click **`Setup.bat`**. It installs Python, the Android tools and Git (with winget), starts Fedora Pad at every log-in, and can add the Persian keyboard.
+3. Plug in the tablet and tap **Allow** on it. The app installs or updates itself and opens.
+4. **Screen:** Windows shows its screen on the tablet with **spacedesk** (free for personal use; works on Windows Home): install the *spacedesk Windows driver* on the PC (Setup opens the page) and *spacedesk* on the tablet. Fedora Pad's **Show Screen** button opens it. Connect them over Wi-Fi.
+
+| | On Windows |
+|---|---|
+| 🔄 Update | double-click `windows\Update.bat` |
+| 🎙 Voice typing | Push to Talk with *Laptop mic* uses Windows' own voice typing (Win+H) |
+| ⏻ Shut down / Restart / Log out | opens Windows' own "Shut Down Windows" box, so you confirm on the PC |
+| 🔊 Volume | exact with pycaw (Setup installs it), otherwise in 2 % steps |
+| 📄 Log | `%LOCALAPPDATA%\FedoraPad\fedorapad.log` |
+
+Not on Windows: turning the laptop keyboard off, "Same picture" mode, the GNOME tools (macOS look, Fedora Plus, Tailscale scripts) and now-playing titles (the media buttons still work).
+If spacedesk is set to *USB cable* mode it brings its own adb, which can fight with Fedora Pad's; use spacedesk over Wi-Fi.
+
 ## 🧰 Fedora extras (optional)
 | Script | What it does |
 |---|---|
@@ -130,6 +149,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + poi
 | `host/tabletdesk_host.py` | Turns messages from the tablet into real keyboard and mouse input (works on Wayland), runs the whitelisted Tools and Control Center actions, and turns the laptop keyboard off while connected. |
 | `host/connect.sh` | Runs on every plug-in: `adb reverse`, screen mode, app updates, and a clean hand-back on unplug. |
 | `host/gnome-extension/` | Reports the focused app and the pointer position (GNOME 45–50). |
+| `windows/` | Fedora Pad for Windows: the same protocol with SendInput, plus setup and plug-in scripts. |
 | `android/` | The app, in plain Java with no extra libraries. |
 
 Everything listens on `127.0.0.1` only and travels over the USB cable. Nothing is exposed on your network.

@@ -35,6 +35,8 @@ import java.util.Locale;
 public class MainActivity extends Page implements HostLink.StateListener {
     /** RDP apps that show the Fedora screen, best first. */
     static final String[] RDP = {"com.microsoft.rdc.androidx", "com.freerdp.afreerdp"};
+    /** spacedesk shows a Windows PC's screen (Fedora Pad for Windows). */
+    static final String SPACEDESK = "ph.spacedesk.beta";
 
     // menu bar menus: title, then "Label|action|shortcut", "-" = separator
     private static final String[][] MENUS = {
@@ -632,6 +634,16 @@ public class MainActivity extends Page implements HostLink.StateListener {
     }
 
     static void openRdp(android.content.Context c) {
+        if ("windows".equals(HostLink.get().os())) {
+            Intent sd = c.getPackageManager().getLaunchIntentForPackage(SPACEDESK);
+            if (sd == null) {
+                Toast.makeText(c, "Install spacedesk to see the Windows screen", Toast.LENGTH_LONG).show();
+                openStore(c, SPACEDESK);
+            } else {
+                c.startActivity(sd.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+            return;
+        }
         String ip = HostLink.get().wifiIp();
         for (String pkg : RDP) {
             Intent i = c.getPackageManager().getLaunchIntentForPackage(pkg);

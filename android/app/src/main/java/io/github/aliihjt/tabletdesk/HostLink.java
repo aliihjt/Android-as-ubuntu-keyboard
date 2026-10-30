@@ -64,6 +64,7 @@ public final class HostLink {
     private volatile String via = "USB";
     private volatile String wifiIp = "";
     private volatile String user = "";
+    private volatile String os = "linux";
     private volatile PointerListener pointerListener;
     private volatile ClipListener clipListener;
     /** one listener per reply type ("media", "stats", ...) for the live panels */
@@ -92,6 +93,11 @@ public final class HostLink {
     /** The Fedora user name (for Remote Desktop). */
     public String user() {
         return user;
+    }
+
+    /** "windows" when the PC runs Fedora Pad for Windows, else "linux". */
+    public String os() {
+        return os;
     }
 
     /** "USB" or "Wi-Fi": how the tablet is connected right now. */
@@ -448,6 +454,7 @@ public final class HostLink {
                 } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
                     user = msg.optString("user", "");
+                    os = msg.optString("os", "linux");
                     // adb accepts the tunnel even if nothing listens on the laptop,
                     // so only the host's hello means we are really connected
                     setConnected(true);

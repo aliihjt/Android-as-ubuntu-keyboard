@@ -74,7 +74,7 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 ## 🧰 Fedora extras (optional)
 | Script | What it does |
 |---|---|
-| `./host/macos-look.sh` | Makes Fedora look like macOS: dock at the bottom, window buttons on the left, blur, macOS-style icons. `--undo` puts it back. |
+| `./host/macos-look.sh` | Makes Fedora look and feel like a MacBook: Dock, window buttons on the left, macOS theme, icons and cursors, top-left menu like the Apple menu, genie minimise, rounded corners, day/night macOS wallpapers, Inter font, Mac shortcuts (Super = Cmd: Super+Q, Super+Space Spotlight, Super+Shift+3/4/5 screenshots), two-finger right click, Firefox theme. `--undo` puts it back. |
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |

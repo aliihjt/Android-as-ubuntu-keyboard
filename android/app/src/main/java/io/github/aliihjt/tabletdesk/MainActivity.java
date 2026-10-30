@@ -68,6 +68,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
     @Override
     protected void onCreate(Bundle state) {
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        // the old built-in AI chat is gone (Claude app instead): don't keep its key or history
+        prefs.edit().remove("claude_key").remove("claude_history").apply();
         super.onCreate(state);
         // started by the PC when the cable is plugged in: just bring up the floating button
         if (getIntent().getBooleanExtra("autostart", false) && Settings.canDrawOverlays(this)) {
@@ -259,7 +261,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"📚", Theme.ORANGE, "Books", BooksActivity.class},
                 {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
                 {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
-                {"✨", Theme.PURPLE, "AI Chat", AiActivity.class},
+                {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
@@ -311,7 +313,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
             }
             Object[] a = apps[i];
             row.addView(appIcon((String) a[0], (Integer) a[1], (String) a[2], 64,
-                    () -> startActivity(new Intent(this, (Class<?>) a[3]))), th.weighted(0));
+                    a[3] instanceof Runnable ? (Runnable) a[3]
+                            : () -> startActivity(new Intent(this, (Class<?>) a[3]))), th.weighted(0));
         }
         int rest = apps.length % columns;
         for (int i = rest; rest != 0 && i < columns; i++) row.addView(new View(this), th.weighted(0));
@@ -377,7 +380,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         Object[][] items = {
                 {"📚", Theme.ORANGE, (Runnable) () -> startActivity(new Intent(this, BooksActivity.class))},
                 {"\uD83D\uDDD2", Theme.YELLOW, (Runnable) () -> startActivity(new Intent(this, NotesActivity.class))},
-                {"✨", Theme.PURPLE, (Runnable) () -> startActivity(new Intent(this, AiActivity.class))},
+                {"✨", 0xFFD97757, (Runnable) () -> ClaudeApp.open(this)},
                 {"▦", Theme.TEAL, (Runnable) () -> startActivity(new Intent(this, TabletAppsActivity.class))},
                 null,
                 {"⌨️", Theme.BLUE, (Runnable) () -> startActivity(new Intent(this, KeyboardActivity.class))},

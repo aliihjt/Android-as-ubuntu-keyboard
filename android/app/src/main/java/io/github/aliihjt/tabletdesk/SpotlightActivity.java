@@ -107,7 +107,7 @@ public class SpotlightActivity extends Page {
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"📚", Theme.ORANGE, "Books", BooksActivity.class},
-                {"✨", Theme.PURPLE, "AI Chat", AiActivity.class},
+                {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
@@ -117,13 +117,14 @@ public class SpotlightActivity extends Page {
                 {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
         };
         for (Object[] p : pages) {
-            Class<?> c = (Class<?>) p[3];
-            index.add(new Object[]{p[0], p[1], p[2], "Fedora Pad", (Runnable) () -> startActivity(new Intent(this, c))});
+            Runnable go = p[3] instanceof Runnable ? (Runnable) p[3]
+                    : () -> startActivity(new Intent(this, (Class<?>) p[3]));
+            index.add(new Object[]{p[0], p[1], p[2], "Fedora Pad", go});
         }
         index.add(new Object[]{"🖥", Theme.INDIGO, "Mission Control", "Fedora", (Runnable) () -> link.combo("super")});
         index.add(new Object[]{"▦", Theme.TEAL, "Launchpad", "Fedora", (Runnable) () -> link.combo("super+a")});
         index.add(new Object[]{"🔒", Theme.GRAY, "Lock Screen", "Fedora", (Runnable) () -> link.combo("super+l")});
-        index.add(new Object[]{"✨", Theme.PURPLE, "Ask AI", "Fedora", (Runnable) () -> link.command("ai")});
+        index.add(new Object[]{"✨", Theme.PURPLE, "AI on Fedora", "Fedora", (Runnable) () -> link.command("ai")});
         index.add(new Object[]{"🎙", Theme.RED, "Voice typing (start / stop)", "Fedora", (Runnable) () -> link.command("voice")});
         for (String[][] group : new String[][][]{ShortcutsActivity.EDIT, ShortcutsActivity.WINDOWS, ShortcutsActivity.SYSTEM}) {
             for (String[] s : group) {
@@ -178,8 +179,8 @@ public class SpotlightActivity extends Page {
         }
         if (!q.isEmpty()) {
             String words = query.trim();
-            rows.add(row("✨", Theme.PURPLE, "Ask AI: “" + words + "”", "AI Chat",
-                    () -> startActivity(new Intent(this, AiActivity.class).putExtra(AiActivity.EXTRA_ASK, words))));
+            rows.add(row("✨", 0xFFD97757, "Ask Claude: “" + words + "”", "Claude app",
+                    () -> ClaudeApp.ask(this, words, null)));
             rows.add(row("🌐", Theme.TEAL, "Search the web for “" + words + "”", "Web",
                     () -> startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
                             "https://www.google.com/search?q=" + android.net.Uri.encode(words))))));

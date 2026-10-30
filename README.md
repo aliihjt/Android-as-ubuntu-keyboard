@@ -50,11 +50,11 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 
 | | Page | What it does |
 |---|---|---|
-| 📚 | **Books** | PDF, EPUB and text books with covers and reading progress. Text size, night mode, swipe to turn pages. Select text to ask AI about it or keep it as a note; on a PDF, AI reads the page picture. |
-| ✍️ | **Handwriting** | Write or draw with a finger or stylus (palm ignored with a stylus): pens, highlighter, eraser, undo, lined or grid paper. Save to the Gallery, send to Fedora, or let AI read it. |
+| 📚 | **Books** | PDF, EPUB and text books with covers and reading progress. Text size, night mode, swipe to turn pages. Select text to ask Claude about it or keep it as a note; on a PDF, Claude gets a picture of the page. |
+| ✍️ | **Handwriting** | Write or draw with a finger or stylus (palm ignored with a stylus): pens, highlighter, eraser, undo, lined or grid paper. Save to the Gallery, send to Fedora, or let Claude read it. |
 | 🗒 | **Notes** | Sticky notes, also on the Fedora desktop. Book quotes and AI answers can be saved here. |
-| ✨ | **AI Chat** | Chat with Claude on the tablet, by typing or voice, in English or Persian. Paste your own API key once (from console.anthropic.com); it stays on the tablet. Long-press an answer to copy it, type it on Fedora or save it as a note. |
-| 🔍 | **Search** | One box for the tablet's apps, notes, books, Fedora Pad pages and Fedora apps, plus Ask AI and Search the web. |
+| ✨ | **Claude** | Opens the official Claude app (free on the Play Store; Fedora Pad offers to install it). **Ask Claude** in Books, Handwriting and Search sends your question, and a picture of the page or your writing, straight to it; the question is also copied in case you need to paste it. |
+| 🔍 | **Search** | One box for the tablet's apps, notes, books, Fedora Pad pages and Fedora apps, plus Ask Claude and Search the web. |
 | ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
 ## 🚀 Setup (once)

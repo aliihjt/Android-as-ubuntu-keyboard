@@ -55,7 +55,7 @@ import java.util.zip.ZipFile;
 
 /**
  * Reads one book: PDF pages (swipe or ◀ ▶, zoom, night mode), or EPUB / text
- * chapters in a web view (text size, night mode). Select text to ask AI about
+ * chapters in a web view (text size, night mode). Select text to ask Claude about
  * it or keep it as a note. Remembers where you stopped.
  */
 public class ReaderActivity extends Page {
@@ -137,7 +137,7 @@ public class ReaderActivity extends Page {
         bar.addView(tool("A−", v -> scale(-1)));
         bar.addView(tool("A+", v -> scale(1)));
         bar.addView(tool("🌙", v -> toggleNight()));
-        bar.addView(tool("✨ Ask AI", v -> askAi()));
+        bar.addView(tool("✨ Ask Claude", v -> askAi()));
         bar.addView(tool("🗒 Note", v -> note()));
         bar.setPadding(0, 0, 0, th.dp(8));
         return bar;
@@ -450,16 +450,7 @@ public class ReaderActivity extends Page {
     private void askAi() {
         if (pdf != null) {  // a PDF page goes to Claude as a picture
             if (pageBitmap == null) return;
-            File f = new File(getCacheDir(), "ask-page.jpg");
-            try (OutputStream out = new FileOutputStream(f)) {
-                Bitmap small = scaleDown(pageBitmap, 1568);
-                small.compress(Bitmap.CompressFormat.JPEG, 85, out);
-            } catch (IOException e) {
-                return;
-            }
-            startActivity(new Intent(this, AiActivity.class)
-                    .putExtra(AiActivity.EXTRA_IMAGE, f.getAbsolutePath())
-                    .putExtra(AiActivity.EXTRA_ASK, "Explain this page of “" + bookTitle + "” simply."));
+            ClaudeApp.ask(this, "Explain this page of “" + bookTitle + "” simply.", pageBitmap);
             return;
         }
         selection(sel -> {
@@ -479,14 +470,7 @@ public class ReaderActivity extends Page {
     }
 
     private void open(String question) {
-        startActivity(new Intent(this, AiActivity.class).putExtra(AiActivity.EXTRA_ASK, question));
-    }
-
-    private static Bitmap scaleDown(Bitmap b, int maxSide) {
-        int side = Math.max(b.getWidth(), b.getHeight());
-        if (side <= maxSide) return b;
-        float k = maxSide / (float) side;
-        return Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * k), Math.round(b.getHeight() * k), true);
+        ClaudeApp.ask(this, question, null);
     }
 
     private void note() {

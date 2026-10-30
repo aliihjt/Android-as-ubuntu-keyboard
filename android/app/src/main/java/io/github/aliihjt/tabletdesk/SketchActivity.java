@@ -40,7 +40,7 @@ import java.util.UUID;
 /**
  * Handwriting: write or draw with a finger or a stylus (with a stylus, the
  * palm is ignored). Pens, highlighter, eraser, undo, lined or grid paper.
- * Save to the tablet's Gallery, send to Fedora, or ask AI to read it.
+ * Save to the tablet's Gallery, send to Fedora, or ask Claude to read it.
  */
 public class SketchActivity extends Page {
     private static final int[] INKS = {0xFF1D1D1F, 0xFF007AFF, 0xFFFF3B30, 0xFF34C759, 0xFFAF52DE};
@@ -77,7 +77,7 @@ public class SketchActivity extends Page {
         bar.addView(tool("📂 Open", v -> openSaved()));
         bar.addView(tool("💾 Save", v -> save(true)));
         bar.addView(tool("💻 To Fedora", v -> sendToFedora()));
-        bar.addView(tool("✨ Ask AI", v -> askAi()));
+        bar.addView(tool("✨ Ask Claude", v -> askAi()));
         barScroll.addView(bar);
         content.addView(barScroll);
         ink.setBackground(Theme.round(Color.WHITE, th.dp(12)));
@@ -213,20 +213,8 @@ public class SketchActivity extends Page {
     }
 
     private void askAi() {
-        File f = new File(getCacheDir(), "ask-page.jpg");
-        try (OutputStream out = new FileOutputStream(f)) {
-            Bitmap page = ink.picture();
-            float k = Math.min(1f, 1568f / Math.max(page.getWidth(), page.getHeight()));
-            Bitmap small = k < 1f ? Bitmap.createScaledBitmap(page, Math.round(page.getWidth() * k),
-                    Math.round(page.getHeight() * k), true) : page;
-            small.compress(Bitmap.CompressFormat.JPEG, 90, out);
-        } catch (IOException e) {
-            return;
-        }
-        startActivity(new Intent(this, AiActivity.class)
-                .putExtra(AiActivity.EXTRA_IMAGE, f.getAbsolutePath())
-                .putExtra(AiActivity.EXTRA_ASK, "Read my handwriting and type it out. If it is a question or "
-                        + "a maths problem, answer it too."));
+        ClaudeApp.ask(this, "Read my handwriting and type it out. If it is a question or "
+                + "a maths problem, answer it too.", ink.picture());
     }
 
     private void toast(String s) {

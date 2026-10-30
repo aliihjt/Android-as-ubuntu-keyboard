@@ -62,7 +62,7 @@ public class BooksActivity extends Page {
         top.addView(th.primaryButton("＋  Add books", v -> pick()), th.weighted(0));
         add(top, 6);
         add(th.caption("PDF, EPUB and text files from the tablet, a USB stick or the cloud. "
-                + "In a book: select text to ask AI about it or save it as a note."), 8);
+                + "In a book: select text to ask Claude about it or save it as a note."), 8);
         grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         add(grid, 18);

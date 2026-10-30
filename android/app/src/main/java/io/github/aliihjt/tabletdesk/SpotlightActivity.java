@@ -118,6 +118,7 @@ public class SpotlightActivity extends Page {
         index.add(new Object[]{"▦", Theme.TEAL, "Launchpad", "Fedora", (Runnable) () -> link.combo("super+a")});
         index.add(new Object[]{"🔒", Theme.GRAY, "Lock Screen", "Fedora", (Runnable) () -> link.combo("super+l")});
         index.add(new Object[]{"✨", Theme.PURPLE, "Ask AI", "Fedora", (Runnable) () -> link.command("ai")});
+        index.add(new Object[]{"🎙", Theme.RED, "Voice typing (start / stop)", "Fedora", (Runnable) () -> link.command("voice")});
         for (String[][] group : new String[][][]{ShortcutsActivity.EDIT, ShortcutsActivity.WINDOWS, ShortcutsActivity.SYSTEM}) {
             for (String[] s : group) {
                 index.add(new Object[]{s[0], Theme.INDIGO, s[1], "Shortcut", (Runnable) () -> link.action(s[2])});

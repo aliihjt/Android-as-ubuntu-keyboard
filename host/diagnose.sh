@@ -23,6 +23,8 @@ OUT="$HOME/tabletdesk-diagnose.txt"
   gsettings get org.gnome.desktop.remote-desktop.rdp screen-share-mode 2>/dev/null
   echo; echo "== Wi-Fi mode"
   [ -e "$HOME/.config/tabletdesk/wifi" ] && echo "on" || echo "off (run host/wifi-setup.sh)"
+  echo; echo "== Tailscale (use from anywhere)"
+  command -v tailscale >/dev/null && { tailscale ip -4 2>/dev/null | head -1; tailscale status 2>&1 | head -5; } || echo "not installed (host/tailscale-setup.sh)"
   ip -4 -o addr show scope global | awk '{print $2, $4}'
   echo "listening:"; ss -ltn 2>/dev/null | grep -E ':(7778|3389) ' || echo "nothing on 7778/3389"
   echo "firewall ($(firewall-cmd --get-default-zone 2>/dev/null)):"

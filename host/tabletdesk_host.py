@@ -80,6 +80,9 @@ COMMANDS = {
     "ai": [os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai-open.sh")],
     # sticky notes window on the Fedora desktop
     "notes": [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sticky_notes.py")],
+    # offline voice typing (start / stop), see host/voice-setup.sh
+    "voice": [os.path.expanduser("~/.local/share/fedora-pad/voice/venv/bin/python"),
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.py")],
     # Terminal Pad: edit the list of commands
     "editcommands": ["xdg-open", os.path.expanduser("~/.config/tabletdesk/commands.json")],
 }

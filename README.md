@@ -78,6 +78,8 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+| `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
+| `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 
 ## 📶 Wi-Fi mode (no cable)

@@ -283,6 +283,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
+                {"🖥", Theme.BLUE, "Show on PC", MirrorActivity.class},
                 {"📷", Theme.RED, "Webcam", WebcamActivity.class},
                 {"📋", Theme.TEAL, "Clipboard History", ClipHistoryActivity.class},
                 {"⏰", Theme.INDIGO, "Wake & Sleep", WakeActivity.class},

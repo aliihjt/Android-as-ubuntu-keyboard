@@ -114,6 +114,7 @@ public class SpotlightActivity extends Page {
                 {"⏱", Theme.RED, "Focus", FocusActivity.class},
                 {"📄", Theme.BLUE, "Scanner", ScanActivity.class},
                 {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
+                {"🖥", Theme.BLUE, "Show on PC", MirrorActivity.class},
                 {"📷", Theme.RED, "Webcam", WebcamActivity.class},
                 {"📋", Theme.TEAL, "Clipboard History", ClipHistoryActivity.class},
                 {"⏰", Theme.INDIGO, "Wake & Sleep", WakeActivity.class},

@@ -205,12 +205,28 @@ if (-not (Test-Path (Join-Path $Repo 'windows\fedorapad_host.py'))) {
 }
 Ok $Repo
 
+# ---------------------------------------------------------------- scrcpy (the tablet's screen on this PC)
+Step 'Tablet Mirroring (scrcpy, from GitHub)'
+$scrcpyExe = Get-ChildItem (Join-Path $Data 'scrcpy') -Recurse -Filter scrcpy.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $scrcpyExe) {
+    $tag = Latest-Tag 'Genymobile/scrcpy' 'v5.0.1'
+    $zip = Join-Path $Data 'scrcpy.zip'
+    try {
+        Download "https://github.com/Genymobile/scrcpy/releases/download/$tag/scrcpy-win64-$tag.zip" $zip "scrcpy $tag"
+        Expand-Archive $zip -DestinationPath (Join-Path $Data 'scrcpy') -Force
+        $scrcpyExe = Get-ChildItem (Join-Path $Data 'scrcpy') -Recurse -Filter scrcpy.exe | Select-Object -First 1
+    } catch { Warn "scrcpy download failed: $($_.Exception.Message)" }
+    Remove-Item $zip -ErrorAction SilentlyContinue
+}
+$scrcpy = if ($scrcpyExe) { $scrcpyExe.FullName } else { $null }
+if ($scrcpy) { Ok $scrcpy } else { Warn 'skipped: Tablet Mirroring needs it (run Setup again later)' }
+
 # remember the tools for FedoraPad.ps1
 $openssl = (Get-Command openssl.exe -ErrorAction SilentlyContinue).Source
 foreach ($p in "$env:ProgramFiles\Git\usr\bin\openssl.exe", "$env:LOCALAPPDATA\Programs\Git\usr\bin\openssl.exe") {
     if (-not $openssl -and (Test-Path $p)) { $openssl = $p }
 }
-@{ python = $pyw; adb = $adb; git = $git; openssl = $openssl; repo = $Repo } |
+@{ python = $pyw; adb = $adb; git = $git; openssl = $openssl; repo = $Repo; scrcpy = $scrcpy } |
     ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $Data 'tools.json')
 
 # ---------------------------------------------------------------- extras
@@ -251,6 +267,16 @@ if ($pyw -and $adb) {
     $send.Arguments = "`"$(Join-Path $Repo 'host\send_to_pad.py')`""
     $send.Description = 'Send to the tablet or phone with Fedora Pad'
     $send.Save()
+    if ($scrcpy) {
+        # Start menu › Tablet Mirroring (with Fedora Pad's adb, so the two never fight)
+        $programs = [Environment]::GetFolderPath('Programs')
+        $mir = $shell.CreateShortcut((Join-Path $programs 'Tablet Mirroring.lnk'))
+        $mir.TargetPath = 'powershell.exe'
+        $mir.Arguments = "-NoProfile -WindowStyle Hidden -Command `"`$env:ADB='$adb'; & '$scrcpy' --window-title='Tablet - Fedora Pad' --stay-awake --max-size=1920`""
+        $mir.IconLocation = $scrcpy
+        $mir.Description = 'Show and use the tablet in a window (USB cable)'
+        $mir.Save()
+    }
     Start-Process powershell.exe -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WindowStyle Hidden
     Ok 'running now'
 

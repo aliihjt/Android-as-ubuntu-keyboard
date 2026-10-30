@@ -30,6 +30,8 @@ Tablet -> host messages (one JSON object per line):
   {"t":"camframe","jpg":"<base64>"} / {"t":"micpcm","pcm":"<base64 s16>","rate":48000}  web app webcam
   {"t":"pttstart","rate":48000} / {"t":"pttpcm","pcm":"<base64 s16>"} / {"t":"pttstop"}  phone Push to Talk
   {"t":"cliphist?"} / {"t":"clipclear"}    clipboard history
+  {"t":"mirror","on":true,"audio":true} / {"t":"mirror?"}   the tablet's screen in a window on the PC
+  {"t":"airplay","on":true} / {"t":"airplay?"}             AirPlay receiver for an iPhone / iPad
   {"t":"wake?"} / {"t":"sleep?"} / {"t":"sleepin","min":30} / {"t":"sleepnightly","at":"23:30"} / {"t":"sleepcancel"}
 Host -> tablet also: {"t":"pushfile","id","name","size","data","last"} / {"t":"pushtext","s"}  AirDrop from the PC
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
@@ -500,6 +502,43 @@ class LaptopKeyboard:
 
 laptop_kbd = None  # set in main()
 sleeper = None     # sleep timers, set in main()
+mirror_proc = None   # the tablet's screen on the PC (scrcpy), set in main()
+airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
+
+
+def mirror_status(error=None):
+    return {"t": "mirror", "on": bool(mirror_proc and mirror_proc.running()),
+            "error": error or (mirror_proc.error if mirror_proc else "")}
+
+
+def airplay_status(error=None):
+    return {"t": "airplay", "on": bool(airplay_proc and airplay_proc.running()),
+            "name": socket.gethostname().split(".")[0] + " (Fedora Pad)", "pin": pad_extras.airplay_pin(CONF_DIR),
+            "error": error or (airplay_proc.error if airplay_proc else "")}
+
+
+def screen_to_pc(t, on, audio, reply):
+    """The tablet (scrcpy, over the cable) or an iPhone (AirPlay) shown in a window on this PC."""
+    if t == "mirror":
+        if not on:
+            mirror_proc.stop()
+            return reply(mirror_status())
+        if not os.path.exists(webcam_module.SCRCPY):
+            return reply(mirror_status("Run ./host/mirror-setup.sh on Fedora once."))
+        argv = [webcam_module.SCRCPY, "--window-title=Tablet · Fedora Pad", "--stay-awake", "--max-size=1920"]
+        if not audio:
+            argv.append("--no-audio")
+        mirror_proc.start(argv, dict(os.environ, ADB=shutil.which("adb") or "adb"))
+        return reply(mirror_status())
+    if not on:
+        airplay_proc.stop()
+        return reply(airplay_status())
+    if not shutil.which("uxplay"):
+        return reply(airplay_status("Run ./host/mirror-setup.sh on Fedora once."))
+    st = airplay_status()
+    airplay_proc.start(["uxplay", "-n", st["name"], "-nh", "-pin", st["pin"],
+                        "-reg", os.path.join(CONF_DIR, "airplay-devices")])
+    reply(airplay_status())
 
 
 def desktop_notify(title, text):
@@ -1242,6 +1281,13 @@ def handle(inj, msg, reply=None):
         webcam.frame(str(msg.get("jpg", "")))
     elif t == "micpcm":
         webcam.pcm(str(msg.get("pcm", "")), msg.get("rate", 48000))
+    elif t in ("mirror", "airplay") and reply:  # tablet / iPhone screen in a window on this PC
+        threading.Thread(target=screen_to_pc, args=(t, bool(msg.get("on")), bool(msg.get("audio", True)), reply),
+                         daemon=True).start()
+    elif t == "mirror?" and reply:
+        reply(mirror_status())
+    elif t == "airplay?" and reply:
+        reply(airplay_status())
     elif t == "cliphist?" and reply:  # clipboard history (the GNOME extension keeps it)
         raw = shell_call("ClipHistory")
         try:
@@ -1471,7 +1517,8 @@ def main():
         start_wifi(inj, clients)
     if os.path.exists(WEB_FLAG):
         start_web_app(inj, clients)
-    global sleeper
+    global sleeper, mirror_proc, airplay_proc
+    mirror_proc, airplay_proc = pad_extras.Proc(), pad_extras.Proc()
     sleeper = pad_extras.Sleeper(CONF_DIR, lambda: _run(["systemctl", "suspend"]), desktop_notify)
     sleeper.start()
     pad_extras.Outbox(clients.broadcast, lambda: len(clients.files), desktop_notify).start()  # AirDrop

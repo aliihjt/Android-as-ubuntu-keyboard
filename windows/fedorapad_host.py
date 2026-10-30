@@ -957,6 +957,11 @@ def handle(inj, msg, reply=None):
         reply(ambient_colors())
     elif t == "pttstop" and reply:  # phone Push to Talk with the PC's Whisper: Fedora only
         reply({"t": "ptt", "state": "error", "error": "On Windows, choose “iPhone speech” in Push to Talk."})
+    elif t in ("mirror", "mirror?") and reply:  # the tablet's screen in a window on this PC (scrcpy)
+        threading.Thread(target=lambda: reply(tablet_mirror(msg)), daemon=True).start()
+    elif t in ("airplay", "airplay?") and reply:
+        reply({"t": "airplay", "on": False, "error": "Showing an iPhone works with Fedora for now: Windows has no "
+               "free AirPlay receiver that Fedora Pad can start."})
     elif t == "cliphist?" and reply:
         reply({"t": "cliphist", "list": clip_history.list()})
     elif t == "clipclear":
@@ -1074,6 +1079,33 @@ def watch_clipboard():
             clip_history.add(get_clipboard())
         except OSError:
             pass
+
+
+mirror_proc = pad_extras.Proc()
+
+
+def _tools():
+    try:
+        with open(os.path.join(os.environ.get("LOCALAPPDATA", ""), "FedoraPad", "tools.json"), encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def tablet_mirror(msg):
+    if msg.get("t") == "mirror":
+        if not msg.get("on"):
+            mirror_proc.stop()
+        else:
+            tools = _tools()
+            exe, adb = tools.get("scrcpy"), tools.get("adb")
+            if not exe or not os.path.exists(exe):
+                return {"t": "mirror", "on": False, "error": "Run windows\\Setup.bat again to add Tablet Mirroring."}
+            argv = [exe, "--window-title=Tablet - Fedora Pad", "--stay-awake", "--max-size=1920"]
+            if not msg.get("audio", True):
+                argv.append("--no-audio")
+            mirror_proc.start(argv, dict(os.environ, ADB=adb or "adb"))
+    return {"t": "mirror", "on": mirror_proc.running(), "error": mirror_proc.error}
 
 
 def _toast(title, text):

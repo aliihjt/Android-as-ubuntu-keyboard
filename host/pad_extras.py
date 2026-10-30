@@ -238,3 +238,73 @@ def wake_info():
 
 def hostname():
     return socket.gethostname()
+
+
+# ---------------------------------------------------------------- screen mirroring helpers
+
+class Proc:
+    """One helper program at a time (scrcpy, uxplay): start, stop, is it running,
+    and why it stopped."""
+
+    def __init__(self):
+        self.p = None
+        self.error = ""
+        self.lock = threading.Lock()
+
+    def running(self):
+        return self.p is not None and self.p.poll() is None
+
+    def start(self, argv, env=None):
+        with self.lock:
+            self._stop()
+            self.error = ""
+            try:
+                self.p = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                          stderr=subprocess.PIPE, text=True, errors="replace",
+                                          creationflags=0x08000000 if WINDOWS else 0)  # no console window
+            except OSError as err:
+                self.p = None
+                self.error = str(err)
+                return False
+            p = self.p
+        threading.Thread(target=self._watch, args=(p,), daemon=True).start()
+        time.sleep(1.5)  # most problems show up at once
+        return self.running()
+
+    def _watch(self, p):
+        _, err = p.communicate()
+        lines = [l for l in (err or "").splitlines() if l.strip()]
+        with self.lock:
+            if p is self.p and p.returncode not in (0, None):
+                self.error = (lines[-1] if lines else "it closed")[-200:]
+
+    def stop(self):
+        with self.lock:
+            self._stop()
+
+    def _stop(self):
+        if self.p is not None and self.p.poll() is None:
+            self.p.terminate()
+            try:
+                self.p.wait(3)
+            except subprocess.TimeoutExpired:
+                self.p.kill()
+        self.p = None
+
+
+def airplay_pin(conf_dir):
+    """A fixed 4-digit PIN the iPhone asks for the first time (then it's remembered)."""
+    path = os.path.join(conf_dir, "airplay-pin")
+    try:
+        with open(path) as f:
+            pin = f.read().strip()
+        if len(pin) == 4 and pin.isdigit():
+            return pin
+    except OSError:
+        pass
+    import secrets
+    pin = "%04d" % secrets.randbelow(10000)
+    os.makedirs(conf_dir, exist_ok=True)
+    with open(path, "w") as f:
+        f.write(pin)
+    return pin

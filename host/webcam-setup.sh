@@ -45,15 +45,8 @@ MSG
 fi
 
 echo "==> scrcpy (tablet camera over the USB cable)"
-if [ "$(uname -m)" = x86_64 ]; then
-  tag=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/Genymobile/scrcpy/releases/latest | sed 's#.*/##')
-  case "$tag" in v[0-9]*) ;; *) tag=v5.0.1 ;; esac
-  mkdir -p "$DATA/scrcpy"
-  curl -fL --progress-bar "https://github.com/Genymobile/scrcpy/releases/download/$tag/scrcpy-linux-x86_64-$tag.tar.gz" |
-    tar xz -C "$DATA/scrcpy" --strip-components=1 && echo "    scrcpy $tag"
-else
-  echo "    Not an x86_64 PC: the tablet camera needs scrcpy from your distribution; the iPhone camera still works."
-fi
+. "$(dirname "$0")/get-scrcpy.sh"
+get_scrcpy
 
 systemctl --user restart tabletdesk.service 2>/dev/null || true
 cat <<'MSG'

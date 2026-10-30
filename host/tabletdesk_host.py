@@ -29,6 +29,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
+The same messages also arrive from the phone / iPad web app (host/webapp.py).
 
 Host -> tablet messages:
   {"t":"hello","host":"my-laptop","session":"x11"}
@@ -1168,6 +1169,35 @@ def wifi_enabled():
     return os.path.exists(WIFI_FLAG)
 
 
+WEB_FLAG = os.path.join(CONF_DIR, "web")
+
+
+def start_web_app(inj, clients):
+    """Fedora Pad for iPhone, iPad and any browser (host/webapp.py), when turned on
+    with host/webapp-setup.sh."""
+    try:
+        import webapp
+    except ImportError as err:
+        print("web app unavailable:", err, file=sys.stderr)
+        return
+
+    def hello():
+        return {"t": "hello", "host": socket.gethostname(), "os": "linux",
+                "session": os.environ.get("XDG_SESSION_TYPE", "unknown"), "user": os.environ.get("USER", "")}
+
+    def opened(ws):
+        clients.add(ws)
+        if clients.last_app:
+            ws.send({"t": "app", "name": clients.last_app})
+
+    def notify(title, text):
+        if shutil.which("notify-send"):
+            subprocess.Popen(["notify-send", "-u", "critical", "-a", "Fedora Pad", title, text])
+
+    webapp.WebApp(CONF_DIR, lambda msg, reply: handle(inj, msg, reply), hello, opened, clients.remove,
+                  notify, lan_ips).start()
+
+
 def lan_identity():
     """Secret token + TLS certificate for Wi-Fi mode, created on first use.
     Returns (token, cert path, key path, sha256 fingerprint of the cert)."""
@@ -1316,6 +1346,8 @@ def main():
     threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()
     if wifi_enabled():
         start_wifi(inj, clients)
+    if os.path.exists(WEB_FLAG):
+        start_web_app(inj, clients)
     # bind to localhost only: the tablet reaches it through `adb reverse`
     with Server(("127.0.0.1", args.port), make_handler(inj, clients)) as srv:
         print(f"TabletDesk host listening on 127.0.0.1:{args.port}", flush=True)

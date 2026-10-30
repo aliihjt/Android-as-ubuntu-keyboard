@@ -1028,6 +1028,68 @@ def make_handler(inj, clients):
     return Handler
 
 
+# ---------------------------------------------------------------- phone / iPad web app
+
+WEB_FLAG = os.path.join(CONF_DIR, "web")
+
+
+def _lan_ips():
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith(("127.", "169.254.")):
+                ips.add(ip)
+    except OSError:
+        pass
+    return sorted(ips)
+
+
+def _openssl():
+    found = shutil.which("openssl")
+    if found:
+        return found
+    for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("LOCALAPPDATA", "")):
+        for p in (os.path.join(base, "Git", "usr", "bin", "openssl.exe"),
+                  os.path.join(base, "Programs", "Git", "usr", "bin", "openssl.exe")):
+            if os.path.exists(p):
+                return p
+    return "openssl"
+
+
+def _message(title, text):
+    """A box on the PC's screen (for the pairing code)."""
+    script = ("Add-Type -AssemblyName PresentationFramework;"
+              "[System.Windows.MessageBox]::Show(" + json.dumps(text) + "," + json.dumps(title) + ")")
+    threading.Thread(target=_ps, args=(script, 130), daemon=True).start()
+
+
+def start_web_app(inj, clients):
+    sys.path.insert(0, os.path.join(REPO, "host"))
+    try:
+        import webapp
+    except ImportError as err:
+        print("web app unavailable:", err, file=sys.stderr)
+        return
+
+    def hello():
+        return {"t": "hello", "host": socket.gethostname(), "session": "windows", "os": "windows",
+                "user": os.environ.get("USERNAME", "")}
+
+    def opened(ws):
+        with clients.lock:
+            clients.files.add(ws)
+        if clients.last_app:
+            ws.send({"t": "app", "name": clients.last_app})
+
+    def closed(ws):
+        with clients.lock:
+            clients.files.discard(ws)
+
+    webapp.WebApp(CONF_DIR, lambda msg, reply: handle(inj, msg, reply), hello, opened, closed,
+                  _message, _lan_ips, _openssl()).start()
+
+
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = False  # on Windows "reuse" would let two copies share the port
     daemon_threads = True
@@ -1046,6 +1108,8 @@ def main():
     inj = Injector(dry_run=args.dry_run)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
+    if os.path.exists(WEB_FLAG):
+        start_web_app(inj, clients)
     try:
         srv = Server(("127.0.0.1", args.port), make_handler(inj, clients))
     except OSError:

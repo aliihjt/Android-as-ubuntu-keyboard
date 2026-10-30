@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fedora Pad">
+<meta name="theme-color" content="#007aff">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Fedora Pad</title>
+<style>
+:root{--bg:#f2f2f7;--card:#fff;--text:#1d1d1f;--sub:#8e8e93;--sep:#d1d1d6;--fill:#e5e5ea;--key:#fff;--mod:#d1d3d9;
+ --blue:#007aff;--green:#34c759;--red:#ff3b30;--orange:#ff9500;--purple:#af52de;--pink:#ff2d55;--teal:#30b0c7;
+ --indigo:#5856d6;--yellow:#ffcc00;--gray:#8e8e93}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--text:#f5f5f7;--sub:#98989f;--sep:#38383a;
+ --fill:#2c2c2e;--key:#4a4a4e;--mod:#2c2c2e}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+ font:17px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none;
+ -webkit-text-size-adjust:100%;overscroll-behavior:none}
+#app{min-height:100%;padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 14px)
+ calc(env(safe-area-inset-bottom) + 14px) calc(env(safe-area-inset-left) + 14px);max-width:900px;margin:0 auto}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,textarea{font:inherit;color:var(--text);-webkit-user-select:text;user-select:text}
+.bar{display:flex;align-items:center;gap:8px;min-height:44px;margin-bottom:10px}
+.bar h1{flex:1;font-size:20px;margin:0;text-align:center}
+.back{color:var(--blue);font-size:17px;padding:8px 4px;min-width:70px;text-align:left}
+.right{min-width:70px;text-align:right}
+.big{font-size:34px;font-weight:700;margin:6px 2px 4px}
+.sub{color:var(--sub);font-size:14px}
+.status{display:flex;align-items:center;gap:8px;color:var(--sub);font-size:15px;margin:0 2px 16px}
+.dot{width:10px;height:10px;border-radius:5px;background:var(--gray)}
+.dot.on{background:var(--green)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+@media(max-width:430px){.tiles{grid-template-columns:1fr 1fr;gap:10px}}
+.tile{background:var(--card);border-radius:18px;padding:16px;text-align:left;display:flex;flex-direction:column;gap:10px;
+ min-height:108px;transition:transform .08s}
+.tile:active{transform:scale(.96)}
+.chip{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;font-size:24px;color:#fff}
+.tile b{font-size:16px}
+.card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.group{background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:.5px solid var(--sep);min-height:52px;width:100%;text-align:left}
+.row:last-child{border-bottom:0}
+.row .grow{flex:1;min-width:0}
+.row small{display:block;color:var(--sub);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h{font-size:13px;color:var(--sub);text-transform:uppercase;margin:18px 6px 6px;letter-spacing:.03em}
+.btn{background:var(--blue);color:#fff;border-radius:12px;padding:13px 16px;font-weight:600;text-align:center}
+.btn2{background:var(--fill);border-radius:12px;padding:13px 16px;font-weight:600;text-align:center}
+.btns{display:flex;gap:10px;flex-wrap:wrap}.btns>*{flex:1}
+.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:10px}
+.sc{background:var(--card);border-radius:14px;padding:12px 6px;text-align:center;font-size:13px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.sc span{font-size:24px}.sc:active{background:var(--fill)}
+.toggle{width:51px;height:31px;border-radius:16px;background:var(--fill);position:relative;flex:none;transition:background .2s}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:14px;background:#fff;
+ box-shadow:0 2px 4px #0003;transition:left .2s}
+.toggle.on{background:var(--green)}.toggle.on::after{left:22px}
+input[type=range]{width:100%;accent-color:var(--blue);height:32px}
+.seg{display:flex;background:var(--fill);border-radius:10px;padding:2px}
+.seg button{flex:1;padding:8px 4px;border-radius:8px;font-size:14px;font-weight:600}
+.seg button.on{background:var(--card);box-shadow:0 1px 3px #0002}
+/* keyboard */
+.kb{display:flex;flex-direction:column;gap:6px}
+.kr{display:flex;gap:5px}
+.k{flex:1;min-width:0;height:clamp(38px,8.5vh,58px);border-radius:8px;background:var(--key);box-shadow:0 1px 0 #0004;
+ font-size:clamp(13px,2.4vw,20px);display:grid;place-items:center;padding:0;white-space:nowrap;overflow:hidden}
+.k.m{background:var(--mod);font-size:clamp(11px,1.8vw,15px)}
+.k.on{background:var(--blue);color:#fff}.k:active{filter:brightness(.8)}
+.phonekb{width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid var(--sep);background:var(--card)}
+/* trackpad */
+.pad{background:var(--fill);border-radius:18px;touch-action:none;height:calc(100vh - 230px);min-height:260px;
+ display:grid;place-items:center;color:var(--sub);font-size:14px;text-align:center;padding:20px}
+.clicks{display:flex;gap:10px;margin-top:10px}.clicks button{flex:1;height:64px;border-radius:14px;background:var(--card)}
+pre{background:#1c1c1e;color:#e5e5ea;border-radius:12px;padding:12px;font:13px ui-monospace,Menlo,monospace;
+ white-space:pre-wrap;word-break:break-word;max-height:50vh;overflow:auto;-webkit-user-select:text;user-select:text}
+textarea{width:100%;min-height:150px;border-radius:12px;border:1px solid var(--sep);background:var(--card);padding:12px;resize:vertical}
+.search{width:100%;padding:11px 14px;border-radius:10px;border:0;background:var(--fill);margin-bottom:12px}
+.note{border-radius:14px;padding:14px;color:#1d1d1f;min-height:100px;white-space:pre-wrap;text-align:left;word-break:break-word}
+.notes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.code{font-size:34px;letter-spacing:10px;text-align:center;width:100%;padding:12px;border-radius:12px;border:1px solid var(--sep);background:var(--card)}
+.center{text-align:center}
+.stat{display:flex;justify-content:space-between;padding:4px 0}
+.meter{height:8px;border-radius:4px;background:var(--fill);overflow:hidden;margin:4px 0 10px}
+.meter i{display:block;height:100%;background:var(--blue)}
+.modal{position:fixed;inset:0;background:#0006;display:flex;align-items:flex-end;justify-content:center;z-index:9}
+.sheet{background:var(--bg);width:100%;max-width:620px;border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:#000c;
+ color:#fff;padding:10px 18px;border-radius:20px;font-size:15px;z-index:10;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+// ---------------------------------------------------------------- helpers
+const app = document.getElementById("app");
+const store = {
+  get: (k, d) => { try { const v = localStorage.getItem("fp_" + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: (k, v) => { try { localStorage.setItem("fp_" + k, JSON.stringify(v)); } catch (e) {} },
+};
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) e.append(c.nodeType ? c : String(c));
+  return e;
+}
+function toast(text) {
+  const t = el("div", {class: "toast"}, text);
+  document.body.append(t);
+  setTimeout(() => t.remove(), 2200);
+}
+function haptic() { if (navigator.vibrate) navigator.vibrate(8); }
+const COLORS = {blue: "var(--blue)", green: "var(--green)", red: "var(--red)", orange: "var(--orange)",
+  purple: "var(--purple)", pink: "var(--pink)", teal: "var(--teal)", indigo: "var(--indigo)", yellow: "var(--yellow)", gray: "var(--gray)"};
+const chip = (sym, color) => el("div", {class: "chip", style: "background:" + (COLORS[color] || color)}, sym);
+
+// ---------------------------------------------------------------- connection
+const link = {ws: null, connected: false, host: "", os: "linux", app: "", handlers: {}, retry: null};
+function send(obj) { if (link.ws && link.ws.readyState === 1) link.ws.send(JSON.stringify(obj)); }
+function on(type, fn) { if (fn) link.handlers[type] = fn; else delete link.handlers[type]; }
+const combo = keys => send({t: "combo", keys});
+const command = name => send({t: "cmd", name});
+function action(a) {  // "cmd:files", "url:https://…", "app:id", "text:…", or a key combo
+  const i = a.indexOf(":"), kind = i < 0 ? "combo" : a.slice(0, i), value = i < 0 ? a : a.slice(i + 1);
+  if (kind === "cmd") command(value);
+  else if (kind === "url") send({t: "url", u: value});
+  else if (kind === "app" || kind === "launch") send({t: "launch", id: value});
+  else if (kind === "text") send({t: "text", s: value});
+  else combo(value);
+}
+function connect() {
+  clearTimeout(link.retry);
+  const token = store.get("token", "");
+  if (!token) return showPairing();
+  if (link.ws && link.ws.readyState <= 1) return;
+  const ws = new WebSocket("wss://" + location.host + "/ws?token=" + encodeURIComponent(token));
+  link.ws = ws;
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus(); }
+    if (m.t === "app") { link.app = m.name || ""; refreshStatus(); }
+    const h = link.handlers[m.t]; if (h) h(m);
+  };
+  ws.onclose = ev => {
+    link.connected = false; refreshStatus();
+    if (ev.code === 4401) { store.set("token", ""); return showPairing(); }
+    link.retry = setTimeout(connect, 2000);
+  };
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) connect(); });
+let statusEls = [];
+function statusLine() {
+  const s = el("div", {class: "status"}, el("span", {class: "dot"}), el("span"));
+  statusEls.push(s); paintStatus(s); return s;
+}
+function paintStatus(s) {
+  s.firstChild.className = "dot" + (link.connected ? " on" : "");
+  s.lastChild.textContent = link.connected ? link.host + (link.app ? " · " + link.app : "") : "Connecting…";
+}
+function refreshStatus() { statusEls = statusEls.filter(s => s.isConnected); statusEls.forEach(paintStatus); }
+
+// ---------------------------------------------------------------- pages
+let cleanup = [];
+function show(name, push = true) {
+  cleanup.forEach(f => f()); cleanup = [];
+  app.innerHTML = "";
+  (PAGES[name] || PAGES.home)();
+  window.scrollTo(0, 0);
+  if (push && name !== "home") history.pushState({p: name}, "");
+}
+window.addEventListener("popstate", ev => show(ev.state && ev.state.p || "home", false));
+function every(ms, fn) { fn(); const id = setInterval(fn, ms); cleanup.push(() => clearInterval(id)); }
+function page(title, right) {
+  app.append(el("div", {class: "bar"},
+    el("button", {class: "back", onclick: () => history.length > 1 ? history.back() : show("home", false)}, "‹ Home"),
+    el("h1", {}, title), el("div", {class: "right"}, right || "")));
+}
+const TILES = [
+  ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["media", "🎵", "Media", "pink"],
+  ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
+  ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
+  ["notes", "🗒", "Notes", "yellow"], ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
+  ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
+];
+const PAGES = {};
+
+PAGES.home = () => {
+  app.append(el("div", {class: "big"}, "Fedora Pad"), statusLine(),
+    el("div", {class: "tiles"}, TILES.map(([id, sym, label, color]) =>
+      el("button", {class: "tile", onclick: () => show(id)}, chip(sym, color), el("b", {}, label)))));
+};
+
+// ---- pairing
+function showPairing() {
+  cleanup.forEach(f => f()); cleanup = [];
+  app.innerHTML = "";
+  const code = el("input", {class: "code", inputmode: "numeric", maxlength: 6, autocomplete: "one-time-code", placeholder: "••••••"});
+  const msg = el("p", {class: "sub center"}, "");
+  const ask = async () => {
+    const r = await fetch("/pair/request", {method: "POST"}).catch(() => null);
+    msg.textContent = r && r.ok ? "A 6-digit code is now on the PC's screen. Type it here."
+      : "Wait a few seconds, then try again.";
+    code.focus();
+  };
+  const confirm = async () => {
+    const name = /iPad/.test(navigator.userAgent) ? "iPad" : /iPhone/.test(navigator.userAgent) ? "iPhone"
+      : /Android/.test(navigator.userAgent) ? "Android" : "Browser";
+    const r = await fetch("/pair/confirm", {method: "POST", body: JSON.stringify({code: code.value, name})}).catch(() => null);
+    const data = r ? await r.json().catch(() => ({})) : {};
+    if (data.token) { store.set("token", data.token); toast("Paired ✓"); show("home", false); connect(); }
+    else { msg.textContent = "That code didn't work. Ask for a new one."; code.value = ""; }
+  };
+  code.addEventListener("input", () => { if (code.value.length === 6) confirm(); });
+  app.append(el("div", {class: "big"}, "Fedora Pad"),
+    el("div", {class: "card"},
+      el("p", {}, "Pair this " + (/iPhone/.test(navigator.userAgent) ? "iPhone" : "device") + " with your PC once."),
+      el("button", {class: "btn", style: "width:100%", onclick: ask}, "Show a code on the PC"),
+      el("div", {style: "height:14px"}), code, msg,
+      el("button", {class: "btn2", style: "width:100%", onclick: confirm}, "Pair")));
+}
+
+// ---- keyboard
+const LETTERS = [
+  ["esc|esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "⌫|backspace"],
+  ["tab|tab", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"],
+  ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "return|enter"],
+  ["⇧|shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "↑|up"],
+  ["123|numpad", "ctrl|ctrl", "alt|alt", "⌘|super", " |space", "←|left", "↓|down", "→|right", "فا|lang"],
+];
+const NUMPAD = [
+  ["7|kp7", "8|kp8", "9|kp9", "÷|kpslash", "⌫|backspace"], ["4|kp4", "5|kp5", "6|kp6", "×|kpasterisk", "tab|tab"],
+  ["1|kp1", "2|kp2", "3|kp3", "−|kpminus", "esc|esc"], ["ABC|letters", "0|kp0", ".|kpdot", "+|kpplus", "return|kpenter"],
+];
+const FA_KEYS = "1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./";
+const FA_NORMAL = ["۱","۲","۳","۴","۵","۶","۷","۸","۹","۰","-","=","ض","ص","ث","ق","ف","غ","ع","ه","خ","ح","ج","چ","\\",
+  "ش","س","ی","ب","ل","ا","ت","ن","م","ک","گ","ظ","ط","ز","ر","ذ","د","پ","و",".","/"];
+const FA_SHIFT = ["!","٬","٫","﷼","٪","×","،","*",")","(","ـ","+","◌ْ","◌ٌ","◌ٍ","◌ً","◌ُ","◌ِ","◌َ","◌ّ","]","[","}","{","|",
+  "ؤ","ئ","ي","إ","أ","آ","ة","»","«",":","؛","ك","◌ٓ","ژ","◌ٰ","‌نیم","◌ٔ","ء",">","<","؟"];
+const KEY_NAME = {"-": "minus", "=": "equal", "[": "leftbrace", "]": "rightbrace", "\\": "backslash", ";": "semicolon",
+  "'": "apostrophe", ",": "comma", ".": "dot", "/": "slash"};
+const SHIFTED = {"1":"!","2":"@","3":"#","4":"$","5":"%","6":"^","7":"&","8":"*","9":"(","0":")","-":"_","=":"+",
+  "[":"{","]":"}","\\":"|",";":":","'":"\"",",":"<",".":">","/":"?"};
+const REPEAT = new Set(["backspace", "left", "right", "up", "down", "space"]);
+
+function keyboardView() {
+  const st = {numpad: false, shift: false, caps: false, lastShift: 0, mods: new Set(), fa: store.get("fa", false)};
+  const box = el("div", {class: "kb"});
+  const draw = () => {
+    box.innerHTML = "";
+    for (const row of st.numpad ? NUMPAD : LETTERS) {
+      const r = el("div", {class: "kr"});
+      for (const spec of row) {
+        const [label, key = ""] = spec.split("|");
+        let shown = label;
+        const fi = st.fa && !key ? FA_KEYS.indexOf(label) : -1;
+        if (fi >= 0) shown = (st.shift ? FA_SHIFT : FA_NORMAL)[fi];
+        else if (!key && st.shift) shown = SHIFTED[label] || label.toUpperCase();
+        if (key === "lang") shown = st.fa ? "EN" : "فا";
+        if (key === "space") shown = st.fa ? "فارسی" : " ";
+        const special = !!key && label.length > 1 || ["shift", "super", "lang", "numpad", "letters"].includes(key);
+        const on = (key === "shift" && st.shift) || st.mods.has(key);
+        const b = el("button", {class: "k" + (special ? " m" : "") + (on ? " on" : ""),
+          style: key === "space" ? "flex:5" : ["enter", "shift", "backspace", "tab"].includes(key) && !st.numpad ? "flex:1.6" : ""},
+          key === "shift" && st.caps ? "⇪" : shown);
+        let timer = null;
+        b.addEventListener("pointerdown", ev => {
+          ev.preventDefault(); haptic(); press(label, key);
+          if (REPEAT.has(key)) timer = setTimeout(function again() { press(label, key); timer = setTimeout(again, 65); }, 380);
+        });
+        const stop = () => clearTimeout(timer);
+        b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop);
+        r.append(b);
+      }
+      box.append(r);
+    }
+  };
+  const press = (label, key) => {
+    if (key === "numpad") { st.numpad = true; return draw(); }
+    if (key === "letters") { st.numpad = false; return draw(); }
+    if (key === "lang") { st.fa = !st.fa; store.set("fa", st.fa); send({t: "lang", id: st.fa ? "fa" : "en"}); return draw(); }
+    if (key === "shift") {
+      const now = Date.now();
+      if (now - st.lastShift < 350) { st.caps = !st.caps; st.shift = st.caps; } else { st.shift = !st.shift; st.caps = false; }
+      st.lastShift = now; return draw();
+    }
+    if (["ctrl", "alt", "super"].includes(key)) { st.mods.has(key) ? st.mods.delete(key) : st.mods.add(key); return draw(); }
+    const mods = [...st.mods].map(m => m + "+").join("");
+    if (st.fa && !key && FA_KEYS.includes(label)) {
+      combo(mods + (st.shift ? "shift+" : "") + (KEY_NAME[label] || label));  // Persian: the PC's Persian layout makes the letter
+    } else if (!key && !mods) {
+      send({t: "text", s: st.shift ? (SHIFTED[label] || label.toUpperCase()) : label});
+    } else {
+      combo(mods + (st.shift && !key.startsWith("kp") ? "shift+" : "") + (key || KEY_NAME[label] || label));
+    }
+    const redraw = st.mods.size || (st.shift && !st.caps);
+    st.mods.clear(); if (!st.caps) st.shift = false;
+    if (redraw) draw();
+  };
+  if (st.fa) send({t: "lang", id: "fa"});
+  draw();
+  return box;
+}
+
+/** The phone's own keyboard (any language, dictation too) typing live on the PC. */
+function phoneKeyboard() {
+  const input = el("input", {class: "phonekb", placeholder: "Tap here and type: it appears on the PC",
+    autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "send"});
+  input.addEventListener("beforeinput", ev => {
+    ev.preventDefault();
+    const t = ev.inputType;
+    if (t === "insertText" || t === "insertReplacementText" || t === "insertFromPaste" || t === "insertFromDictation") {
+      if (ev.data) send({t: "text", s: ev.data});
+    } else if (t === "deleteContentBackward") combo("backspace");
+    else if (t === "deleteContentForward") combo("delete");
+    else if (t === "insertLineBreak" || t === "insertParagraph") combo("enter");
+  });
+  input.addEventListener("keydown", ev => {  // keys that don't produce text
+    const map = {Enter: "enter", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", Tab: "tab", Escape: "esc"};
+    if (map[ev.key]) { ev.preventDefault(); combo(map[ev.key]); }
+  });
+  return input;
+}
+
+PAGES.keyboard = () => {
+  page("Keyboard");
+  const phone = window.matchMedia("(max-width: 600px)").matches;
+  app.append(el("div", {class: "card"}, el("div", {class: "sub", style: "margin-bottom:8px"}, "📱 Phone keyboard: any language, voice too"), phoneKeyboard()));
+  app.append(el("div", {class: "h"}, phone ? "PC keyboard: turn the phone sideways for bigger keys" : "PC keyboard"), keyboardView());
+};
+
+// ---- trackpad
+function trackpad(height) {
+  const pad = el("div", {class: "pad", style: height ? "height:" + height : ""},
+    "One finger: move · tap: click\nTwo fingers: scroll · two-finger tap: right click\nDouble-tap and hold: drag");
+  const pts = new Map();
+  let start = 0, moved = false, maxPts = 0, lastTap = 0, dragging = false, lastMid = null;
+  const speed = () => store.get("speed", 1);
+  pad.addEventListener("pointerdown", ev => {
+    pad.setPointerCapture(ev.pointerId);
+    pts.set(ev.pointerId, {x: ev.clientX, y: ev.clientY, t: ev.timeStamp});
+    if (pts.size === 1) {
+      start = ev.timeStamp; moved = false; maxPts = 1;
+      if (ev.timeStamp - lastTap < 280) { dragging = true; send({t: "btn", b: "left", s: "down"}); }
+    }
+    maxPts = Math.max(maxPts, pts.size); lastMid = null;
+  });
+  pad.addEventListener("pointermove", ev => {
+    const p = pts.get(ev.pointerId); if (!p) return;
+    const dx = ev.clientX - p.x, dy = ev.clientY - p.y, dt = Math.max(1, ev.timeStamp - p.t);
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    if (pts.size === 1) {
+      const v = Math.hypot(dx, dy) / dt;  // px per ms: faster = farther, slow = precise
+      const gain = speed() * devicePixelRatio * (1.2 + Math.min(v * 2.5, 2.5));
+      send({t: "move", dx: dx * gain, dy: dy * gain});
+    } else if (pts.size === 2) {  // two fingers: scroll by how far their midpoint moves
+      p.x = ev.clientX; p.y = ev.clientY; p.t = ev.timeStamp;
+      const [a, b] = [...pts.values()], mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+      if (lastMid) send({t: "scroll", dx: (mid[0] - lastMid[0]) * 1.4, dy: (mid[1] - lastMid[1]) * 1.4});
+      lastMid = mid;
+      return;
+    }
+    p.x = ev.clientX; p.y = ev.clientY; p.t = ev.timeStamp;
+  });
+  const up = ev => {
+    if (!pts.delete(ev.pointerId)) return;
+    if (pts.size) return;
+    const quick = ev.timeStamp - start < 250 && !moved;
+    if (dragging) { send({t: "btn", b: "left", s: "up"}); dragging = false; lastTap = 0; return; }
+    if (quick && maxPts === 2) { send({t: "btn", b: "right", s: "click"}); haptic(); }
+    else if (quick && maxPts === 1) { send({t: "btn", b: "left", s: "click"}); lastTap = ev.timeStamp; }
+  };
+  pad.addEventListener("pointerup", up); pad.addEventListener("pointercancel", up);
+  const clicks = el("div", {class: "clicks"},
+    el("button", {onpointerdown: e => { e.preventDefault(); haptic(); send({t: "btn", b: "left", s: "down"}); },
+      onpointerup: () => send({t: "btn", b: "left", s: "up"})}, ""),
+    el("button", {onclick: () => { haptic(); send({t: "btn", b: "right", s: "click"}); }}, ""));
+  return [pad, clicks];
+}
+PAGES.trackpad = () => {
+  page("Trackpad", el("button", {class: "back", style: "text-align:right", onclick: () => show("keyboard")}, "⌨️"));
+  app.append(...trackpad());
+};
+
+// ---- media
+PAGES.media = () => {
+  page("Media");
+  const title = el("div", {style: "font-size:22px;font-weight:700"}, "…"), who = el("div", {class: "sub"}, "");
+  app.append(el("div", {class: "card center"}, el("div", {style: "font-size:64px"}, "🎵"), title, who),
+    el("div", {class: "btns", style: "margin:10px 0 20px"},
+      ...[["⏮", "previous"], ["⏯", "play-pause"], ["⏭", "next"]].map(([s, a]) =>
+        el("button", {class: "btn2", style: "font-size:30px", onclick: () => { haptic(); send({t: "mediactl", a}); }}, s))),
+    el("div", {class: "btns"}, ...[["🔉", "voldown"], ["🔇", "mute"], ["🔊", "volup"]].map(([s, k]) =>
+      el("button", {class: "btn2", style: "font-size:24px", onclick: () => combo(k)}, s))));
+  on("media", m => { title.textContent = m.title || "Nothing playing"; who.textContent = [m.artist, m.player].filter(Boolean).join(" · "); });
+  every(2000, () => send({t: "media?"}));
+  cleanup.push(() => on("media", null));
+};
+
+// ---- controls
+function toggleRow(sym, color, label, key, st) {
+  const t = el("div", {class: "toggle" + (st[key] ? " on" : "")});
+  return el("button", {class: "row", onclick: () => { const v = !t.classList.contains("on"); t.classList.toggle("on", v);
+    send({t: "set", what: key, value: v ? 1 : 0}); }}, chip(sym, color), el("div", {class: "grow"}, label), t);
+}
+function slider(label, key, value) {
+  let last = 0;
+  const r = el("input", {type: "range", min: 0, max: 100, value: value || 0});
+  const go = () => send({t: "set", what: key, value: +r.value});
+  r.addEventListener("input", () => { const now = Date.now(); if (now - last > 120) { last = now; go(); } });
+  r.addEventListener("change", go);
+  return el("div", {class: "card"}, el("div", {class: "sub"}, label), r);
+}
+PAGES.controls = () => {
+  page("Controls");
+  const body = el("div", {}, el("p", {class: "sub center"}, "Loading…"));
+  app.append(body);
+  on("state", st => {
+    body.innerHTML = "";
+    body.append(slider("🔊 Volume", "volume", st.volume), slider("☀️ Brightness", "brightness", st.brightness),
+      el("div", {class: "group"}, toggleRow("🌙", "indigo", "Dark mode", "dark", st),
+        link.os === "windows" ? null : toggleRow("🔕", "purple", "Do not disturb", "dnd", st),
+        link.os === "windows" ? null : toggleRow("🌅", "orange", "Night light", "nightlight", st),
+        link.os === "windows" ? null : toggleRow("☕", "teal", "Keep awake", "awake", st)),
+      el("div", {class: "h"}, "Power mode"),
+      seg([["0", "Battery saver"], ["1", "Balanced"], ["2", "Performance"]], String(st.power ?? 1), v => send({t: "set", what: "power", value: +v})),
+      el("div", {class: "h"}, "Session"),
+      el("div", {class: "group"},
+        actionRow("🔒", "gray", "Lock", () => command("lock")),
+        actionRow("💤", "indigo", "Sleep", () => confirmThen("Put the PC to sleep?", () => command("suspend"))),
+        actionRow("🔄", "orange", "Restart…", () => command("restart")),
+        actionRow("⏻", "red", "Shut down…", () => command("poweroff"))));
+  });
+  send({t: "state?"});
+  cleanup.push(() => on("state", null));
+};
+function seg(options, current, pick) {
+  const box = el("div", {class: "seg"});
+  for (const [v, label] of options) box.append(el("button", {class: v === current ? "on" : "", onclick: e => {
+    [...box.children].forEach(b => b.classList.remove("on")); e.currentTarget.classList.add("on"); pick(v); }}, label));
+  return box;
+}
+function actionRow(sym, color, label, fn, sub) {
+  return el("button", {class: "row", onclick: () => { haptic(); fn(); }}, chip(sym, color),
+    el("div", {class: "grow"}, label, sub ? el("small", {}, sub) : null), el("span", {class: "sub"}, "›"));
+}
+function confirmThen(question, fn) { if (window.confirm(question)) fn(); }
+
+// ---- shortcuts
+const SHORTCUTS = {
+  "Edit": [["📋", "Copy", "ctrl+c"], ["📥", "Paste", "ctrl+v"], ["✂️", "Cut", "ctrl+x"], ["↩️", "Undo", "ctrl+z"],
+    ["↪️", "Redo", "ctrl+shift+z"], ["☑️", "Select all", "ctrl+a"], ["💾", "Save", "ctrl+s"], ["🔍", "Find", "ctrl+f"]],
+  "Windows": [["⇄", "Switch app", "alt+tab"], ["▦", "Overview", "super"], ["🚀", "All apps", "super+a"], ["⬆️", "Maximize", "super+up"],
+    ["⬅️", "Left half", "super+left"], ["➡️", "Right half", "super+right"], ["➖", "Hide", "super+h"], ["✕", "Close", "ctrl+w"]],
+  "System": [["📷", "Screenshot", "print"], ["🖼", "Whole screen", "shift+print"], ["😀", "Emoji", "ctrl+dot"], ["🔒", "Lock", "super+l"],
+    ["📁", "Files", "cmd:files"], ["💻", "Terminal", "cmd:terminal"], ["⚙️", "Settings", "cmd:settings"], ["📊", "Task manager", "cmd:monitor"]],
+  "Browser": [["◀️", "Back", "alt+left"], ["▶️", "Forward", "alt+right"], ["🔄", "Reload", "ctrl+r"], ["➕", "New tab", "ctrl+t"],
+    ["✕", "Close tab", "ctrl+w"], ["🔗", "Address bar", "ctrl+l"], ["⭐", "Bookmark", "ctrl+d"], ["⇥", "Next tab", "ctrl+tab"]],
+};
+PAGES.shortcuts = () => {
+  page("Shortcuts");
+  for (const [group, items] of Object.entries(SHORTCUTS)) {
+    app.append(el("div", {class: "h"}, group), el("div", {class: "grid3"}, items.map(([s, label, a]) =>
+      el("button", {class: "sc", onclick: () => { haptic(); action(a); }}, el("span", {}, s), label))));
+  }
+};
+
+// ---- apps
+PAGES.apps = () => {
+  page("Apps");
+  const search = el("input", {class: "search", placeholder: "🔍 Search apps on the PC"});
+  const list = el("div", {class: "group"}, el("div", {class: "row sub"}, "Loading…"));
+  let all = [];
+  const draw = () => {
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = "";
+    all.filter(a => !q || a.name.toLowerCase().includes(q)).slice(0, 200).forEach(a =>
+      list.append(actionRow(a.name.slice(0, 1).toUpperCase(), "teal", a.name, () => { send({t: "launch", id: a.id}); toast("Opening " + a.name); })));
+    if (!list.children.length) list.append(el("div", {class: "row sub"}, "No apps match."));
+  };
+  search.addEventListener("input", draw);
+  app.append(search, list);
+  on("allapps", m => { all = m.list || []; draw(); });
+  send({t: "allapps?"});
+  cleanup.push(() => on("allapps", null));
+};
+
+// ---- windows
+PAGES.windows = () => {
+  page("Windows");
+  const list = el("div", {}, el("p", {class: "sub center"}, "Loading…"));
+  app.append(list);
+  let last = "";
+  on("windows", m => {
+    const key = JSON.stringify(m.list || m.error); if (key === last) return; last = key;
+    list.innerHTML = "";
+    if (m.error) return list.append(el("p", {class: "sub"}, m.error));
+    if (!(m.list || []).length) return list.append(el("p", {class: "sub center"}, "No open windows."));
+    for (const w of m.list) {
+      list.append(el("div", {class: "card", style: w.focused ? "box-shadow:inset 0 0 0 2px var(--blue)" : ""},
+        el("b", {}, w.app + (w.minimized ? " · hidden" : "")), el("div", {class: "sub", style: "margin:4px 0 10px"}, w.title),
+        el("div", {class: "btns"},
+          el("button", {class: "btn", onclick: () => { send({t: "winfocus", id: w.id}); last = ""; }}, "Show"),
+          el("button", {class: "btn2", onclick: () => send({t: "wintablet", id: w.id})}, "To 2nd screen"),
+          el("button", {class: "btn2", onclick: () => { send({t: "winclose", id: w.id}); last = ""; }}, "✕"))));
+    }
+  });
+  every(2000, () => send({t: "windows?"}));
+  cleanup.push(() => on("windows", null));
+};
+
+// ---- notes
+const PAPER = {yellow: "#ffe58a", pink: "#ffb3c7", blue: "#a8d4ff", green: "#b5eba8", purple: "#d9b8f5", orange: "#ffcb8a"};
+PAGES.notes = () => {
+  let notes = [];
+  page("Notes", el("button", {class: "back", style: "text-align:right", onclick: () => edit(-1)}, "＋"));
+  const grid = el("div", {class: "notes"});
+  app.append(el("div", {class: "btns", style: "margin-bottom:12px"},
+    el("button", {class: "btn", onclick: () => edit(-1)}, "＋ New note"),
+    el("button", {class: "btn2", onclick: () => command("notes")}, "🖥 Show on PC")), grid);
+  const draw = () => {
+    grid.innerHTML = "";
+    if (!notes.length) grid.append(el("p", {class: "sub"}, "No notes yet."));
+    notes.forEach((n, i) => grid.append(el("button", {class: "note", style: "background:" + (PAPER[n.color] || PAPER.yellow),
+      onclick: () => edit(i)}, n.text)));
+  };
+  const save = () => { send({t: "setnotes", list: notes}); draw(); };
+  const edit = i => {
+    const n = i >= 0 ? notes[i] : {id: Date.now().toString(36), text: "", color: Object.keys(PAPER)[notes.length % 6]};
+    const text = el("textarea", {dir: "auto", placeholder: "Write anything, in any language"}); text.value = n.text;
+    let color = n.color;
+    const colors = el("div", {class: "btns", style: "margin:10px 0"}, Object.entries(PAPER).map(([c, hex]) =>
+      el("button", {style: `background:${hex};height:36px;border-radius:18px;outline:${c === color ? "3px solid var(--text)" : "0"}`,
+        onclick: e => { color = c; [...colors.children].forEach(b => b.style.outline = "0"); e.currentTarget.style.outline = "3px solid var(--text)"; }})));
+    const close = sheet(el("b", {}, i >= 0 ? "Edit note" : "New note"), colors, text,
+      el("div", {class: "btns", style: "margin-top:12px"},
+        i >= 0 ? el("button", {class: "btn2", style: "color:var(--red)", onclick: () => { notes.splice(i, 1); save(); close(); }}, "Delete") : null,
+        el("button", {class: "btn2", onclick: () => close()}, "Cancel"),
+        el("button", {class: "btn", onclick: () => { if (text.value.trim()) { Object.assign(n, {text: text.value.trim(), color});
+          if (i < 0) notes.push(n); save(); } close(); }}, "Save")));
+    setTimeout(() => text.focus(), 100);
+  };
+  on("notes", m => { notes = m.list || []; draw(); });
+  send({t: "notes?"});
+  cleanup.push(() => on("notes", null));
+};
+function sheet(...kids) {
+  const m = el("div", {class: "modal"}, el("div", {class: "sheet"}, ...kids));
+  const close = () => m.remove();
+  m.addEventListener("click", e => { if (e.target === m) close(); });
+  document.body.append(m); cleanup.push(close);
+  return close;
+}
+
+// ---- Terminal Pad
+PAGES.terminal = () => {
+  page("Terminal Pad");
+  const grid = el("div", {class: "grid3"}, el("p", {class: "sub"}, "Loading…"));
+  const out = el("pre", {}, ""), state = el("b", {}, "Output");
+  app.append(grid, el("div", {class: "bar", style: "margin-top:16px"}, state, el("div", {style: "flex:1"}),
+    el("button", {class: "btn2", onclick: () => send({t: "termstop"})}, "■ Stop"),
+    el("button", {class: "btn2", onclick: () => out.textContent = ""}, "Clear")), out,
+    el("button", {class: "btn2", style: "width:100%;margin-top:12px", onclick: () => command("editcommands")}, "✏️ Edit commands on the PC"));
+  const add = line => { out.textContent += line + "\n"; out.scrollTop = out.scrollHeight; };
+  on("termlist", m => { grid.innerHTML = ""; (m.list || []).forEach(c => grid.append(el("button", {class: "sc", onclick: () => {
+    state.textContent = "⏳ " + c.name; add("$ " + c.name); send({t: "termrun", name: c.name}); }}, el("span", {}, c.icon || "▶"), c.name))); });
+  on("termout", m => add(m.line));
+  on("termdone", m => { state.textContent = m.code === 0 ? "✅ Done" : "⚠️ Finished with code " + m.code; });
+  send({t: "termlist?"});
+  cleanup.push(() => ["termlist", "termout", "termdone"].forEach(t => on(t, null)));
+};
+
+// ---- text & clipboard
+PAGES.text = () => {
+  page("Text & Clipboard");
+  const text = el("textarea", {dir: "auto", placeholder: "Write here in any language, then type it on the PC"});
+  text.value = store.get("draft", "");
+  text.addEventListener("input", () => store.set("draft", text.value));
+  const typeIt = keys => { if (!text.value) return toast("Write something first");
+    send({t: "setclip", s: text.value}); setTimeout(() => combo(keys), 250); toast("Typed on the PC"); };
+  app.append(text, el("div", {class: "btns", style: "margin:12px 0"},
+      el("button", {class: "btn", onclick: () => typeIt("ctrl+v")}, "Type on PC"),
+      el("button", {class: "btn2", onclick: () => typeIt("ctrl+shift+v")}, "In a terminal")),
+    el("div", {class: "group"},
+      actionRow("📱", "blue", "Send this text to the PC clipboard", () => { send({t: "setclip", s: text.value}); toast("Copied on the PC"); }),
+      actionRow("💻", "green", "Get the PC's clipboard", () => send({t: "clip?"}), "Puts it here and on this device's clipboard"),
+      actionRow("🧹", "gray", "Clear", () => { text.value = ""; store.set("draft", ""); })));
+  on("clip", m => { text.value = m.s || ""; store.set("draft", text.value);
+    if (navigator.clipboard) navigator.clipboard.writeText(text.value).catch(() => {}); toast("Got the PC's clipboard"); });
+  cleanup.push(() => on("clip", null));
+};
+
+// ---- send files
+PAGES.files = () => {
+  page("Send Files");
+  const pick = el("input", {type: "file", multiple: true, style: "display:none"});
+  const log = el("div", {class: "group"});
+  app.append(el("p", {class: "sub"}, "Photos and files go to the PC's Downloads › Fedora Pad."),
+    el("button", {class: "btn", style: "width:100%;margin-bottom:14px", onclick: () => pick.click()}, "Choose photos or files"), pick, log);
+  const done = {};
+  on("filedone", m => { if (done[m.id]) done[m.id](m.name); });
+  cleanup.push(() => on("filedone", null));
+  pick.addEventListener("change", async () => {
+    for (const file of pick.files) {
+      const row = el("div", {class: "row"}, el("div", {class: "grow"}, file.name, el("small", {}, "0 %")));
+      log.prepend(row);
+      const small = row.querySelector("small"), id = Math.random().toString(36).slice(2);
+      const CHUNK = 48 * 1024;
+      for (let at = 0; at < file.size || at === 0; at += CHUNK) {
+        const buf = new Uint8Array(await file.slice(at, at + CHUNK).arrayBuffer());
+        let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        while (link.ws && link.ws.bufferedAmount > 512 * 1024) await new Promise(r => setTimeout(r, 30));
+        send({t: "file", id, name: file.name, data: btoa(bin), last: at + CHUNK >= file.size});
+        small.textContent = Math.min(100, Math.round((at + CHUNK) * 100 / Math.max(file.size, 1))) + " %";
+        if (file.size === 0) break;
+      }
+      done[id] = name => { small.textContent = "✓ Saved as " + name; };
+    }
+    pick.value = "";
+  });
+};
+
+// ---- presenter
+PAGES.presenter = () => {
+  page("Presenter");
+  let t0 = 0;
+  const clock = el("div", {class: "center", style: "font-size:40px;font-weight:700;margin:6px 0 14px;font-variant-numeric:tabular-nums"}, "0:00");
+  every(500, () => { if (!t0) return; const s = Math.floor((Date.now() - t0) / 1000); clock.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); });
+  const big = (label, keys, color) => el("button", {class: "btn", style: `height:28vh;font-size:44px;background:${color}`,
+    onclick: () => { haptic(); combo(keys); }}, label);
+  app.append(clock, el("div", {class: "btns"}, big("◀", "left", "var(--fill);color:var(--text)"), big("▶", "right", "var(--blue)")),
+    el("div", {class: "btns", style: "margin-top:12px"},
+      el("button", {class: "btn2", onclick: () => { combo("f5"); t0 = Date.now(); }}, "▶ Start"),
+      el("button", {class: "btn2", onclick: () => combo("b")}, "⬛ Black"),
+      el("button", {class: "btn2", onclick: () => { combo("esc"); t0 = 0; clock.textContent = "0:00"; }}, "■ End")));
+};
+
+// ---- stats
+PAGES.stats = () => {
+  page("Stats");
+  const box = el("div", {class: "card"}, "Loading…");
+  app.append(box);
+  const meter = (label, v, unit = "%") => [el("div", {class: "stat"}, el("span", {}, label), el("b", {}, v === undefined ? "–" : v + unit)),
+    el("div", {class: "meter"}, el("i", {style: `width:${Math.min(100, v || 0)}%`}))];
+  on("stats", s => {
+    box.innerHTML = "";
+    box.append(...meter("CPU", s.cpu), ...meter("Memory", s.ram), ...meter("Disk", s.disk),
+      s.battery !== undefined ? meter("Battery" + (s.charging ? " ⚡" : ""), s.battery) : [],
+      s.temp !== undefined ? el("div", {class: "stat"}, el("span", {}, "Temperature"), el("b", {}, s.temp + " °C")) : null,
+      s.down_kbs !== undefined ? el("div", {class: "stat"}, el("span", {}, "Network"), el("b", {}, `↓ ${s.down_kbs} · ↑ ${s.up_kbs} KB/s`)) : null,
+      s.uptime_min !== undefined ? el("div", {class: "stat"}, el("span", {}, "On for"), el("b", {}, Math.floor(s.uptime_min / 60) + " h " + s.uptime_min % 60 + " min")) : null);
+  });
+  every(2000, () => send({t: "stats?"}));
+  cleanup.push(() => on("stats", null));
+};
+
+// ---- settings
+PAGES.settings = () => {
+  page("Settings");
+  const speed = el("input", {type: "range", min: 40, max: 250, value: Math.round(store.get("speed", 1) * 100)});
+  speed.addEventListener("input", () => store.set("speed", speed.value / 100));
+  app.append(el("div", {class: "card"}, el("div", {class: "sub"}, "🖱 Trackpad speed"), speed),
+    el("div", {class: "group"},
+      actionRow("🖥", "indigo", "Connected to", () => {}, link.connected ? link.host + " (" + link.os + ")" : "not connected"),
+      actionRow("🔓", "red", "Forget this device", () => confirmThen("Unpair? You will need a new code from the PC.", () => {
+        store.set("token", ""); if (link.ws) link.ws.close(); showPairing(); }))),
+    el("p", {class: "sub"}, "Add to Home Screen (Share › Add to Home Screen) to open Fedora Pad like an app."));
+};
+
+// ---------------------------------------------------------------- start
+history.replaceState({p: "home"}, "");
+if (store.get("token", "")) { show("home", false); connect(); } else showPairing();
+</script>
+</body>
+</html>

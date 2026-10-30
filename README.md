@@ -84,6 +84,18 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 
 **From now on: unlock Fedora and plug in the tablet. That's it.**
 
+## 📱 iPhone, iPad and other phones (web app)
+Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter and Stats. Encrypted, and only for devices you pair.
+
+1. Turn it on: Fedora `./host/webapp-setup.sh` · Windows double-click `windows\WebApp.bat`.
+2. On the iPhone / iPad, open the address it shows in **Safari** (or scan the QR code), and follow the page:
+   install the certificate, then **Settings › General › About › Certificate Trust Settings** › turn on *Fedora Pad local CA*.
+3. Open the https link, then **Share › Add to Home Screen**.
+4. Open Fedora Pad from the Home Screen, tap **Show a code on the PC**, and type the 6-digit code that pops up on the PC.
+
+Off: `./host/webapp-setup.sh --off` · unpair every phone: `./host/webapp-setup.sh --forget` (Windows: `WebApp.bat off` / `WebApp.bat forget`).
+Safari can't do a few things the Android app does: Push to Talk with the phone's mic, the floating button over other apps, and Books / Handwriting / home-screen features.
+
 ## 🪟 Windows version
 Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), trackpad, Media, Controls, Shortcuts, Apps, Stream Deck, Windows switcher, Notes, Terminal Pad, Send Files, Text & Clipboard, Stats and Ambient Light.
 
@@ -148,6 +160,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + poi
 |---|---|
 | `host/tabletdesk_host.py` | Turns messages from the tablet into real keyboard and mouse input (works on Wayland), runs the whitelisted Tools and Control Center actions, and turns the laptop keyboard off while connected. |
 | `host/connect.sh` | Runs on every plug-in: `adb reverse`, screen mode, app updates, and a clean hand-back on unplug. |
+| `host/webapp.py`, `host/web/` | The phone / iPad web app: HTTPS with a local certificate authority, pairing codes, and a WebSocket carrying the same messages as the Android app. |
 | `host/gnome-extension/` | Reports the focused app and the pointer position (GNOME 45–50). |
 | `windows/` | Fedora Pad for Windows: the same protocol with SendInput, plus setup and plug-in scripts. |
 | `android/` | The app, in plain Java with no extra libraries. |

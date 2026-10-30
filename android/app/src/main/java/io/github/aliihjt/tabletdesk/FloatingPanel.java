@@ -19,6 +19,7 @@ import android.widget.TextView;
 final class FloatingPanel {
     static final String KEYBOARD = "keyboard";
     static final String TRACKPAD = "trackpad";
+    static final String TALK = "talk";
 
     private final Context ctx;
     private final WindowManager wm;
@@ -27,6 +28,7 @@ final class FloatingPanel {
     private final String mode;
     private final FrameLayout root;
     private final WindowManager.LayoutParams params;
+    private PushToTalk ptt;
 
     FloatingPanel(Context ctx, WindowManager wm, String mode, Runnable close) {
         this.ctx = ctx;
@@ -39,9 +41,11 @@ final class FloatingPanel {
         card.setElevation(th.dp(12));
         int p = th.dp(10);
         card.setPadding(p, th.dp(4), p, p);
-        card.addView(header(mode.equals(KEYBOARD) ? "Keyboard" : "Trackpad", close));
+        card.addView(header(mode.equals(KEYBOARD) ? "Keyboard" : mode.equals(TALK) ? "Push to Talk" : "Trackpad", close));
 
-        if (mode.equals(KEYBOARD)) {
+        if (mode.equals(TALK)) {
+            card.addView(talk());
+        } else if (mode.equals(KEYBOARD)) {
             card.addView(new KeyboardView(th, 46));
         } else {
             TrackpadView pad = new TrackpadView(ctx);
@@ -63,8 +67,8 @@ final class FloatingPanel {
 
         int screenW = ctx.getResources().getDisplayMetrics().widthPixels;
         int screenH = ctx.getResources().getDisplayMetrics().heightPixels;
-        int width = mode.equals(KEYBOARD)
-                ? Math.min(screenW, th.dp(900)) : Math.min(screenW, th.dp(380));
+        int width = mode.equals(KEYBOARD) ? Math.min(screenW, th.dp(900))
+                : Math.min(screenW, th.dp(mode.equals(TALK) ? 340 : 380));
         params = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -72,6 +76,33 @@ final class FloatingPanel {
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = prefs.getInt(mode + "_x", (screenW - width) / 2);
         params.y = prefs.getInt(mode + "_y", screenH / 2);
+    }
+
+    /** Hold-to-talk mic with the words so far next to it. */
+    private View talk() {
+        LinearLayout row = new LinearLayout(ctx);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout texts = new LinearLayout(ctx);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView status = th.text(PushToTalk.useLaptop(ctx) ? "Hold · laptop mic" : "Hold to talk", 14, th.text, true);
+        TextView words = th.caption("Click on Fedora where to write, then hold the mic.");
+        words.setMaxLines(3);
+        texts.addView(status);
+        texts.addView(words, th.fullWidth(4));
+        ptt = new PushToTalk(ctx, (s, t) -> {
+            status.setText(s);
+            if (!t.isEmpty()) words.setText(t);
+        });
+        row.addView(ptt.button(th, 76), new LinearLayout.LayoutParams(th.dp(76), th.dp(76)));
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tlp.leftMargin = th.dp(14);
+        row.addView(texts, tlp);
+        row.setPadding(th.dp(4), th.dp(4), th.dp(4), th.dp(6));
+        return row;
+    }
+
+    void destroy() {
+        if (ptt != null) ptt.release();
     }
 
     View view() {

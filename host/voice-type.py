@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Voice typing for Fedora, fully offline (Whisper). English, Persian and ~100 more.
 
-Press the shortcut (Ctrl+Super+D) to start listening, press it again to stop:
+Press the shortcut (Ctrl+Super+D) to start listening, press it again to stop
+(or hold the mic in Fedora Pad › Push to Talk with "Laptop mic"):
 the words are typed where your cursor is, in any app. Stops by itself after
 two minutes. Settings: ~/.config/tabletdesk/voice.json
     {"model": "small", "language": "auto"}     language: auto, en, fa, ...
@@ -113,6 +114,13 @@ def record_and_type():
             os.remove(PIDFILE)
         except OSError:
             pass
+    if not os.path.exists(WAV) or os.path.getsize(WAV) < 8000:  # under ~0.25 s of sound
+        notify("Too short: keep holding while you speak.", nid)
+        try:
+            os.remove(WAV)
+        except OSError:
+            pass
+        return
     nid = notify("✍️ Writing…", nid) or nid
     try:
         text = transcribe(cfg)
@@ -131,14 +139,25 @@ def record_and_type():
     notify("✅ " + (text if len(text) < 80 else text[:77] + "…"), nid)
 
 
-def main():
+def main():  # no argument: start / stop; "start" or "stop" for Push to Talk
     os.makedirs(CACHE, exist_ok=True)
-    pid = running_pid()
-    if pid:  # second press: stop listening; the background run types the text
-        os.kill(pid, signal.SIGINT)
-        return
-    if len(sys.argv) > 1 and sys.argv[1] == "--run":
+    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if arg == "--run":
         record_and_type()
+        return
+    pid = running_pid()
+    if pid:  # second press (or Push to Talk let go): stop; the background run types the text
+        if arg != "start":
+            os.kill(pid, signal.SIGINT)
+        return
+    if arg == "stop":
+        # let go before listening began: wait a moment for it, then stop
+        for _ in range(60):
+            time.sleep(0.05)
+            pid = running_pid()
+            if pid:
+                os.kill(pid, signal.SIGINT)
+                break
         return
     # first press: start in the background so the shortcut returns at once
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "--run"],

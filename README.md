@@ -36,6 +36,7 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | 🎤 | **Presenter** | Slide remote with huge ◀ ▶ buttons, start / end, black screen and a timer. |
 | 🎚 | **Stream Deck** | Big buttons you make yourself; each runs several steps: open an app, open a website, press keys, type text, wait. |
 | 🗂 | **Windows** | Every open Fedora window as a card: tap to jump to it, ✕ to close it, **📱 To tablet** to put just that window full size on the tablet (Second screen mode). |
+| 🎙 | **Push to Talk** | Hold the mic (or the volume-down key), speak, let go: the words are typed where the cursor is on Fedora. Tablet mic shows the words live (English, فارسی or automatic); Laptop mic is fully offline. Also as a floating mic over the Fedora screen. |
 | 🗒 | **Notes** | Sticky notes written on the tablet. **Show on Fedora** opens them as coloured cards on the Fedora desktop, and they update live. Also saved as `~/Documents/Fedora Pad Notes.md`. |
 | >_ | **Terminal Pad** | Your saved Fedora commands as big buttons: one tap runs it, the output shows on the tablet. Edit the list in `~/.config/tabletdesk/commands.json`. |
 | 🌈 | **Ambient Light** | The tablet glows in the colours of the Fedora screen, like a bias light behind a TV. |

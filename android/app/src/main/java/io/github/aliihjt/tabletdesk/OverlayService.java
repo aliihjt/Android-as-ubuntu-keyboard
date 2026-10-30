@@ -54,7 +54,7 @@ public class OverlayService extends Service {
         c.startForegroundService(new Intent(c, OverlayService.class));
     }
 
-    /** Opens the floating keyboard or trackpad (or closes it if it is already open). */
+    /** Opens the floating keyboard, trackpad or mic (or closes it if it is already open). */
     static void showPanel(Context c, String mode) {
         c.startForegroundService(new Intent(c, OverlayService.class)
                 .setAction(ACTION_PANEL).putExtra(EXTRA_MODE, mode));
@@ -207,6 +207,7 @@ public class OverlayService extends Service {
         row.setElevation(th.dp(10));
         row.addView(menuItem(th, "⌨️", "Keyboard", () -> togglePanel(FloatingPanel.KEYBOARD)));
         row.addView(menuItem(th, "🖱", "Trackpad", () -> togglePanel(FloatingPanel.TRACKPAD)));
+        row.addView(menuItem(th, "🎙", "Talk", () -> togglePanel(FloatingPanel.TALK)));
         row.addView(menuItem(th, "🎵", "Media", () -> openPage(MediaActivity.class)));
         row.addView(menuItem(th, "⚡", "Shortcuts", () -> openPage(ShortcutsActivity.class)));
         row.addView(menuItem(th, "⌂", "Home", () -> openPage(MainActivity.class)));
@@ -278,6 +279,7 @@ public class OverlayService extends Service {
 
     private void closePanel() {
         if (panel != null) {
+            panel.destroy();
             wm.removeView(panel.view());
             panel = null;
             panelMode = null;
@@ -304,7 +306,15 @@ public class OverlayService extends Service {
                 .setOngoing(true)
                 .build();
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            // with the mic allowed, the floating Push to Talk can listen over the Fedora screen
+            try {
+                startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                        | (PushToTalk.micAllowed(this) ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE : 0));
+            } catch (RuntimeException notNow) {  // the mic type can't start from the background
+                startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            }
+        } else if (Build.VERSION.SDK_INT >= 30 && PushToTalk.micAllowed(this)) {
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
         } else {
             startForeground(1, n);
         }

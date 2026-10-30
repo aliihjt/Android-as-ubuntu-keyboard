@@ -83,6 +83,11 @@ COMMANDS = {
     # offline voice typing (start / stop), see host/voice-setup.sh
     "voice": [os.path.expanduser("~/.local/share/fedora-pad/voice/venv/bin/python"),
               os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.py")],
+    # Push to Talk with the laptop mic: hold = start, let go = stop
+    "voicestart": [os.path.expanduser("~/.local/share/fedora-pad/voice/venv/bin/python"),
+                   os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.py"), "start"],
+    "voicestop": [os.path.expanduser("~/.local/share/fedora-pad/voice/venv/bin/python"),
+                  os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.py"), "stop"],
     # Terminal Pad: edit the list of commands
     "editcommands": ["xdg-open", os.path.expanduser("~/.config/tabletdesk/commands.json")],
 }

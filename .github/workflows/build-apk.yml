@@ -38,6 +38,14 @@ jobs:
           ./gradlew assembleDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../TabletDesk.apk
           echo "$GITHUB_RUN_NUMBER" > ../version.txt
+      # A copy of Google's adb for Windows next to the app, for PCs that can't
+      # reach Google's servers (windows/setup.ps1 downloads it from here)
+      - name: Mirror Android platform-tools for Windows
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        run: |
+          curl -fsSL -o ../platform-tools-windows.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+          unzip -tq ../platform-tools-windows.zip
+          (cd .. && sha256sum platform-tools-windows.zip | cut -d' ' -f1 > platform-tools-windows.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: TabletDesk-apk
@@ -57,6 +65,8 @@ jobs:
           files: |
             TabletDesk.apk
             version.txt
+            platform-tools-windows.zip
+            platform-tools-windows.sha256
       - name: Official release (tags v*, or run manually with a tag)
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
         uses: softprops/action-gh-release@v2

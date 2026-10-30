@@ -109,6 +109,9 @@ if (-not $pyw) {
 if ($pyw) { Ok $pyw } else { $problems += 'Python' ; Warn 'Python is missing. Install it from https://www.python.org/downloads/ and run Setup again.' }
 
 # ---------------------------------------------------------------- adb
+# Where Google's servers are blocked, adb comes from GitHub instead: first Fedora
+# Pad's own copy (its build mirrors Google's official Windows tools, with a
+# checksum), then the official scrcpy release (it ships Google's adb), then Google.
 Step 'Android tools (adb)'
 $adb = $null
 $own = Join-Path $Data 'platform-tools\adb.exe'
@@ -117,16 +120,62 @@ if (-not $adb) {
     $c = Get-Command adb.exe -ErrorAction SilentlyContinue
     if ($c) { $adb = $c.Source }
 }
-if (-not $adb) {
+
+# The newest release tag of a GitHub project, from the "latest" link (no API needed)
+function Latest-Tag($repo, $fallback) {
     try {
-        $zip = Join-Path $Data 'platform-tools.zip'
-        Download 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' $zip 'Android tools'
-        Expand-Archive $zip -DestinationPath $Data -Force
-        Remove-Item $zip -ErrorAction SilentlyContinue
-        if (Test-Path $own) { $adb = $own }
-    } catch { Warn "adb download failed: $($_.Exception.Message)" }
+        $r = [System.Net.HttpWebRequest]::Create("https://github.com/$repo/releases/latest")
+        $r.AllowAutoRedirect = $false
+        $r.UserAgent = 'FedoraPad-setup'
+        $resp = $r.GetResponse()
+        $loc = $resp.Headers['Location']
+        $resp.Close()
+        if ($loc -match '/tag/(v[0-9.]+)$') { return $Matches[1] }
+    } catch {}
+    return $fallback
 }
-if ($adb) { Ok $adb } else { $problems += 'adb' ; Warn 'adb is missing (download blocked?). Check the internet connection and run Setup again.' }
+
+# Downloads a zip with adb in it and keeps adb.exe + its two DLLs; $true when it worked
+function Get-AdbZip($url, $label, $shaUrl) {
+    $zip = Join-Path $Data 'adb-download.zip'
+    $tmp = Join-Path $Data 'adb-unpack'
+    try {
+        Download $url $zip $label
+        if ($shaUrl) {
+            $want = (New-Object System.Net.WebClient).DownloadString($shaUrl).Trim().ToLower()
+            $have = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+            if ($want -ne $have) { Warn "    $label`: the checksum doesn't match, not used"; return $false }
+            Write-Host '    checksum OK'
+        }
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        Expand-Archive $zip -DestinationPath $tmp -Force
+        $exe = Get-ChildItem $tmp -Recurse -Filter adb.exe | Select-Object -First 1
+        if (-not $exe) { Warn "    $label`: no adb inside"; return $false }
+        $dest = Join-Path $Data 'platform-tools'
+        New-Item -ItemType Directory -Force $dest | Out-Null
+        Get-ChildItem $exe.DirectoryName -Filter 'Adb*' | Copy-Item -Destination $dest -Force  # adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll
+        return (Test-Path $own)
+    } catch {
+        Warn "    $label failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        Remove-Item $zip, $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not $adb) {
+    $mirror = 'https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/download/latest-apk'
+    $scrcpy = Latest-Tag 'Genymobile/scrcpy' 'v5.0.1'
+    $sources = @(
+        @("$mirror/platform-tools-windows.zip", 'Android tools (GitHub copy)', "$mirror/platform-tools-windows.sha256"),
+        @("https://github.com/Genymobile/scrcpy/releases/download/$scrcpy/scrcpy-win64-$scrcpy.zip", "Android tools (from scrcpy $scrcpy)", $null),
+        @('https://dl.google.com/android/repository/platform-tools-latest-windows.zip', 'Android tools (Google)', $null)
+    )
+    foreach ($src in $sources) {
+        if (Get-AdbZip $src[0] $src[1] $src[2]) { $adb = $own; break }
+    }
+}
+if ($adb) { Ok $adb } else { $problems += 'adb' ; Warn 'adb could not be downloaded from GitHub or Google. Check the internet connection (or a VPN) and run Setup again.' }
 
 # ---------------------------------------------------------------- Git (optional)
 Step 'Git (optional: easy updates, and the phone web app)'

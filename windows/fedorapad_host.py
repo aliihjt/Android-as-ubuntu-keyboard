@@ -957,6 +957,20 @@ def handle(inj, msg, reply=None):
         reply(ambient_colors())
     elif t == "pttstop" and reply:  # phone Push to Talk with the PC's Whisper: Fedora only
         reply({"t": "ptt", "state": "error", "error": "On Windows, choose “iPhone speech” in Push to Talk."})
+    elif t == "cliphist?" and reply:
+        reply({"t": "cliphist", "list": clip_history.list()})
+    elif t == "clipclear":
+        clip_history.clear()
+    elif t == "wake?" and reply:
+        threading.Thread(target=lambda: reply({"t": "wake", "host": socket.gethostname(),
+                                                "cards": pad_extras.wake_info()}), daemon=True).start()
+    elif t == "sleep?" and reply and sleeper:
+        reply(sleeper.status())
+    elif t in ("sleepin", "sleepnightly", "sleepcancel") and sleeper:
+        r = (sleeper.sleep_in(msg.get("min", 0)) if t == "sleepin" else
+             sleeper.set_nightly(msg.get("at", "")) if t == "sleepnightly" else sleeper.cancel())
+        if reply:
+            reply(r)
     elif t in ("webcam", "webcam?") and reply:
         reply({"t": "webcam", "on": False, "error": "Webcam mode works with Fedora for now. On Windows, "
                "spacedesk or the phone's own webcam apps can do it."})
@@ -1031,6 +1045,39 @@ def make_handler(inj, clients):
                 print("tablet disconnected", flush=True)
 
     return Handler
+
+
+# ---------------------------------------------------------------- AirDrop, sleep timers, clipboard history
+
+sys.path.insert(0, os.path.join(REPO, "host"))
+import pad_extras  # noqa: E402
+
+clip_history = pad_extras.ClipList()
+sleeper = None
+
+
+def watch_clipboard():
+    """Remembers each text copied on the PC (not what password managers mark private)."""
+    if not WINDOWS:
+        return
+    private = user32.RegisterClipboardFormatW("ExcludeClipboardContentFromMonitorProcessing")
+    last = user32.GetClipboardSequenceNumber()
+    while True:
+        time.sleep(0.7)
+        seq = user32.GetClipboardSequenceNumber()
+        if seq == last:
+            continue
+        last = seq
+        if private and user32.IsClipboardFormatAvailable(private):
+            continue
+        try:
+            clip_history.add(get_clipboard())
+        except OSError:
+            pass
+
+
+def _toast(title, text):
+    _message(title, text)
 
 
 # ---------------------------------------------------------------- phone / iPad web app
@@ -1115,6 +1162,11 @@ def main():
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     if os.path.exists(WEB_FLAG):
         start_web_app(inj, clients)
+    global sleeper
+    sleeper = pad_extras.Sleeper(CONF_DIR, COMMANDS["suspend"], _toast)
+    sleeper.start()
+    pad_extras.Outbox(clients.broadcast, lambda: len(clients.files), _toast).start()  # AirDrop
+    threading.Thread(target=watch_clipboard, daemon=True).start()
     try:
         srv = Server(("127.0.0.1", args.port), make_handler(inj, clients))
     except OSError:

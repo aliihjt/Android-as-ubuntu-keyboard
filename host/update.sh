@@ -11,6 +11,10 @@ if ! cmp -s "$HERE/gnome-extension/extension.js" "$EXT/extension.js"; then
   cp "$HERE/gnome-extension/metadata.json" "$HERE/gnome-extension/extension.js" "$EXT/"
   NEED_RELOGIN=1
 fi
+# Files › right-click › Scripts › "Send to Fedora Pad"
+mkdir -p "$HOME/.local/share/nautilus/scripts"
+printf '#!/bin/sh\nexec python3 "%s/send_to_pad.py" "$@"\n' "$HERE" >"$HOME/.local/share/nautilus/scripts/Send to Fedora Pad"
+chmod +x "$HOME/.local/share/nautilus/scripts/Send to Fedora Pad"
 echo "==> Updating tablet app (plug the tablet in if it isn't)"
 "$HERE/app-update.sh"
 echo "==> Restarting TabletDesk"

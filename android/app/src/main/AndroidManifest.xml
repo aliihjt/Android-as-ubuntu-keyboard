@@ -74,6 +74,8 @@
         <activity android:name=".PushToTalkActivity" android:exported="false" />
         <activity android:name=".TabletAppsActivity" android:exported="false" />
         <activity android:name=".WebcamActivity" android:exported="false" />
+        <activity android:name=".ClipHistoryActivity" android:exported="false" />
+        <activity android:name=".WakeActivity" android:exported="false" />
         <activity android:name=".ScanActivity" android:exported="false" />
         <activity android:name=".FocusActivity" android:exported="false" />
         <activity android:name=".StandByActivity" android:exported="false"

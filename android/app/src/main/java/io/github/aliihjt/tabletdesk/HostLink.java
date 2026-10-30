@@ -65,6 +65,7 @@ public final class HostLink {
     private volatile String wifiIp = "";
     private volatile String user = "";
     private volatile String os = "linux";
+    private volatile android.content.Context appContext;  // for files and links sent from the PC
     private volatile PointerListener pointerListener;
     private volatile ClipListener clipListener;
     /** one listener per reply type ("media", "stats", ...) for the live panels */
@@ -80,6 +81,7 @@ public final class HostLink {
 
     /** Gives HostLink somewhere to keep the Wi-Fi pairing. Call before start(). */
     public void attach(android.content.Context c) {
+        appContext = c.getApplicationContext();
         if (prefs == null) {
             prefs = c.getApplicationContext().getSharedPreferences("tabletdesk", android.content.Context.MODE_PRIVATE);
         }
@@ -451,6 +453,10 @@ public final class HostLink {
                             .putString("wifi_fp", msg.optString("fp"))
                             .putString("wifi_ips", list.toString())
                             .putInt("wifi_port", msg.optInt("port", 7778)).apply();
+                } else if ("wake".equals(t) && prefs != null && typedListener == null) {
+                    WakeActivity.save(prefs, msg);
+                } else if ("pushfile".equals(t) || "pushtext".equals(t)) {
+                    Inbox.receive(appContext, msg);  // AirDrop from the PC (works with no page open)
                 } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
                     user = msg.optString("user", "");
@@ -460,6 +466,7 @@ public final class HostLink {
                     setConnected(true);
                     requestApps();
                     requestState();
+                    send("{\"t\":\"wake?\"}");  // remember how to wake this PC later
                 } else if ("clip".equals(t)) {
                     ClipListener l = clipListener;
                     clipListener = null;

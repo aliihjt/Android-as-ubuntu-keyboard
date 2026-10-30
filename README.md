@@ -59,6 +59,9 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | ⏱ | **Focus** | A 15–90 minute timer; the PC (and, if you allow it, the tablet) stays on Do Not Disturb until it rings. |
 | 📄 | **Scanner** | Photograph pages, drag the corners onto the paper, and get a straight, clean PDF on the PC, in Downloads, or shared to any app. |
 | 📷 | **Webcam** | The tablet's camera and mic become “Fedora Pad Camera” and “Fedora Pad Microphone” on Fedora for Zoom, Meet and OBS (USB cable, Android 12+). The iPhone web app has a Webcam page too (Wi-Fi). Run `./host/webcam-setup.sh` once. |
+| 📤 | **AirDrop from the PC** | Fedora: Files › right-click › **Scripts › Send to Fedora Pad**. Windows: right-click › **Send to › Fedora Pad**. Files (folders as a zip) and links appear on the tablet (Downloads › Fedora Pad, with a notification) and on the iPhone web app (Save to Photos / Files). |
+| 📋 | **Clipboard History** | The last 50 things copied on the PC; tap one to paste it again, long-press to copy it to the tablet or keep it as a note. Password managers' copies are skipped. Also in the iPhone web app. |
+| ⏰ | **Wake & Sleep** | Wake the sleeping PC from the tablet (run `./host/wake-setup.sh` once), and sleep it now, in 30–90 minutes, or every night, with a minute's warning you can cancel. The iPhone web app has the sleep timers. |
 | ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
 ## 🚀 Setup (once)
@@ -127,6 +130,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+| `./host/wake-setup.sh` | Lets the tablet wake this PC from sleep (wake-on-LAN on Ethernet, wake-on-Wi-Fi when the card supports it). `--off` turns it off. |
 | `./host/webcam-setup.sh` | Makes the phone or tablet a webcam and microphone on Fedora: virtual camera driver (with the Secure Boot step if needed) and scrcpy. `--undo` removes it. |
 | `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |

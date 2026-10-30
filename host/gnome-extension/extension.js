@@ -5,6 +5,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Keyboard from 'resource:///org/gnome/shell/ui/status/keyboard.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -39,6 +40,12 @@ const IFACE = `
     <method name="SetInputSource">
       <arg type="s" direction="in" name="id"/>
     </method>
+    <method name="ClipHistory">
+      <arg type="s" direction="out" name="json"/>
+    </method>
+    <method name="ClipClear">
+      <arg type="s" direction="out" name="ok"/>
+    </method>
   </interface>
 </node>`;
 
@@ -46,9 +53,21 @@ export default class TabletDeskExtension extends Extension {
     enable() {
         this._dbus = Gio.DBusExportedObject.wrapJSObject(IFACE, this);
         this._dbus.export(Gio.DBus.session, '/io/github/aliihjt/TabletDesk');
+        // clipboard history for the tablet: the last 50 texts copied, in memory only
+        this._clips = [];
+        this._selection = global.display.get_selection();
+        this._selectionId = this._selection.connect('owner-changed', (sel, type) => {
+            if (type === Meta.SelectionType.SELECTION_CLIPBOARD)
+                this._rememberClip();
+        });
     }
 
     disable() {
+        if (this._selectionId)
+            this._selection.disconnect(this._selectionId);
+        this._selectionId = 0;
+        this._selection = null;
+        this._clips = [];
         this._dbus?.unexport();
         this._dbus = null;
         if (this._ambientTimer)
@@ -162,6 +181,27 @@ export default class TabletDeskExtension extends Extension {
         const w = this._find(id);
         if (w)
             w.delete(global.get_current_time());
+    }
+
+    _rememberClip() {
+        // password managers mark what they copy: never keep that
+        const types = this._selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD);
+        if (types.some(t => t.includes('passwordManagerHint') || t.includes('x-kde-passwordManagerHint')))
+            return;
+        St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (clip, text) => {
+            if (!text || !text.trim() || text.length > 20000)
+                return;
+            this._clips = [{text, time: Date.now()}, ...this._clips.filter(c => c.text !== text)].slice(0, 50);
+        });
+    }
+
+    ClipHistory() {
+        return JSON.stringify(this._clips ?? []);
+    }
+
+    ClipClear() {
+        this._clips = [];
+        return 'ok';
     }
 
     // Keyboard language for the tablet's Persian keys: 'fa' = the Persian

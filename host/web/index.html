@@ -147,6 +147,8 @@ function connect() {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus(); }
     if (m.t === "app") { link.app = m.name || ""; refreshStatus(); }
+    if (m.t === "pushfile") return receiveFile(m);   // AirDrop from the PC
+    if (m.t === "pushtext") return receiveText(m.s || "");
     const h = link.handlers[m.t]; if (h) h(m);
   };
   ws.onclose = ev => {
@@ -166,6 +168,49 @@ function paintStatus(s) {
   s.lastChild.textContent = link.connected ? link.host + (link.app ? " · " + link.app : "") : "Connecting…";
 }
 function refreshStatus() { statusEls = statusEls.filter(s => s.isConnected); statusEls.forEach(paintStatus); }
+
+// ---------------------------------------------------------------- AirDrop from the PC
+const incoming = {};
+function receiveFile(m) {
+  const f = incoming[m.id] || (incoming[m.id] = {parts: [], got: 0, toast: null});
+  const bin = atob(m.data || ""), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  f.parts.push(bytes); f.got += bytes.length;
+  if (!m.last) {
+    if (m.size > 2e6 && (!f.shownAt || Date.now() - f.shownAt > 1500)) {
+      f.shownAt = Date.now(); toast("📥 " + m.name + "  " + Math.round(f.got * 100 / m.size) + " %");
+    }
+    return;
+  }
+  delete incoming[m.id];
+  const ext = (m.name.split(".").pop() || "").toLowerCase();
+  const types = {jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", heic: "image/heic",
+    pdf: "application/pdf", mp4: "video/mp4", mov: "video/quicktime", mp3: "audio/mpeg", txt: "text/plain", zip: "application/zip"};
+  const type = types[ext] || "application/octet-stream";
+  const blob = new Blob(f.parts, {type}), file = new File([blob], m.name, {type}), url = URL.createObjectURL(blob);
+  const size = blob.size > 1e6 ? (blob.size / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(blob.size / 1e3)) + " KB";
+  let close = null;
+  const canShare = navigator.canShare && navigator.canShare({files: [file]});
+  close = sheet(el("b", {}, "📥 From " + (link.host || "the PC")), el("div", {class: "sub", style: "margin:4px 0 12px"}, m.name + " · " + size),
+    type.startsWith("image/") ? el("img", {src: url, style: "width:100%;max-height:45vh;object-fit:contain;border-radius:12px;background:#000"}) : null,
+    el("div", {class: "btns", style: "margin-top:14px"},
+      canShare ? el("button", {class: "btn", onclick: () => navigator.share({files: [file]}).catch(() => {})},
+        type.startsWith("image/") || type.startsWith("video/") ? "Save to Photos / Share" : "Save to Files / Share") : null,
+      el("a", {class: "btn2", href: url, download: m.name, style: "text-decoration:none;color:inherit"}, "Download"),
+      el("button", {class: "btn2", onclick: () => close()}, "Close")));
+  haptic();
+}
+function receiveText(text) {
+  const t = text.trim(), isLink = /^https?:\/\/\S+$/i.test(t);
+  let close = null;
+  close = sheet(el("b", {}, (isLink ? "🔗 Link" : "📋 Text") + " from " + (link.host || "the PC")),
+    el("div", {class: "card", dir: "auto", style: "margin-top:10px;max-height:40vh;overflow:auto;-webkit-user-select:text;user-select:text;word-break:break-word"}, t),
+    el("div", {class: "btns"},
+      isLink ? el("a", {class: "btn", href: t, target: "_blank", rel: "noopener", style: "text-decoration:none"}, "Open") : null,
+      el("button", {class: isLink ? "btn2" : "btn", onclick: () => { if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast("Copied")); }}, "Copy"),
+      el("button", {class: "btn2", onclick: () => close()}, "Close")));
+  haptic();
+}
 
 // ---------------------------------------------------------------- pages
 let cleanup = [];
@@ -189,6 +234,7 @@ const TILES = [
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
   ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
   ["notes", "🗒", "Notes", "yellow"], ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
+  ["clips", "📋", "Clipboard History", "teal"], ["sleep", "💤", "Sleep", "indigo"],
   ["webcam", "📷", "Webcam", "red"], ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
 ];
 const PAGES = {};
@@ -813,6 +859,68 @@ PAGES.webcam = () => {
     go,
     el("p", {class: "sub"}, "In Zoom, Meet or OBS on the PC, choose “Fedora Pad Camera” and “Fedora Pad Microphone”. "
       + "Keep this page open in front while it's on. First time: run ./host/webcam-setup.sh on Fedora."));
+};
+
+// ---- clipboard history: what was copied on the PC
+PAGES.clips = () => {
+  page("Clipboard History");
+  const search = el("input", {class: "search", placeholder: "🔍 Search what you copied"});
+  const list = el("div", {class: "group"}, el("div", {class: "row sub"}, "Loading…"));
+  let items = [], last = "";
+  const terminal = () => /terminal|ptyxis|console|konsole|kitty|alacritty|wezterm/i.test(link.app);
+  const ago = t => { const s = Math.max(0, (Date.now() - t) / 1000);
+    return s < 60 ? "just now" : s < 3600 ? Math.floor(s / 60) + " min ago" : s < 86400 ? Math.floor(s / 3600) + " h ago" : Math.floor(s / 86400) + " days ago"; };
+  const draw = () => {
+    const q = search.value.trim().toLowerCase(), key = q + JSON.stringify(items);
+    if (key === last) return; last = key;
+    list.innerHTML = "";
+    items.filter(c => !q || c.text.toLowerCase().includes(q)).forEach(c => {
+      const row = el("button", {class: "row", style: "flex-direction:column;align-items:stretch"},
+        el("div", {dir: "auto", style: "white-space:pre-wrap;word-break:break-word;max-height:4.5em;overflow:hidden"}, c.text.trim()),
+        el("small", {}, ago(c.time) + " · tap: paste on the PC · hold: copy here"));
+      let pressT = 0;
+      row.addEventListener("pointerdown", () => { pressT = Date.now(); });
+      row.addEventListener("click", () => {
+        if (Date.now() - pressT > 550) { if (navigator.clipboard) navigator.clipboard.writeText(c.text).then(() => toast("Copied on this device")); return; }
+        send({t: "setclip", s: c.text}); setTimeout(() => combo(terminal() ? "ctrl+shift+v" : "ctrl+v"), 250); toast("Pasted on the PC");
+      });
+      list.append(row);
+    });
+    if (!list.children.length) list.append(el("div", {class: "row sub"}, q ? "No match." : "Nothing copied on the PC yet."));
+  };
+  search.addEventListener("input", draw);
+  app.append(search, list, el("button", {class: "btn2", style: "width:100%", onclick: () => confirmThen("Forget everything copied on the PC?",
+    () => { send({t: "clipclear"}); items = []; draw(); })}, "🧹 Clear the history"));
+  on("cliphist", m => { if (m.error) { list.innerHTML = ""; list.append(el("div", {class: "row sub"}, m.error)); return; }
+    items = m.list || []; draw(); });
+  every(2000, () => send({t: "cliphist?"}));
+  cleanup.push(() => on("cliphist", null));
+};
+
+// ---- sleep timers (waking needs the Android app: browsers can't send the wake-up packet)
+PAGES.sleep = () => {
+  page("Sleep");
+  const state = el("div", {class: "card center", style: "font-weight:700"}, "…");
+  const time = el("input", {type: "time", value: "23:30", class: "search", style: "margin:0"});
+  app.append(state,
+    el("div", {class: "h"}, "Sleep the PC"),
+    el("div", {class: "btns"}, el("button", {class: "btn", onclick: () => confirmThen("Put the PC to sleep now?", () => command("suspend"))}, "💤 Now"),
+      ...[30, 60, 90].map(n => el("button", {class: "btn2", onclick: () => send({t: "sleepin", min: n})}, n + " min"))),
+    el("div", {class: "h"}, "Every night"),
+    el("div", {class: "btns"}, time, el("button", {class: "btn2", onclick: () => send({t: "sleepnightly", at: time.value})}, "Set"),
+      el("button", {class: "btn2", onclick: () => send({t: "sleepnightly", at: ""})}, "Off")),
+    el("button", {class: "btn2", style: "width:100%;margin-top:14px;color:var(--red)", onclick: () => send({t: "sleepcancel"})}, "Cancel the sleep timer"),
+    el("p", {class: "sub"}, "A minute before it sleeps, the PC shows a warning; cancel here if you're still using it. "
+      + "Waking the PC needs the Android app (Wake & Sleep): browsers can't send the wake-up signal."));
+  on("sleep", m => {
+    const fmt = t => new Date(t).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    let text = m.warning_until ? "⚠️ Going to sleep in " + Math.max(0, Math.round((m.warning_until - Date.now()) / 1000)) + " s"
+      : m.in_until ? "💤 Sleeps at " + fmt(m.in_until) : "No sleep timer";
+    if (m.nightly) { text += " · 🌙 every night at " + m.nightly; time.value = m.nightly; }
+    state.textContent = text;
+  });
+  every(3000, () => send({t: "sleep?"}));
+  cleanup.push(() => on("sleep", null));
 };
 
 // ---- stats

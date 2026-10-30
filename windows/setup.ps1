@@ -22,6 +22,35 @@ function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('Path', 'User') + ";$env:LOCALAPPDATA\Microsoft\WinGet\Links"
 }
+# Downloads a file and shows how far it is: "Python  42 %  (11.2 / 26.5 MB)"
+function Download($url, $out, $label) {
+    $req = [System.Net.HttpWebRequest]::Create($url)
+    $req.UserAgent = 'FedoraPad-setup'
+    $resp = $req.GetResponse()
+    $total = $resp.ContentLength
+    $in = $resp.GetResponseStream()
+    $fs = [System.IO.File]::Create($out)
+    $buf = New-Object byte[] 262144
+    $done = 0; $shown = -1
+    try {
+        while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+            $fs.Write($buf, 0, $n)
+            $done += $n
+            if ($total -gt 0) {
+                $pct = [int][math]::Floor(100 * $done / $total)
+                if ($pct -ne $shown) {
+                    Write-Host -NoNewline ("`r    {0}  {1,3} %  ({2:N1} / {3:N1} MB)   " -f $label, $pct, ($done / 1MB), ($total / 1MB))
+                    $shown = $pct
+                }
+            } else {
+                Write-Host -NoNewline ("`r    {0}  {1:N1} MB   " -f $label, ($done / 1MB))
+            }
+        }
+    } finally {
+        $fs.Close(); $in.Close(); $resp.Close()
+    }
+    Write-Host ""
+}
 $HasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 function Winget-Install($id) {
     if (-not $HasWinget) { return $false }
@@ -68,9 +97,8 @@ if (-not $pyw) {
 if (-not $pyw) {
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
     $exe = Join-Path $Data "python-$PyVersion-$arch.exe"
-    Write-Host "    downloading Python $PyVersion from python.org ..."
     try {
-        Invoke-WebRequest "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-$arch.exe" -OutFile $exe -UseBasicParsing
+        Download "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-$arch.exe" $exe "Python $PyVersion"
         Write-Host '    installing (about a minute) ...'
         Start-Process $exe -ArgumentList '/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 InstallLauncherAllUsers=0 Include_test=0' -Wait | Out-Null
         Remove-Item $exe -ErrorAction SilentlyContinue
@@ -90,10 +118,9 @@ if (-not $adb) {
     if ($c) { $adb = $c.Source }
 }
 if (-not $adb) {
-    Write-Host '    downloading from Google ...'
     try {
         $zip = Join-Path $Data 'platform-tools.zip'
-        Invoke-WebRequest 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' -OutFile $zip -UseBasicParsing
+        Download 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' $zip 'Android tools'
         Expand-Archive $zip -DestinationPath $Data -Force
         Remove-Item $zip -ErrorAction SilentlyContinue
         if (Test-Path $own) { $adb = $own }
@@ -141,7 +168,7 @@ foreach ($p in "$env:ProgramFiles\Git\usr\bin\openssl.exe", "$env:LOCALAPPDATA\P
 if ($pyw) {
     Step 'Exact volume control (optional)'
     $py = if ($pyw -like '*pyw.exe') { $pyw -replace 'pyw\.exe$', 'py.exe' } else { Join-Path (Split-Path $pyw) 'python.exe' }
-    & $py -m pip install --user --quiet --disable-pip-version-check pycaw comtypes
+    & $py -m pip install --user --disable-pip-version-check --progress-bar on pycaw comtypes
     if ($LASTEXITCODE -eq 0) { Ok 'pycaw' } else { Warn 'skipped (volume then moves in 2 % steps)' }
 }
 
@@ -169,6 +196,12 @@ if ($pyw -and $adb) {
     $lnk.WindowStyle = 7
     $lnk.Description = 'Fedora Pad: tablet keyboard, trackpad and tools'
     $lnk.Save()
+    # Explorer: right-click a file › Send to › Fedora Pad (AirDrop to the tablet / phone)
+    $send = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('SendTo')) 'Fedora Pad.lnk'))
+    $send.TargetPath = $pyw
+    $send.Arguments = "`"$(Join-Path $Repo 'host\send_to_pad.py')`""
+    $send.Description = 'Send to the tablet or phone with Fedora Pad'
+    $send.Save()
     Start-Process powershell.exe -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WindowStyle Hidden
     Ok 'running now'
 

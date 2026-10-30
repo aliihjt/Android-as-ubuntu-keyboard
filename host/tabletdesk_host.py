@@ -29,6 +29,9 @@ Tablet -> host messages (one JSON object per line):
   {"t":"webcam","on":true,"src":"android|web","facing":"front|back","mic":true} / {"t":"webcam?"}
   {"t":"camframe","jpg":"<base64>"} / {"t":"micpcm","pcm":"<base64 s16>","rate":48000}  web app webcam
   {"t":"pttstart","rate":48000} / {"t":"pttpcm","pcm":"<base64 s16>"} / {"t":"pttstop"}  phone Push to Talk
+  {"t":"cliphist?"} / {"t":"clipclear"}    clipboard history
+  {"t":"wake?"} / {"t":"sleep?"} / {"t":"sleepin","min":30} / {"t":"sleepnightly","at":"23:30"} / {"t":"sleepcancel"}
+Host -> tablet also: {"t":"pushfile","id","name","size","data","last"} / {"t":"pushtext","s"}  AirDrop from the PC
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -71,6 +74,7 @@ except ImportError:  # allows --dry-run on machines without python3-evdev
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import webcam as webcam_module  # noqa: E402
+import pad_extras  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -495,6 +499,12 @@ class LaptopKeyboard:
 
 
 laptop_kbd = None  # set in main()
+sleeper = None     # sleep timers, set in main()
+
+
+def desktop_notify(title, text):
+    if shutil.which("notify-send"):
+        subprocess.Popen(["notify-send", "-a", "Fedora Pad", title, text])
 
 
 class Clients:
@@ -1232,6 +1242,32 @@ def handle(inj, msg, reply=None):
         webcam.frame(str(msg.get("jpg", "")))
     elif t == "micpcm":
         webcam.pcm(str(msg.get("pcm", "")), msg.get("rate", 48000))
+    elif t == "cliphist?" and reply:  # clipboard history (the GNOME extension keeps it)
+        raw = shell_call("ClipHistory")
+        try:
+            items = json.loads(raw) if raw else []
+        except ValueError:
+            items = []
+        reply({"t": "cliphist", "list": items} if raw is not None else
+              {"t": "cliphist", "list": [], "error": "Log out and back in once so the GNOME extension loads."})
+    elif t == "clipclear":
+        shell_call("ClipClear")
+    elif t == "wake?" and reply:  # what the tablet needs to wake this PC later
+        reply({"t": "wake", "host": socket.gethostname(), "cards": pad_extras.wake_info()})
+    elif t == "sleep?" and reply and sleeper:
+        reply(sleeper.status())
+    elif t == "sleepin" and sleeper:
+        r = sleeper.sleep_in(msg.get("min", 0))
+        if reply:
+            reply(r)
+    elif t == "sleepnightly" and sleeper:
+        r = sleeper.set_nightly(msg.get("at", ""))
+        if reply:
+            reply(r)
+    elif t == "sleepcancel" and sleeper:
+        r = sleeper.cancel()
+        if reply:
+            reply(r)
     elif t in ("pttstart", "pttpcm", "pttstop"):  # Push to Talk from the phone web app
         phone_ptt(t, msg, reply)
     elif t == "lang" and msg.get("id") in ("fa", "en"):
@@ -1435,6 +1471,10 @@ def main():
         start_wifi(inj, clients)
     if os.path.exists(WEB_FLAG):
         start_web_app(inj, clients)
+    global sleeper
+    sleeper = pad_extras.Sleeper(CONF_DIR, lambda: _run(["systemctl", "suspend"]), desktop_notify)
+    sleeper.start()
+    pad_extras.Outbox(clients.broadcast, lambda: len(clients.files), desktop_notify).start()  # AirDrop
     # bind to localhost only: the tablet reaches it through `adb reverse`
     with Server(("127.0.0.1", args.port), make_handler(inj, clients)) as srv:
         print(f"TabletDesk host listening on 127.0.0.1:{args.port}", flush=True)

@@ -60,6 +60,10 @@ echo "==> Installing auto-start service (runs whenever the tablet is plugged in)
 mkdir -p "$HOME/.config/systemd/user"
 sed "s|@HERE@|$HERE|g" "$HERE/tabletdesk.service" >"$HOME/.config/systemd/user/tabletdesk.service"
 systemctl --user daemon-reload
+# Files › right-click › Scripts › "Send to Fedora Pad"
+mkdir -p "$HOME/.local/share/nautilus/scripts"
+printf '#!/bin/sh\nexec python3 "%s/send_to_pad.py" "$@"\n' "$HERE" >"$HOME/.local/share/nautilus/scripts/Send to Fedora Pad"
+chmod +x "$HOME/.local/share/nautilus/scripts/Send to Fedora Pad"
 systemctl --user enable tabletdesk.service
 # start now too if /dev/uinput is already usable; otherwise it starts at next login
 if [ -w /dev/uinput ]; then systemctl --user restart tabletdesk.service; fi

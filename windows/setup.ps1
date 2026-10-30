@@ -209,14 +209,28 @@ Ok $Repo
 Step 'Tablet Mirroring (scrcpy, from GitHub)'
 $scrcpyExe = Get-ChildItem (Join-Path $Data 'scrcpy') -Recurse -Filter scrcpy.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $scrcpyExe) {
+    # Fedora Pad's checksummed copy on GitHub first, then scrcpy's own release page
+    $mirror = 'https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/download/latest-apk'
     $tag = Latest-Tag 'Genymobile/scrcpy' 'v5.0.1'
+    $tries = @(
+        @("$mirror/scrcpy-win64.zip", 'scrcpy (GitHub copy)', "$mirror/scrcpy-win64.sha256"),
+        @("https://github.com/Genymobile/scrcpy/releases/download/$tag/scrcpy-win64-$tag.zip", "scrcpy $tag", $null)
+    )
     $zip = Join-Path $Data 'scrcpy.zip'
-    try {
-        Download "https://github.com/Genymobile/scrcpy/releases/download/$tag/scrcpy-win64-$tag.zip" $zip "scrcpy $tag"
-        Expand-Archive $zip -DestinationPath (Join-Path $Data 'scrcpy') -Force
-        $scrcpyExe = Get-ChildItem (Join-Path $Data 'scrcpy') -Recurse -Filter scrcpy.exe | Select-Object -First 1
-    } catch { Warn "scrcpy download failed: $($_.Exception.Message)" }
-    Remove-Item $zip -ErrorAction SilentlyContinue
+    foreach ($t in $tries) {
+        try {
+            Download $t[0] $zip $t[1]
+            if ($t[2]) {
+                $want = (New-Object System.Net.WebClient).DownloadString($t[2]).Trim().ToLower()
+                if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne $want) { Warn '    checksum doesn''t match, not used'; continue }
+                Write-Host '    checksum OK'
+            }
+            Expand-Archive $zip -DestinationPath (Join-Path $Data 'scrcpy') -Force
+            $scrcpyExe = Get-ChildItem (Join-Path $Data 'scrcpy') -Recurse -Filter scrcpy.exe | Select-Object -First 1
+            if ($scrcpyExe) { break }
+        } catch { Warn "    $($t[1]) failed: $($_.Exception.Message)" }
+        finally { Remove-Item $zip -ErrorAction SilentlyContinue }
+    }
 }
 $scrcpy = if ($scrcpyExe) { $scrcpyExe.FullName } else { $null }
 if ($scrcpy) { Ok $scrcpy } else { Warn 'skipped: Tablet Mirroring needs it (run Setup again later)' }

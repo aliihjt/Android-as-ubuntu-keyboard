@@ -247,6 +247,7 @@ class Proc:
     and why it stopped."""
 
     def __init__(self):
+        self.log = None
         self.p = None
         self.error = ""
         self.lock = threading.Lock()
@@ -254,7 +255,8 @@ class Proc:
     def running(self):
         return self.p is not None and self.p.poll() is None
 
-    def start(self, argv, env=None):
+    def start(self, argv, env=None, log=None):
+        self.log = log
         with self.lock:
             self._stop()
             self.error = ""
@@ -273,6 +275,12 @@ class Proc:
 
     def _watch(self, p):
         _, err = p.communicate()
+        if getattr(self, "log", None):  # the whole story, for when something goes wrong
+            try:
+                with open(self.log, "w", encoding="utf-8") as f:
+                    f.write(" ".join(map(str, p.args)) + "\n\n" + (err or ""))
+            except OSError:
+                pass
         lines = [l for l in (err or "").splitlines() if l.strip()]
         with self.lock:
             if p is self.p and p.returncode not in (0, None):
@@ -308,3 +316,18 @@ def airplay_pin(conf_dir):
     with open(path, "w") as f:
         f.write(pin)
     return pin
+
+
+def tablet_on_cable(adb):
+    """True when the tablet is plugged in and allowed (adb sees it); else a reason."""
+    try:
+        out = subprocess.run([adb, "get-state"], capture_output=True, text=True, timeout=8,
+                             creationflags=0x08000000 if WINDOWS else 0)
+    except (OSError, subprocess.SubprocessError):
+        return "The Android tools (adb) aren't installed."
+    state = out.stdout.strip()
+    if state == "device":
+        return True
+    if "unauthorized" in (out.stdout + out.stderr):
+        return "On the tablet, tap Allow (USB debugging), then try again."
+    return "Plug the tablet in with the USB cable: Show on PC works over the cable."

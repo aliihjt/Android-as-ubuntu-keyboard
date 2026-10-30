@@ -40,12 +40,17 @@ jobs:
           echo "$GITHUB_RUN_NUMBER" > ../version.txt
       # A copy of Google's adb for Windows next to the app, for PCs that can't
       # reach Google's servers (windows/setup.ps1 downloads it from here)
-      - name: Mirror Android platform-tools for Windows
+      - name: Mirror Android platform-tools and scrcpy for Windows
         if: github.event_name == 'push' && github.ref_type == 'branch'
         run: |
           curl -fsSL -o ../platform-tools-windows.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
           unzip -tq ../platform-tools-windows.zip
           (cd .. && sha256sum platform-tools-windows.zip | cut -d' ' -f1 > platform-tools-windows.sha256)
+          # and the official scrcpy for Windows (Tablet Mirroring), same reason
+          tag=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/Genymobile/scrcpy/releases/latest | sed 's#.*/##')
+          curl -fsSL -o ../scrcpy-win64.zip "https://github.com/Genymobile/scrcpy/releases/download/$tag/scrcpy-win64-$tag.zip"
+          unzip -tq ../scrcpy-win64.zip
+          (cd .. && sha256sum scrcpy-win64.zip | cut -d' ' -f1 > scrcpy-win64.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: TabletDesk-apk
@@ -67,6 +72,8 @@ jobs:
             version.txt
             platform-tools-windows.zip
             platform-tools-windows.sha256
+            scrcpy-win64.zip
+            scrcpy-win64.sha256
       - name: Official release (tags v*, or run manually with a tag)
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
         uses: softprops/action-gh-release@v2

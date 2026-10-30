@@ -41,6 +41,7 @@ else:  # lets the logic be tested on Linux with --dry-run
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 CONF_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "FedoraPad")
+DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "FedoraPad")
 HOME = os.path.expanduser("~")
 
 # ---------------------------------------------------------------- input
@@ -1092,19 +1093,69 @@ def _tools():
         return {}
 
 
+def _find_scrcpy():
+    exe = _tools().get("scrcpy")
+    if exe and os.path.exists(exe):
+        return exe
+    import glob
+    found = glob.glob(os.path.join(DATA_DIR, "scrcpy", "**", "scrcpy.exe"), recursive=True)
+    return found[0] if found else None
+
+
+def _fetch_scrcpy():
+    """The official scrcpy for Windows: Fedora Pad's checksummed copy on GitHub
+    first (made by its build), then scrcpy's own release page."""
+    import hashlib
+    import io
+    import urllib.request
+    import zipfile
+
+    def get(url, timeout):
+        req = urllib.request.Request(url, headers={"User-Agent": "FedoraPad"})
+        return urllib.request.urlopen(req, timeout=timeout)
+
+    mirror = "https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/download/latest-apk/"
+    tries = [(mirror + "scrcpy-win64.zip", mirror + "scrcpy-win64.sha256")]
+    try:
+        tag = get("https://github.com/Genymobile/scrcpy/releases/latest", 20).geturl().rstrip("/").rsplit("/", 1)[-1]
+    except OSError:
+        tag = ""
+    tag = tag if tag.startswith("v") else "v5.0.1"
+    tries.append(("https://github.com/Genymobile/scrcpy/releases/download/%s/scrcpy-win64-%s.zip" % (tag, tag), None))
+    for url, sha in tries:
+        try:
+            data = get(url, 180).read()
+            if sha and hashlib.sha256(data).hexdigest() != get(sha, 20).read().decode().strip().lower():
+                print("scrcpy copy: checksum doesn't match, skipped", file=sys.stderr)
+                continue
+            zipfile.ZipFile(io.BytesIO(data)).extractall(os.path.join(DATA_DIR, "scrcpy"))
+            if _find_scrcpy():
+                return _find_scrcpy()
+        except (OSError, ValueError, zipfile.BadZipFile) as err:
+            print("scrcpy download failed:", url, err, file=sys.stderr)
+    return None
+
+
 def tablet_mirror(msg):
     if msg.get("t") == "mirror":
         if not msg.get("on"):
             mirror_proc.stop()
         else:
             tools = _tools()
-            exe, adb = tools.get("scrcpy"), tools.get("adb")
-            if not exe or not os.path.exists(exe):
-                return {"t": "mirror", "on": False, "error": "Run windows\\Setup.bat again to add Tablet Mirroring."}
+            adb = tools.get("adb") or os.path.join(DATA_DIR, "platform-tools", "adb.exe")
+            if not os.path.exists(adb):
+                adb = shutil.which("adb") or adb
+            cable = pad_extras.tablet_on_cable(adb)
+            if cable is not True:
+                return {"t": "mirror", "on": False, "error": cable}
+            exe = _find_scrcpy() or _fetch_scrcpy()
+            if not exe:
+                return {"t": "mirror", "on": False, "error": "Couldn't get scrcpy from GitHub. Check the internet "
+                        "connection, or run windows\\Setup.bat again."}
             argv = [exe, "--window-title=Tablet - Fedora Pad", "--stay-awake", "--max-size=1920"]
             if not msg.get("audio", True):
                 argv.append("--no-audio")
-            mirror_proc.start(argv, dict(os.environ, ADB=adb or "adb"))
+            mirror_proc.start(argv, dict(os.environ, ADB=adb), os.path.join(DATA_DIR, "mirror.log"))
     return {"t": "mirror", "on": mirror_proc.running(), "error": mirror_proc.error}
 
 

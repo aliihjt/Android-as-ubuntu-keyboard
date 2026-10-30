@@ -215,6 +215,10 @@ class Injector:
                 self._key(k, 0)
 
     def text(self, s):
+        # Persian, emoji and other characters a US keyboard can't type: paste them,
+        # which works in every app (the GNOME extension restores the clipboard)
+        if any(ch not in CHAR_MAP for ch in s) and self._paste(s):
+            return
         with self.lock:
             for ch in s:
                 if ch in CHAR_MAP:
@@ -227,6 +231,18 @@ class Injector:
                         self._key("KEY_LEFTSHIFT", 0)
                 else:
                     self._unicode(ch)
+
+    def _paste(self, s):
+        if self.dry_run:
+            print("paste", repr(s))
+            return True
+        if shell_call("ClipTemp", s) is None:  # extension not loaded: fall back to Ctrl+Shift+U
+            return False
+        time.sleep(0.06)
+        app = (active_app_name() or "").lower()
+        terminal = any(t in app for t in ("terminal", "ptyxis", "console", "konsole", "kitty", "alacritty", "wezterm"))
+        self.combo("ctrl+shift+v" if terminal else "ctrl+v")
+        return True
 
     def _unicode(self, ch):
         # GTK / IBus unicode entry: Ctrl+Shift+U, hex code, Space
@@ -529,10 +545,14 @@ def screen_to_pc(t, on, audio, reply, code=None):
             return reply(mirror_status())
         if not os.path.exists(webcam_module.SCRCPY):
             return reply(mirror_status("Run ./host/mirror-setup.sh on Fedora once."))
+        adb = shutil.which("adb") or "adb"
+        cable = pad_extras.tablet_on_cable(adb)
+        if cable is not True:
+            return reply(mirror_status(cable))
         argv = [webcam_module.SCRCPY, "--window-title=Tablet · Fedora Pad", "--stay-awake", "--max-size=1920"]
         if not audio:
             argv.append("--no-audio")
-        mirror_proc.start(argv, dict(os.environ, ADB=shutil.which("adb") or "adb"))
+        mirror_proc.start(argv, dict(os.environ, ADB=adb), os.path.expanduser("~/.cache/fedora-pad/mirror.log"))
         return reply(mirror_status())
     if code is not None:  # "ask for a code" switch on the tablet / phone
         if code:

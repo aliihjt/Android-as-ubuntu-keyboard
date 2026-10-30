@@ -46,6 +46,9 @@ const IFACE = `
     <method name="ClipClear">
       <arg type="s" direction="out" name="ok"/>
     </method>
+    <method name="ClipTemp">
+      <arg type="s" direction="in" name="text"/>
+    </method>
   </interface>
 </node>`;
 
@@ -73,6 +76,9 @@ export default class TabletDeskExtension extends Extension {
         if (this._ambientTimer)
             GLib.source_remove(this._ambientTimer);
         this._ambientTimer = 0;
+        if (this._restoreTimer)
+            GLib.source_remove(this._restoreTimer);
+        this._restoreTimer = 0;
     }
 
     // Move a window to the tablet's screen (the non-primary monitor) and fill it,
@@ -183,7 +189,30 @@ export default class TabletDeskExtension extends Extension {
             w.delete(global.get_current_time());
     }
 
+    // Typing any language: put the text on the clipboard for a moment (the host
+    // then presses Ctrl+V), and put the user's own clipboard back afterwards.
+    ClipTemp(text) {
+        const clip = St.Clipboard.get_default();
+        const restore = this._clips?.[0]?.text ?? null;
+        this._skipClips = 2;  // neither change belongs in the history
+        clip.set_text(St.ClipboardType.CLIPBOARD, text);
+        if (this._restoreTimer)
+            GLib.source_remove(this._restoreTimer);
+        this._restoreTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
+            this._restoreTimer = 0;
+            if (restore !== null)
+                clip.set_text(St.ClipboardType.CLIPBOARD, restore);
+            else
+                this._skipClips = 0;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _rememberClip() {
+        if (this._skipClips > 0) {
+            this._skipClips--;
+            return;
+        }
         // password managers mark what they copy: never keep that
         const types = this._selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD);
         if (types.some(t => t.includes('passwordManagerHint') || t.includes('x-kde-passwordManagerHint')))

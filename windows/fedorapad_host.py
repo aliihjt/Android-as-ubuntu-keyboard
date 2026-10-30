@@ -955,6 +955,8 @@ def handle(inj, msg, reply=None):
         stop_terminal()
     elif t == "ambient?" and reply:
         reply(ambient_colors())
+    elif t == "pttstop" and reply:  # phone Push to Talk with the PC's Whisper: Fedora only
+        reply({"t": "ptt", "state": "error", "error": "On Windows, choose “iPhone speech” in Push to Talk."})
     elif t in ("webcam", "webcam?") and reply:
         reply({"t": "webcam", "on": False, "error": "Webcam mode works with Fedora for now. On Windows, "
                "spacedesk or the phone's own webcam apps can do it."})

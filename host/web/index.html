@@ -184,7 +184,8 @@ function page(title, right) {
     el("h1", {}, title), el("div", {class: "right"}, right || "")));
 }
 const TILES = [
-  ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["media", "🎵", "Media", "pink"],
+  ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["talk", "🎙", "Push to Talk", "red"],
+  ["media", "🎵", "Media", "pink"],
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
   ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
   ["notes", "🗒", "Notes", "yellow"], ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
@@ -640,6 +641,105 @@ PAGES.presenter = () => {
       el("button", {class: "btn2", onclick: () => { combo("f5"); t0 = Date.now(); }}, "▶ Start"),
       el("button", {class: "btn2", onclick: () => combo("b")}, "⬛ Black"),
       el("button", {class: "btn2", onclick: () => { combo("esc"); t0 = 0; clock.textContent = "0:00"; }}, "■ End")));
+};
+
+// ---- Push to Talk: hold the button, speak, let go: the words are typed on the PC
+PAGES.talk = () => {
+  page("Push to Talk");
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let engine = store.get("pttEngine", SR ? "phone" : "pc"), lang = store.get("pttLang", "auto"), tap = store.get("pttTap", false);
+  const status = el("div", {class: "center", style: "font-weight:700;font-size:18px;margin:6px 0 10px"}, "Hold to talk");
+  const words = el("div", {class: "card center", dir: "auto", style: "min-height:96px;font-size:20px;-webkit-user-select:text;user-select:text"}, "");
+  const mic = el("button", {style: "width:min(52vw,190px);height:min(52vw,190px);border-radius:50%;background:var(--red);color:#fff;"
+    + "font-size:72px;display:block;margin:18px auto;touch-action:none;box-shadow:0 10px 30px #ff3b3055;transition:transform .12s"}, "🎙");
+  let holding = false, rec = null, done = true, stream = null, audio = null;
+  const terminal = () => /terminal|ptyxis|console|konsole|kitty|alacritty|wezterm|tilix/i.test(link.app);
+  const typeOnPc = text => { send({t: "setclip", s: text + " "}); setTimeout(() => combo(terminal() ? "ctrl+shift+v" : "ctrl+v"), 250); };
+  const look = on => { mic.style.transform = on ? "scale(1.12)" : ""; mic.style.background = on ? "#ff6961" : "var(--red)"; };
+
+  // 📱 the phone's own speech recognition: words appear while you speak
+  const phoneDown = () => {
+    if (!SR) { status.textContent = "⚠️ No speech recognition here: choose “PC (offline)”"; return false; }
+    rec = new SR();
+    rec.lang = lang === "auto" ? (navigator.language || "en-US") : lang;
+    rec.continuous = true; rec.interimResults = true;
+    rec.onresult = e => { let t = ""; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; words.textContent = t.trim(); };
+    rec.onerror = e => { status.textContent = e.error === "not-allowed" || e.error === "service-not-allowed"
+      ? "⚠️ Allow the microphone and Speech Recognition for Safari in Settings" : e.error === "no-speech" ? "Didn't hear anything" : "⚠️ " + e.error; };
+    rec.onend = () => {
+      if (holding) { try { rec.start(); } catch (e) {} return; }  // keep listening through pauses while held
+      if (done) return;
+      done = true;
+      const text = words.textContent.trim();
+      if (text) { typeOnPc(text); status.textContent = "✅ Typed on the PC"; } else status.textContent = "Didn't hear any words";
+    };
+    words.textContent = ""; done = false;
+    try { rec.start(); } catch (e) { status.textContent = "⚠️ " + e.message; return false; }
+    status.textContent = "🎙 Listening…";
+    return true;
+  };
+  const phoneUp = () => { status.textContent = "✍️ Finishing…"; if (rec) rec.stop(); };
+
+  // 💻 the phone's mic, written down on the PC by Whisper (offline, good Persian)
+  const pcDown = async () => {
+    try {
+      if (!stream) stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}});
+    } catch (e) { status.textContent = "⚠️ Allow the microphone for this page"; return false; }
+    if (!audio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audio = new AC();
+      const src = audio.createMediaStreamSource(stream), proc = audio.createScriptProcessor(4096, 1, 1);
+      proc.onaudioprocess = e => {
+        if (!holding) return;
+        const f = e.inputBuffer.getChannelData(0), pcm = new Int16Array(f.length);
+        for (let i = 0; i < f.length; i++) pcm[i] = Math.max(-1, Math.min(1, f[i])) * 0x7fff;
+        send({t: "pttpcm", pcm: b64(pcm.buffer)});
+      };
+      src.connect(proc); proc.connect(audio.destination);
+    }
+    await audio.resume();
+    send({t: "pttstart", rate: Math.round(audio.sampleRate)});
+    words.textContent = ""; status.textContent = "🎙 Listening (the PC writes it down)…";
+    return true;
+  };
+  const pcUp = () => { send({t: "pttstop"}); status.textContent = "✍️ Sending…"; };
+  on("ptt", m => {
+    if (m.state === "writing") status.textContent = "✍️ The PC is writing it down…";
+    else if (m.state === "done") { words.textContent = m.text || ""; status.textContent = m.text ? "✅ Typed on the PC" : "Didn't hear any words"; }
+    else if (m.state === "error") status.textContent = "⚠️ " + m.error;
+  });
+
+  const down = async () => {
+    if (holding) return;
+    if (!link.connected) { status.textContent = "Not connected to the PC"; return; }
+    holding = true; haptic(); look(true);
+    const ok = engine === "phone" ? phoneDown() : await pcDown();
+    if (!ok) { holding = false; look(false); }
+  };
+  const up = () => {
+    if (!holding) return;
+    holding = false; haptic(); look(false);
+    engine === "phone" ? phoneUp() : pcUp();
+  };
+  mic.addEventListener("pointerdown", e => { e.preventDefault(); if (tap && holding) up(); else down(); });
+  mic.addEventListener("pointerup", () => { if (!tap) up(); });
+  mic.addEventListener("pointercancel", () => { if (!tap) up(); });
+  mic.addEventListener("contextmenu", e => e.preventDefault());
+  cleanup.push(() => { holding = false; if (rec) rec.abort(); if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audio) audio.close().catch(() => {}); on("ptt", null); });
+
+  const tapToggle = el("div", {class: "toggle" + (tap ? " on" : "")});
+  app.append(el("p", {class: "sub center"}, "Click where you want to write on the PC, then hold the button and speak."),
+    mic, status, words,
+    el("div", {class: "h"}, "Speech"),
+    seg([["phone", "📱 iPhone speech"], ["pc", "💻 PC (offline)"]], engine, v => { engine = v; store.set("pttEngine", v); }),
+    el("p", {class: "sub"}, "iPhone speech shows the words as you speak (needs the internet). PC uses Whisper on Fedora: "
+      + "offline and better for Persian (run ./host/voice-setup.sh once)."),
+    el("div", {class: "h"}, "Language (iPhone speech)"),
+    seg([["auto", "Automatic"], ["en-US", "English"], ["fa-IR", "فارسی"]], lang, v => { lang = v; store.set("pttLang", v); }),
+    el("div", {class: "group", style: "margin-top:14px"}, el("button", {class: "row", onclick: () => {
+      tap = !tap; store.set("pttTap", tap); tapToggle.classList.toggle("on", tap); }},
+      chip("👆", "blue"), el("div", {class: "grow"}, "Tap to start, tap to stop", el("small", {}, "Instead of holding the button")), tapToggle)));
 };
 
 // ---- webcam: this phone's camera and mic as the PC's webcam (Fedora)

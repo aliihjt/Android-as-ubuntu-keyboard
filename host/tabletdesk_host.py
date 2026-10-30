@@ -28,6 +28,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"lang","id":"fa"|"en"}              keyboard language for the Persian keys
   {"t":"webcam","on":true,"src":"android|web","facing":"front|back","mic":true} / {"t":"webcam?"}
   {"t":"camframe","jpg":"<base64>"} / {"t":"micpcm","pcm":"<base64 s16>","rate":48000}  web app webcam
+  {"t":"pttstart","rate":48000} / {"t":"pttpcm","pcm":"<base64 s16>"} / {"t":"pttstop"}  phone Push to Talk
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
   {"t":"ping"}
@@ -1012,6 +1013,65 @@ def stop_terminal():
             pass
 
 
+_ptt = {"pcm": bytearray(), "rate": 48000}
+VOICE_PY = os.path.expanduser("~/.local/share/fedora-pad/voice/venv/bin/python")
+
+
+def phone_ptt(t, msg, reply):
+    """The phone's mic while its button is held; on release Whisper (voice-setup.sh)
+    turns it into text, typed where the cursor is."""
+    if t == "pttstart":
+        rate = msg.get("rate", 48000)
+        _ptt["rate"] = int(rate) if str(rate).isdigit() and 8000 <= int(rate) <= 96000 else 48000
+        _ptt["pcm"] = bytearray()
+    elif t == "pttpcm":
+        if len(_ptt["pcm"]) < _ptt["rate"] * 2 * 180:  # at most 3 minutes
+            try:
+                _ptt["pcm"] += base64.b64decode(str(msg.get("pcm", "")))
+            except ValueError:
+                pass
+    elif t == "pttstop" and reply:
+        pcm, rate = bytes(_ptt["pcm"]), _ptt["rate"]
+        _ptt["pcm"] = bytearray()
+        if len(pcm) < rate // 2:  # under a quarter of a second
+            reply({"t": "ptt", "state": "error", "error": "Too short: hold the button while you speak."})
+            return
+        if not os.path.exists(VOICE_PY):
+            reply({"t": "ptt", "state": "error", "error": "Run ./host/voice-setup.sh on Fedora once."})
+            return
+
+        def work():
+            import wave
+            path = os.path.expanduser("~/.cache/fedora-pad/phone-ptt.wav")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with wave.open(path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(rate)
+                w.writeframes(pcm)
+            reply({"t": "ptt", "state": "writing"})
+            try:  # Whisper can take a while on a slow laptop
+                out = subprocess.run([VOICE_PY, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                             "voice-type.py"), "--file", path],
+                                     capture_output=True, text=True, timeout=180).stdout
+            except (subprocess.SubprocessError, OSError):
+                out = ""
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            try:
+                result = json.loads(out.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                result = {"error": "Whisper didn't answer."}
+            if result.get("error"):
+                reply({"t": "ptt", "state": "error", "error": result["error"]})
+            else:
+                reply({"t": "ptt", "state": "done", "text": result.get("text", "")})
+
+        threading.Thread(target=work, daemon=True).start()
+
+
 def set_keyboard_language(lang):
     """Tablet's Persian keys: switch Fedora's keyboard to Persian ('fa') or back ('en').
     Adds the Persian layout to Fedora the first time."""
@@ -1172,6 +1232,8 @@ def handle(inj, msg, reply=None):
         webcam.frame(str(msg.get("jpg", "")))
     elif t == "micpcm":
         webcam.pcm(str(msg.get("pcm", "")), msg.get("rate", 48000))
+    elif t in ("pttstart", "pttpcm", "pttstop"):  # Push to Talk from the phone web app
+        phone_ptt(t, msg, reply)
     elif t == "lang" and msg.get("id") in ("fa", "en"):
         threading.Thread(target=set_keyboard_language, args=(msg["id"],), daemon=True).start()
     elif t == "ambient?" and reply:

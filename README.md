@@ -89,7 +89,7 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 **From now on: unlock Fedora and plug in the tablet. That's it.**
 
 ## 📱 iPhone, iPad and other phones (web app)
-Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter, Stats and **Webcam** (the phone's camera and mic as the PC's webcam, Fedora). Encrypted, and only for devices you pair.
+Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Push to Talk, Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter, Stats and **Webcam** (the phone's camera and mic as the PC's webcam, Fedora). Encrypted, and only for devices you pair.
 
 1. Turn it on: Fedora `./host/webapp-setup.sh` · Windows double-click `windows\WebApp.bat`.
 2. On the iPhone / iPad, open the address it shows in **Safari** (or scan the QR code), and follow the page:
@@ -98,7 +98,8 @@ Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Key
 4. Open Fedora Pad from the Home Screen, tap **Show a code on the PC**, and type the 6-digit code that pops up on the PC.
 
 Off: `./host/webapp-setup.sh --off` · unpair every phone: `./host/webapp-setup.sh --forget` (Windows: `WebApp.bat off` / `WebApp.bat forget`).
-Safari can't do a few things the Android app does: Push to Talk with the phone's mic, the floating button over other apps, and Books / Handwriting / home-screen features.
+**🎙 Push to Talk** works on the phone too: hold the big button and speak, let go and the words are typed on the PC. *iPhone speech* shows the words live (internet; Fedora and Windows); *PC (offline)* sends the phone's mic to Whisper on Fedora (`./host/voice-setup.sh`, better for Persian).
+Safari can't do a few things the Android app does: the floating button over other apps, and Books / Handwriting / home-screen features.
 
 ## 🪟 Windows version
 Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), trackpad, Media, Controls, Shortcuts, Apps, Stream Deck, Windows switcher, Notes, Terminal Pad, Send Files, Text & Clipboard, Stats and Ambient Light.

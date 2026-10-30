@@ -89,11 +89,11 @@ def paste(text):
         subprocess.run(["wl-copy"], input=old, timeout=3)
 
 
-def transcribe(cfg):
+def transcribe(cfg, path=WAV):
     from faster_whisper import WhisperModel
     model = WhisperModel(cfg["model"], device="cpu", compute_type="int8", download_root=MODELS)
     lang = None if cfg["language"] in ("", "auto") else cfg["language"]
-    segments, _ = model.transcribe(WAV, language=lang, beam_size=5, vad_filter=True)
+    segments, _ = model.transcribe(path, language=lang, beam_size=5, vad_filter=True)
     return " ".join(s.text.strip() for s in segments).strip()
 
 
@@ -139,9 +139,18 @@ def record_and_type():
     notify("✅ " + (text if len(text) < 80 else text[:77] + "…"), nid)
 
 
-def main():  # no argument: start / stop; "start" or "stop" for Push to Talk
+def main():  # no argument: start / stop; "start" or "stop" for Push to Talk; "--file x.wav"
     os.makedirs(CACHE, exist_ok=True)
     arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if arg == "--file" and len(sys.argv) > 2:  # a recording from the phone (Push to Talk in the web app)
+        try:
+            text = transcribe(config(), sys.argv[2])
+            if text:
+                paste(text)
+            print(json.dumps({"text": text}, ensure_ascii=False), flush=True)
+        except Exception as err:  # noqa: BLE001 - reported to the phone
+            print(json.dumps({"error": str(err)[:300]}), flush=True)
+        return
     if arg == "--run":
         record_and_type()
         return

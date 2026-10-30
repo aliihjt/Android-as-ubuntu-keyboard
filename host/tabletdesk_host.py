@@ -511,13 +511,17 @@ def mirror_status(error=None):
             "error": error or (mirror_proc.error if mirror_proc else "")}
 
 
+AIRPLAY_NO_CODE = os.path.expanduser("~/.config/tabletdesk/airplay-no-code")  # exists = no code asked
+
+
 def airplay_status(error=None):
     return {"t": "airplay", "on": bool(airplay_proc and airplay_proc.running()),
             "name": socket.gethostname().split(".")[0] + " (Fedora Pad)", "pin": pad_extras.airplay_pin(CONF_DIR),
+            "code": not os.path.exists(AIRPLAY_NO_CODE),
             "error": error or (airplay_proc.error if airplay_proc else "")}
 
 
-def screen_to_pc(t, on, audio, reply):
+def screen_to_pc(t, on, audio, reply, code=None):
     """The tablet (scrcpy, over the cable) or an iPhone (AirPlay) shown in a window on this PC."""
     if t == "mirror":
         if not on:
@@ -530,15 +534,31 @@ def screen_to_pc(t, on, audio, reply):
             argv.append("--no-audio")
         mirror_proc.start(argv, dict(os.environ, ADB=shutil.which("adb") or "adb"))
         return reply(mirror_status())
+    if code is not None:  # "ask for a code" switch on the tablet / phone
+        if code:
+            try:
+                os.remove(AIRPLAY_NO_CODE)
+            except OSError:
+                pass
+        else:
+            os.makedirs(CONF_DIR, exist_ok=True)
+            open(AIRPLAY_NO_CODE, "w").close()
     if not on:
         airplay_proc.stop()
         return reply(airplay_status())
     if not shutil.which("uxplay"):
         return reply(airplay_status("Run ./host/mirror-setup.sh on Fedora once."))
     st = airplay_status()
-    airplay_proc.start(["uxplay", "-n", st["name"], "-nh", "-pin", st["pin"],
-                        "-reg", os.path.join(CONF_DIR, "airplay-devices")])
-    reply(airplay_status())
+    argv = ["uxplay", "-n", st["name"], "-nh"]
+    if st["code"]:  # the iPhone asks for this code once, then remembers this PC
+        argv += ["-pin", st["pin"], "-reg", os.path.join(CONF_DIR, "airplay-devices")]
+    airplay_proc.start(argv)
+    st = airplay_status()
+    if st["on"]:
+        desktop_notify("AirPlay is on: " + st["name"],
+                       ("Code for the iPhone: " + st["pin"] + "  (asked only the first time)") if st["code"]
+                       else "On the iPhone: Control Center › Screen Mirroring")
+    reply(st)
 
 
 def desktop_notify(title, text):
@@ -1282,7 +1302,8 @@ def handle(inj, msg, reply=None):
     elif t == "micpcm":
         webcam.pcm(str(msg.get("pcm", "")), msg.get("rate", 48000))
     elif t in ("mirror", "airplay") and reply:  # tablet / iPhone screen in a window on this PC
-        threading.Thread(target=screen_to_pc, args=(t, bool(msg.get("on")), bool(msg.get("audio", True)), reply),
+        threading.Thread(target=screen_to_pc, args=(t, bool(msg.get("on")), bool(msg.get("audio", True)), reply,
+                                                    None if "code" not in msg else bool(msg["code"])),
                          daemon=True).start()
     elif t == "mirror?" and reply:
         reply(mirror_status())

@@ -868,17 +868,26 @@ PAGES.mirror = () => {
   const go = el("button", {class: "btn", style: "width:100%"}, "Start AirPlay on the PC");
   let live = false;
   go.addEventListener("click", () => { send({t: "airplay", on: !live}); state.textContent = live ? "Stopping…" : "Starting…"; });
+  const codeToggle = el("div", {class: "toggle on"});
+  const codeRow = el("button", {class: "row", onclick: () => {
+    const want = !codeToggle.classList.contains("on"); codeToggle.classList.toggle("on", want);
+    send({t: "airplay", on: live, code: want}); }},
+    chip("🔢", "indigo"), el("div", {class: "grow"}, "Ask for a code", el("small", {}, "The iPhone asks once; then it's remembered")), codeToggle);
   app.append(el("div", {class: "center", style: "font-size:44px;margin:6px 0"}, "📱➜💻"), state, go,
+    el("div", {class: "group", style: "margin-top:12px"}, codeRow),
     el("div", {class: "h"}, "Then on this " + (/iPad/.test(navigator.userAgent) ? "iPad" : "iPhone")),
     el("div", {class: "group"},
       actionRow("1", "blue", "Open Control Center", () => {}, "Swipe down from the top-right corner"),
       actionRow("2", "blue", "Tap Screen Mirroring (two rectangles)", () => {}),
-      actionRow("3", "blue", "Pick the PC's name", () => {}, "The first time, type the code shown above")),
+      actionRow("3", "blue", "Pick the PC's name", () => {}, "If it asks for a password: type the code shown above (it also pops up on the PC)")),
     el("p", {class: "sub"}, "Same Wi-Fi as the PC. Stop mirroring from Control Center or with the button above. "
       + "Fedora only (run ./host/mirror-setup.sh once). An Android tablet uses Show on PC in the Fedora Pad app instead."));
   on("airplay", m => {
     live = !!m.on;
-    state.textContent = live ? "🟢 Ready: pick “" + m.name + "”\nFirst-time code: " + m.pin : m.error ? "⚠️ " + m.error : "AirPlay receiver is off";
+    const code = m.code !== false;
+    codeToggle.classList.toggle("on", code);
+    state.textContent = live ? "🟢 Ready: pick “" + m.name + "”\n" + (code ? "Code:  " + m.pin : "No code needed")
+      : m.error ? "⚠️ " + m.error : "AirPlay receiver is off";
     go.textContent = live ? "Stop AirPlay" : "Start AirPlay on the PC";
     go.style.background = live ? "var(--red)" : "";
   });

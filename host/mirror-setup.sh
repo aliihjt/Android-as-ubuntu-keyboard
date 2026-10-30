@@ -44,13 +44,21 @@ Icon=phone
 Exec=env ADB=$(command -v adb) $HOME/.local/share/fedora-pad/scrcpy/scrcpy --window-title="Tablet · Fedora Pad" --stay-awake --max-size=1920
 Categories=Utility;
 DESK
+mkdir -p "$HOME/.local/share/fedora-pad"
+cat >"$HOME/.local/share/fedora-pad/airplay.sh" <<SCRIPT
+#!/bin/sh
+# iPhone Mirroring launcher: shows the code, then waits for the iPhone
+notify-send -a "Fedora Pad" "AirPlay is on: $name" "Code for the iPhone: $pin  (asked only the first time)"
+exec uxplay -n "$name" -nh -pin $pin -reg "$CONF/airplay-devices"
+SCRIPT
+chmod +x "$HOME/.local/share/fedora-pad/airplay.sh"
 cat >"$APPS/fedorapad-airplay.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=iPhone Mirroring (AirPlay)
 Comment=Show the iPhone or iPad here: Control Center › Screen Mirroring › "$name"
 Icon=video-display
-Exec=uxplay -n "$name" -nh -pin $pin -reg $CONF/airplay-devices
+Exec=$HOME/.local/share/fedora-pad/airplay.sh
 Categories=Utility;
 DESK
 update-desktop-database "$APPS" 2>/dev/null || true

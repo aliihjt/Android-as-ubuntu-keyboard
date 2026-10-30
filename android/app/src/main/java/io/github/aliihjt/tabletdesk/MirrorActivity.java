@@ -17,7 +17,8 @@ import org.json.JSONObject;
 public class MirrorActivity extends Page {
     private SharedPreferences prefs;
     private TextView tabletState, tabletButton, airState, airButton;
-    private boolean tabletOn, airOn;
+    private boolean tabletOn, airOn, applying;
+    private Switch codeSwitch;
 
     @Override
     protected String title() {
@@ -55,7 +56,12 @@ public class MirrorActivity extends Page {
         airButton = th.secondaryButton("Start AirPlay on the PC", v -> send("airplay", !airOn));
         air.addView(airButton, th.fullWidth(12));
         add(air);
-        add(th.caption("Then on the iPhone: Control Center › Screen Mirroring › pick the PC. Same Wi-Fi."), 8);
+        codeSwitch = th.toggle(true, on -> {
+            if (!applying) sendCode(on);
+        });
+        add(th.group(th.row("🔢", Theme.INDIGO, "Ask for a code", "The iPhone asks once; then it's remembered", codeSwitch)), 10);
+        add(th.caption("Then on the iPhone: Control Center › Screen Mirroring › pick the PC. Same Wi-Fi. "
+                + "The code also pops up on the PC."), 8);
     }
 
     private void send(String t, boolean on) {
@@ -70,6 +76,13 @@ public class MirrorActivity extends Page {
         (t.equals("mirror") ? tabletState : airState).setText(on ? "Starting…" : "Stopping…");
     }
 
+    private void sendCode(boolean on) {
+        try {
+            link.send(new JSONObject().put("t", "airplay").put("on", airOn).put("code", on));
+        } catch (JSONException ignored) {
+        }
+    }
+
     private void showTablet(JSONObject m) {
         tabletOn = m.optBoolean("on");
         String err = m.optString("error", "");
@@ -82,8 +95,13 @@ public class MirrorActivity extends Page {
     private void showAir(JSONObject m) {
         airOn = m.optBoolean("on");
         String err = m.optString("error", "");
-        airState.setText(airOn ? "🟢 Ready: on the iPhone pick “" + m.optString("name") + "”\nFirst time code: "
-                + m.optString("pin") : !err.isEmpty() ? "⚠️ " + err : "AirPlay receiver is off");
+        boolean code = m.optBoolean("code", true);
+        airState.setText(airOn ? "🟢 Ready: on the iPhone pick “" + m.optString("name") + "”"
+                + (code ? "\nCode:  " + m.optString("pin") : "\nNo code needed")
+                : !err.isEmpty() ? "⚠️ " + err : "AirPlay receiver is off");
+        applying = true;
+        codeSwitch.setChecked(code);
+        applying = false;
         airState.setTextColor(!airOn && !err.isEmpty() ? Theme.ORANGE : th.text);
         airButton.setText(airOn ? "Stop AirPlay" : "Start AirPlay on the PC");
     }

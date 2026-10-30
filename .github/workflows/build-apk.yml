@@ -18,6 +18,10 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    # one build at a time: two branches publishing the same release at once collide
+    concurrency:
+      group: apk-release
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: android

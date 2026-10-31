@@ -108,6 +108,21 @@ public class SettingsActivity extends Page {
         box.addView(steps);
         add(box);
 
+        section("App update");
+        TextView updateState = th.caption("Build " + AppUpdate.installed(this) + " · tap to check for a newer one");
+        android.widget.ProgressBar bar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setVisibility(android.view.View.GONE);
+        LinearLayout updateRow = th.row("⬇️", Theme.GREEN, "Update Fedora Pad", "From GitHub, right here", th.chevron());
+        th.click(updateRow, v -> AppUpdate.run(this, (pct, text) -> {
+            updateState.setText(text);
+            bar.setVisibility(pct >= 0 ? android.view.View.VISIBLE : android.view.View.GONE);
+            if (pct >= 0) bar.setProgress(pct);
+        }));
+        add(th.group(updateRow));
+        add(bar, 8);
+        add(updateState, 6);
+
         section("About");
         add(th.group(
                 th.row("📱", Theme.BLUE, "Fedora Pad", "Build " + buildNumber(), null),

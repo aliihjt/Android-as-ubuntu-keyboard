@@ -51,6 +51,11 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | | Page | What it does |
 |---|---|---|
 | 📚 | **Books** | PDF, EPUB and text books with covers and reading progress. Text size, night mode, swipe to turn pages. Select text to ask Claude about it or keep it as a note; on a PDF, Claude gets a picture of the page. |
+| 🔊 | **Read aloud** | 🔊 Listen in a book (EPUB / text): reads paragraph by paragraph and highlights it, ⏮ ⏭, speed 0.8–2×, sleep timer (15/30/60 min or end of part), goes on to the next part. Persian books use a Persian voice (install eSpeak NG or RHVoice if Android has none). |
+| 🔎 | **Tap a word** | Double-tap any word: translate or define it with your apps (Google Translate, a dictionary…), Wiktionary, or Claude (English ↔ Persian), or ⭐ save it to **Words** with its sentence. Words has search and ✨ Quiz me. |
+| 🖍 | **Highlights** | Select text › 🖍 Highlight: 4 colours and an optional note; they stay in the book. 📑 shows a book's highlights; ⇪ Export as Markdown to Downloads, the PC, Notes or any app (Obsidian, Keep…). |
+| ⬇️ | **Get Books** | Free classics from Project Gutenberg (search, one tap downloads the EPUB into Books); 🌹 Persian poetry from Ganjoor — Hafez, Saadi, Rumi, Ferdowsi, Khayyam… with meanings, read aloud, and 🎲 **فال حافظ**; 🇮🇷 Iranian stores: Taaghche, Fidibo, Ketabrah, Navaar, Ketabnak, Wikisource. |
+| 📖 | **Reader home** | Settings › Home screen › 📖 Reader (or the Reader Home icon): a calm home with a big clock, Continue reading, today's goal ring, 🔥 streak and the week, reading tools, your pinned apps and ✨ Ask Claude. 🖥 switches back to the desktop. Tap the goal card to change the daily minutes. |
 | ✍️ | **Handwriting** | Write or draw with a finger or stylus (palm ignored with a stylus): pens, highlighter, eraser, undo, lined or grid paper. Save to the Gallery, send to Fedora, or let Claude read it. |
 | 🗒 | **Notes** | Sticky notes, also on the Fedora desktop. Book quotes and AI answers can be saved here. |
 | ✨ | **Claude** | Opens the official Claude app (free on the Play Store; Fedora Pad offers to install it). **Ask Claude** in Books, Handwriting and Search sends your question, and a picture of the page or your writing, straight to it; the question is also copied in case you need to paste it. |

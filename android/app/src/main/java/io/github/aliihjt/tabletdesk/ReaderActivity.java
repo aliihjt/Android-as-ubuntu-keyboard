@@ -13,11 +13,15 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.text.Html;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -55,8 +59,9 @@ import java.util.zip.ZipFile;
 
 /**
  * Reads one book: PDF pages (swipe or ◀ ▶, zoom, night mode), or EPUB / text
- * chapters in a web view (text size, night mode). Select text to ask Claude about
- * it or keep it as a note. Remembers where you stopped.
+ * chapters in a web view (text size, night mode, read aloud, highlights,
+ * double-tap a word to translate it). Select text to ask Claude about it or
+ * keep it as a note. Remembers where you stopped and how long you read.
  */
 public class ReaderActivity extends Page {
     private static final String HOST = "https://book.local/";
@@ -84,6 +89,18 @@ public class ReaderActivity extends Page {
     private String plainHtml;
     private int restoreScroll;
 
+    // read aloud
+    private TextToSpeech tts;
+    private boolean ttsReady, listening, stopAtPartEnd;
+    private List<String> paras = new ArrayList<>();
+    private int sayAt;
+    private int rate = 1;  // index in RATES
+    private static final float[] RATES = {0.8f, 1f, 1.25f, 1.5f, 2f};
+    private LinearLayout listenBar;
+    private TextView playButton, rateButton, sleepButton;
+    private final Runnable sleepStop = this::stopListening;
+    private long readSince;
+
     @Override
     protected String title() {
         String t = getIntent().getStringExtra("title");
@@ -107,6 +124,7 @@ public class ReaderActivity extends Page {
         zoom = "pdf".equals(type) ? 100 : prefs.getInt("reader_font", 110);
 
         content.addView(toolbar());
+        content.addView(listenBar());
         body = new FrameLayout(this);
         body.setBackground(Theme.round(night ? 0xFF1C1C1E : Color.WHITE, th.dp(12)));
         body.setClipToOutline(true);
@@ -132,15 +150,60 @@ public class ReaderActivity extends Page {
         bar.addView(tool("◀", v -> go(index - 1)));
         where = th.text("", 14, th.secondary, true);
         where.setGravity(Gravity.CENTER);
-        bar.addView(where, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        where.setPadding(th.dp(8), 0, th.dp(2), 0);
+        bar.addView(where);
         bar.addView(tool("▶", v -> go(index + 1)));
-        bar.addView(tool("A−", v -> scale(-1)));
-        bar.addView(tool("A+", v -> scale(1)));
-        bar.addView(tool("🌙", v -> toggleNight()));
-        bar.addView(tool("✨ Ask Claude", v -> askAi()));
-        bar.addView(tool("🗒 Note", v -> note()));
+        // the rest scrolls sideways when the tablet is upright
+        LinearLayout tools = new LinearLayout(this);
+        tools.addView(tool("A−", v -> scale(-1)));
+        tools.addView(tool("A+", v -> scale(1)));
+        tools.addView(tool("🌙", v -> toggleNight()));
+        tools.addView(tool("🔊 Listen", v -> startListening()));
+        tools.addView(tool("🖍 Highlight", v -> highlight()));
+        tools.addView(tool("🗒 Note", v -> note()));
+        tools.addView(tool("✨ Ask Claude", v -> askAi()));
+        tools.addView(tool("📑", v -> startActivity(new Intent(this, HighlightsActivity.class)
+                .putExtra("uri", uri).putExtra("title", bookTitle))));
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.addView(tools);
+        bar.addView(scroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         bar.setPadding(0, 0, 0, th.dp(8));
         return bar;
+    }
+
+    /** Shown while reading aloud: play / pause, paragraph back and forward, speed, sleep timer. */
+    private View listenBar() {
+        listenBar = new LinearLayout(this);
+        listenBar.setGravity(Gravity.CENTER_VERTICAL);
+        listenBar.setVisibility(View.GONE);
+        TextView label = th.text("🔊 Reading aloud", 14, th.secondary, true);
+        listenBar.addView(label, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        listenBar.addView(tool("⏮", v -> speakFrom(Math.max(0, sayAt - 1))));
+        playButton = tool("⏸", v -> {
+            if (listening) pauseListening();
+            else resumeListening();
+        });
+        listenBar.addView(playButton);
+        listenBar.addView(tool("⏭", v -> speakFrom(Math.min(paras.size() - 1, sayAt + 1))));
+        rateButton = tool("1×", v -> {
+            rate = (rate + 1) % RATES.length;
+            rateButton.setText(rateLabel());
+            prefs.edit().putInt("tts_rate", rate).apply();
+            if (tts != null) tts.setSpeechRate(RATES[rate]);
+            if (listening) speakFrom(sayAt);
+        });
+        listenBar.addView(rateButton);
+        sleepButton = tool("⏲", v -> sleepTimer());
+        listenBar.addView(sleepButton);
+        listenBar.addView(tool("✕", v -> stopListening()));
+        listenBar.setPadding(0, 0, 0, th.dp(8));
+        return listenBar;
+    }
+
+    private String rateLabel() {
+        float r = RATES[rate];
+        return (r == (int) r ? String.valueOf((int) r) : String.valueOf(r)) + "×";
     }
 
     private TextView tool(String label, View.OnClickListener l) {
@@ -332,8 +395,15 @@ public class ReaderActivity extends Page {
             while ((n = in.read(buf)) > 0 && all.size() < 8_000_000) all.write(buf, 0, n);
         }
         String text = new String(all.toByteArray(), StandardCharsets.UTF_8);
-        plainHtml = "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>"
-                + "<body dir='auto'><div style='white-space:pre-wrap'>" + Html.escapeHtml(text) + "</div></body></html>";
+        // paragraphs, so read aloud can follow along
+        StringBuilder html = new StringBuilder("<html><head><meta charset='utf-8'>"
+                + "<meta name='viewport' content='width=device-width'></head><body dir='auto'>");
+        for (String para : text.split("\\r?\\n\\s*\\n")) {
+            if (para.trim().isEmpty()) continue;
+            html.append("<p dir='auto' style='white-space:pre-wrap;margin:0 0 1em'>")
+                    .append(Html.escapeHtml(para.replaceAll("^\\s*\\n|\\n\\s*$", ""))).append("</p>");
+        }
+        plainHtml = html.append("</body></html>").toString();
         total = 1;
         index = 0;
         setUpWeb();
@@ -349,6 +419,7 @@ public class ReaderActivity extends Page {
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
         web.setBackgroundColor(Color.TRANSPARENT);
+        web.addJavascriptInterface(new Bridge(), "FP");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
@@ -384,11 +455,14 @@ public class ReaderActivity extends Page {
             @Override
             public void onPageFinished(WebView v, String url) {
                 applyStyle();
+                v.evaluateJavascript(TAP_WORD, null);
+                applyHighlights();
                 int at = restoreScroll;
                 restoreScroll = 0;
                 if (at > 0) {
                     v.evaluateJavascript("window.scrollTo(0," + at + "*document.body.scrollHeight/1000)", null);
                 }
+                if (listening) collectAndSpeak(false);  // turned the page while listening
             }
         });
         body.addView(web);
@@ -407,7 +481,16 @@ public class ReaderActivity extends Page {
                 + "body{max-width:44em;margin:0 auto !important;padding:1.2em 1.4em 4em !important;line-height:1.75;"
                 + "font-family:sans-serif;" + (night ? "background:#1c1c1e !important;color:#e5e5ea !important;" : "")
                 + "}img,svg{max-width:100% !important;height:auto !important}"
-                + (night ? "a{color:#0a84ff}*{background-color:transparent !important;color:inherit !important}" : "");
+                + (night ? "a{color:#0a84ff}*{background-color:transparent !important;color:inherit !important}" : "")
+                + ".fp-say{background-color:rgba(10,132,255,.18) !important;border-radius:6px}"
+                + ".fp-yellow{background-color:#ffe066 !important;color:#000 !important}"
+                + ".fp-green{background-color:#9be58f !important;color:#000 !important}"
+                + ".fp-blue{background-color:#8fc8ff !important;color:#000 !important}"
+                + ".fp-pink{background-color:#ffa3c2 !important;color:#000 !important}"
+                + "::highlight(fp-yellow){background-color:#ffe066;color:#000}"
+                + "::highlight(fp-green){background-color:#9be58f;color:#000}"
+                + "::highlight(fp-blue){background-color:#8fc8ff;color:#000}"
+                + "::highlight(fp-pink){background-color:#ffa3c2;color:#000}";
         web.evaluateJavascript("(function(){var s=document.getElementById('fp-style');"
                 + "if(!s){s=document.createElement('style');s.id='fp-style';(document.head||document.body).appendChild(s);}"
                 + "s.textContent=" + JSONObject.quote(css) + ";})()", null);
@@ -495,6 +578,258 @@ public class ReaderActivity extends Page {
         });
     }
 
+    // ---- double-tap a word ----
+
+    /** Double-tap a word: FP.word(word, its sentence). */
+    private static final String TAP_WORD = "(function(){if(window.fpTap)return;window.fpTap=1;var last=0,lx=0,ly=0;"
+            + "document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('a'))return;"
+            + "var now=Date.now(),dbl=now-last<400&&Math.abs(e.clientX-lx)<30&&Math.abs(e.clientY-ly)<30;"
+            + "last=dbl?0:now;lx=e.clientX;ly=e.clientY;if(!dbl)return;"
+            + "var r=document.caretRangeFromPoint(e.clientX,e.clientY);if(!r||r.startContainer.nodeType!=3)return;"
+            + "var s=r.startContainer.nodeValue,o=r.startOffset,re=/[\\p{L}\\p{M}\\p{N}\\u200c'’-]/u,a=o,b=o;"
+            + "while(a>0&&re.test(s[a-1]))a--;while(b<s.length&&re.test(s[b]))b++;var w=s.substring(a,b);if(!w)return;"
+            + "var p=r.startContainer.parentNode.innerText||s,i=p.indexOf(w),j=i+w.length;"
+            + "var st=Math.max(p.lastIndexOf('.',i),p.lastIndexOf('!',i),p.lastIndexOf('?',i),p.lastIndexOf('؟',i))+1;"
+            + "var en=['.','!','?','؟'].map(function(c){return p.indexOf(c,j)}).filter(function(x){return x>=0});"
+            + "en=en.length?Math.min.apply(null,en)+1:p.length;"
+            + "FP.word(w,i<0?'':p.substring(st,en).trim().substring(0,400));},true);})()";
+
+    public final class Bridge {  // public: the web view calls it by reflection
+        @JavascriptInterface
+        public void word(String word, String sentence) {
+            main.post(() -> {
+                if (!isDestroyed()) WordLookup.show(ReaderActivity.this, word, sentence == null ? "" : sentence, bookTitle);
+            });
+        }
+    }
+
+    // ---- highlights ----
+
+    /** Marks text in the page, ignoring spaces and line breaks; CSS highlights when the web view has them. */
+    private static final String MARK = "(function(list){var api=window.CSS&&CSS.highlights&&window.Highlight,sets={};"
+            + "function map(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null),n,nodes=[],all='',at=[];"
+            + "while(n=w.nextNode()){var pn=n.parentNode;if(pn&&/^(SCRIPT|STYLE)$/.test(pn.nodeName))continue;var s=n.nodeValue;"
+            + "for(var i=0;i<s.length;i++){if(/\\s/.test(s[i]))continue;all+=s[i];at.push([nodes.length,i]);}nodes.push(n);}"
+            + "return{all:all,at:at,nodes:nodes};}"
+            + "function find(q){q=q.replace(/\\s+/g,'');if(!q)return null;var m=map(),k=m.all.indexOf(q);if(k<0)return null;"
+            + "var a=m.at[k],b=m.at[k+q.length-1],r=document.createRange();"
+            + "r.setStart(m.nodes[a[0]],a[1]);r.setEnd(m.nodes[b[0]],b[1]+1);return r;}"
+            + "function wrap(r,c){var root=r.commonAncestorContainer;if(root.nodeType==3)root=root.parentNode;"
+            + "var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null),n,ts=[];while(n=w.nextNode())if(r.intersectsNode(n))ts.push(n);"
+            + "var sc=r.startContainer,so=r.startOffset,ec=r.endContainer,eo=r.endOffset;"
+            + "ts.forEach(function(t){var s=t===sc?so:0,e=t===ec?eo:t.nodeValue.length;if(e<=s)return;var mid=t;"
+            + "if(s>0){mid=t.splitText(s);e-=s;}if(e<mid.nodeValue.length)mid.splitText(e);"
+            + "var m=document.createElement('mark');m.className='fp-'+c;mid.parentNode.insertBefore(m,mid);m.appendChild(mid);});}"
+            + "if(api)['yellow','green','blue','pink'].forEach(function(c){CSS.highlights.delete('fp-'+c)});"
+            + "list.forEach(function(h){var r=find(h.t);if(!r)return;if(api)(sets[h.c]=sets[h.c]||[]).push(r);else wrap(r,h.c);});"
+            + "if(api)for(var c in sets)CSS.highlights.set('fp-'+c,new Highlight(...sets[c]));})";
+
+    private void applyHighlights() {
+        if (web == null) return;
+        JSONArray list = new JSONArray();
+        for (ReadingData.Highlight h : ReadingData.highlights(this, uri)) {
+            if (h.part != index) continue;
+            try {
+                list.put(new JSONObject().put("t", h.text).put("c", h.color));
+            } catch (org.json.JSONException ignored) {
+            }
+        }
+        if (list.length() > 0) web.evaluateJavascript(MARK + "(" + list + ")", null);
+    }
+
+    private void highlight() {
+        if (web == null) {
+            Toast.makeText(this, "Highlights work in EPUB and text books. In a PDF, use 🗒 Note.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        selection(sel -> {
+            if (sel.isEmpty()) {
+                Toast.makeText(this, "Select text first: long-press a word, then drag.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String text = sel.length() > 5000 ? sel.substring(0, 5000) : sel;
+            String[] color = {prefs.getString("hl_color", "yellow")};
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(th.dp(20), th.dp(8), th.dp(20), 0);
+            box.addView(th.segmented(new String[][]{{"yellow", "🟡 Yellow"}, {"green", "🟢 Green"},
+                    {"blue", "🔵 Blue"}, {"pink", "🩷 Pink"}}, color[0], c -> color[0] = c));
+            EditText note = new EditText(this);
+            note.setHint("Add a note (optional)");
+            note.setMinLines(2);
+            box.addView(note, th.fullWidth(10));
+            new AlertDialog.Builder(this).setTitle("Highlight")
+                    .setMessage(text.length() > 200 ? text.substring(0, 200) + "…" : text)
+                    .setView(box)
+                    .setPositiveButton("Save", (d, w) -> {
+                        prefs.edit().putString("hl_color", color[0]).apply();
+                        ReadingData.addHighlight(this, uri, bookTitle, index, text, color[0],
+                                note.getText().toString().trim());
+                        web.evaluateJavascript("window.getSelection().removeAllRanges()", null);
+                        applyHighlights();
+                    })
+                    .setNegativeButton("Cancel", null).show();
+        });
+    }
+
+    // ---- read aloud ----
+
+    /** Numbers the paragraphs and returns their text, and the first one on screen. */
+    private static final String PARAS = "(function(){var q='p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,dd,dt,td,figcaption,div';"
+            + "var els=document.body.querySelectorAll(q),out=[],start=-1;"
+            + "for(var i=0;i<els.length;i++){var e=els[i];if(e.querySelector(q))continue;var t=(e.innerText||'').trim();if(!t)continue;"
+            + "e.setAttribute('data-fp',out.length);if(start<0&&e.getBoundingClientRect().bottom>4)start=out.length;out.push(t);}"
+            + "if(!out.length){var b=(document.body.innerText||'').trim();if(b){document.body.setAttribute('data-fp',0);out.push(b);}}"
+            + "return JSON.stringify({p:out,s:Math.max(0,start)});})()";
+
+    private void startListening() {
+        if (web == null) {
+            Toast.makeText(this, "Read aloud works in EPUB and text books.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        listening = true;
+        listenBar.setVisibility(View.VISIBLE);
+        playButton.setText("⏸");
+        if (tts == null) {
+            rate = Math.max(0, Math.min(RATES.length - 1, prefs.getInt("tts_rate", 1)));
+            rateButton.setText(rateLabel());
+            tts = new TextToSpeech(this, status -> main.post(() -> {
+                ttsReady = status == TextToSpeech.SUCCESS;
+                if (!ttsReady) {
+                    Toast.makeText(this, "No text-to-speech engine. Install one from the app store "
+                            + "(Google Speech Services, or eSpeak NG / RHVoice for Persian).", Toast.LENGTH_LONG).show();
+                    stopListening();
+                    return;
+                }
+                tts.setSpeechRate(RATES[rate]);
+                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onStart(String id) {
+                        int k = Integer.parseInt(id.split(":")[0]);
+                        main.post(() -> saying(k));
+                    }
+
+                    @Override
+                    public void onDone(String id) {
+                        if (id.endsWith(":end")) main.post(() -> partFinished());
+                    }
+
+                    @Override
+                    public void onError(String id) {
+                        onDone(id);
+                    }
+                });
+                if (listening) collectAndSpeak(true);
+            }));
+            return;
+        }
+        if (ttsReady) collectAndSpeak(true);
+    }
+
+    private void collectAndSpeak(boolean fromScreen) {
+        if (!ttsReady) return;
+        web.evaluateJavascript(PARAS, v -> {
+            try {
+                JSONObject o = new JSONObject(new JSONArray("[" + v + "]").getString(0));
+                JSONArray p = o.getJSONArray("p");
+                paras = new ArrayList<>();
+                for (int i = 0; i < p.length(); i++) paras.add(p.getString(i));
+                speakFrom(fromScreen ? o.optInt("s") : 0);
+            } catch (Exception e) {
+                paras = new ArrayList<>();
+                partFinished();
+            }
+        });
+    }
+
+    private void speakFrom(int from) {
+        if (tts == null || !ttsReady || paras.isEmpty()) return;
+        listening = true;
+        playButton.setText("⏸");
+        sayAt = Math.max(0, Math.min(from, paras.size() - 1));
+        StringBuilder sample = new StringBuilder();
+        for (int i = sayAt; i < paras.size() && sample.length() < 1500; i++) sample.append(paras.get(i));
+        Locale lang = ReadingData.persian(sample.toString()) ? new Locale("fa", "IR")
+                : "fa".equals(Locale.getDefault().getLanguage()) ? Locale.US : Locale.getDefault();
+        if (tts.isLanguageAvailable(lang) < TextToSpeech.LANG_AVAILABLE && "fa".equals(lang.getLanguage())) {
+            Toast.makeText(this, "No Persian voice yet: install one (e.g. eSpeak NG or RHVoice) and pick it in "
+                    + "Android Settings › Text-to-speech.", Toast.LENGTH_LONG).show();
+        }
+        tts.setLanguage(lang);
+        int max = Math.max(500, TextToSpeech.getMaxSpeechInputLength() - 100);
+        boolean first = true;
+        for (int k = sayAt; k < paras.size(); k++) {
+            String t = paras.get(k);
+            List<String> chunks = new ArrayList<>();
+            while (t.length() > max) {  // split long paragraphs at a sentence or a space
+                int cut = Math.max(t.lastIndexOf(". ", max), t.lastIndexOf(' ', max));
+                if (cut < max / 2) cut = max;
+                chunks.add(t.substring(0, cut + 1));
+                t = t.substring(cut + 1);
+            }
+            chunks.add(t);
+            for (int j = 0; j < chunks.size(); j++) {
+                boolean last = k == paras.size() - 1 && j == chunks.size() - 1;
+                tts.speak(chunks.get(j), first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null,
+                        k + ":" + j + (last ? ":end" : ""));
+                first = false;
+            }
+        }
+    }
+
+    private void saying(int k) {
+        sayAt = k;
+        if (web != null) web.evaluateJavascript("(function(){var o=document.querySelector('.fp-say');"
+                + "if(o)o.classList.remove('fp-say');var e=document.querySelector('[data-fp=\"" + k + "\"]');"
+                + "if(e){e.classList.add('fp-say');e.scrollIntoView({block:'center',behavior:'smooth'});}})()", null);
+    }
+
+    /** The end of this part: go on to the next one, unless the sleep timer says stop. */
+    private void partFinished() {
+        if (!listening) return;
+        if (stopAtPartEnd || index + 1 >= total) {
+            stopListening();
+            return;
+        }
+        go(index + 1);  // onPageFinished carries on reading
+    }
+
+    private void pauseListening() {
+        listening = false;
+        if (tts != null) tts.stop();
+        playButton.setText("▶");
+    }
+
+    private void resumeListening() {
+        if (paras.isEmpty()) collectAndSpeak(true);
+        else speakFrom(sayAt);
+    }
+
+    private void stopListening() {
+        listening = false;
+        stopAtPartEnd = false;
+        main.removeCallbacks(sleepStop);
+        if (tts != null) tts.stop();
+        if (listenBar != null) {
+            listenBar.setVisibility(View.GONE);
+            sleepButton.setText("⏲");
+        }
+        if (web != null) web.evaluateJavascript("(function(){var o=document.querySelector('.fp-say');"
+                + "if(o)o.classList.remove('fp-say');})()", null);
+    }
+
+    private void sleepTimer() {
+        String[] names = {"Off", "15 minutes", "30 minutes", "60 minutes", "End of this part"};
+        int[] minutes = {0, 15, 30, 60, -1};
+        new AlertDialog.Builder(this).setTitle("Stop reading after")
+                .setItems(names, (d, w) -> {
+                    main.removeCallbacks(sleepStop);
+                    stopAtPartEnd = minutes[w] < 0;
+                    if (minutes[w] > 0) main.postDelayed(sleepStop, minutes[w] * 60_000L);
+                    sleepButton.setText(minutes[w] == 0 ? "⏲" : minutes[w] < 0 ? "⏲ part" : "⏲ " + minutes[w] + "m");
+                }).show();
+    }
+
     // ---- remember the place ----
 
     private void savePosition(int scroll) {
@@ -502,7 +837,14 @@ public class ReaderActivity extends Page {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        readSince = SystemClock.elapsedRealtime();
+    }
+
+    @Override
     protected void onPause() {
+        ReadingData.addSeconds(this, (SystemClock.elapsedRealtime() - readSince) / 1000);
         if (web != null) {
             web.evaluateJavascript("Math.round(1000*scrollY/Math.max(1,document.body.scrollHeight))", v -> {
                 try {
@@ -531,6 +873,8 @@ public class ReaderActivity extends Page {
             if (zip != null) zip.close();
         } catch (IOException ignored) {
         }
+        main.removeCallbacks(sleepStop);
+        if (tts != null) tts.shutdown();
         if (web != null) web.destroy();
         super.onDestroy();
     }

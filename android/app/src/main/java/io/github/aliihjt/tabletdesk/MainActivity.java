@@ -56,6 +56,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+    private ReaderHome readerHome;  // the calm reading home instead of the desktop
+    private String style;
     private TextView hostName, hostInfo, clock, battery, dot;
     private final Runnable tick = new Runnable() {
         @Override
@@ -96,6 +98,12 @@ public class MainActivity extends Page implements HostLink.StateListener {
     protected void build() {
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
         ((View) content.getParent()).setPadding(0, 0, 0, 0);  // edge to edge, like a desktop
+        style = prefs.getString("home_style", "desktop");
+        if (style.equals("reader")) {
+            readerHome = new ReaderHome(this, th, () -> setStyle("desktop"));
+            content.addView(readerHome.view(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            return;
+        }
 
         content.addView(menuBar());
 
@@ -263,6 +271,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
                 {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
+                {"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")},
+                {"⬇️", Theme.GREEN, "Get Books", GetBooksActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
                 {"🕰", Theme.ORANGE, "StandBy", StandByActivity.class},
                 {"⏱", Theme.RED, "Focus", FocusActivity.class},
@@ -421,9 +431,23 @@ public class MainActivity extends Page implements HostLink.StateListener {
                         .withEndAction(then)).start();
     }
 
+    /** Desktop or Reader home; Settings › Home screen can change it too. */
+    private void setStyle(String s) {
+        prefs.edit().putString("home_style", s).apply();
+        recreate();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        if (!prefs.getString("home_style", "desktop").equals(style)) {
+            recreate();
+            return;
+        }
+        if (readerHome != null) {
+            readerHome.resume();
+            return;
+        }
         handler.post(tick);
         link.setStateListener(this);
         link.requestState();
@@ -446,6 +470,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
 
     @Override
     protected void onPause() {
+        if (readerHome != null) readerHome.pause();
         handler.removeCallbacks(tick);
         handler.removeCallbacks(mediaTick);
         link.setStateListener(null);

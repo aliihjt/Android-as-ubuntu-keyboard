@@ -28,7 +28,11 @@ public class SettingsActivity extends Page {
         }));
 
         section("Home screen");
-        add(th.group(homeRow()));
+        add(th.segmented(new String[][]{{"desktop", "🖥 Desktop"}, {"reader", "📖 Reader"}},
+                prefs.getString("home_style", "desktop"), s -> prefs.edit().putString("home_style", s).apply()));
+        add(th.caption("Reader: a calm home for reading — continue your book, daily goal and streak, "
+                + "Get Books, Highlights, Words, Fal-e Hafez and Claude."), 6);
+        add(th.group(homeRow()), 12);
         add(th.caption("Make Fedora Pad the tablet's home screen: Books, Notes, AI, Search and your apps "
                 + "appear when the tablet starts and when you press Home. Choose your old launcher there to undo."), 6);
 

@@ -60,6 +60,8 @@ public class BooksActivity extends Page {
     protected void build() {
         LinearLayout top = new LinearLayout(this);
         top.addView(th.primaryButton("＋  Add books", v -> pick()), th.weighted(0));
+        top.addView(th.secondaryButton("📚 Get free books", v -> startActivity(new Intent(this, GetBooksActivity.class))),
+                th.weighted(10));
         add(top, 6);
         add(th.caption("PDF, EPUB and text files from the tablet, a USB stick or the cloud. "
                 + "In a book: select text to ask Claude about it or save it as a note."), 8);
@@ -124,6 +126,20 @@ public class BooksActivity extends Page {
             if (o != null && o.optString("uri").equals(uri)) return o.optInt("scroll", 0);
         }
         return 0;
+    }
+
+    /** Adds a book (e.g. one downloaded from Get Books) unless it is already there. */
+    static void addBook(Context c, String uri, String title, String type) {
+        JSONArray all = raw(c);
+        for (int i = 0; i < all.length(); i++) {
+            JSONObject o = all.optJSONObject(i);
+            if (o != null && uri.equals(o.optString("uri"))) return;
+        }
+        try {
+            all.put(new JSONObject().put("uri", uri).put("title", title).put("type", type));
+        } catch (JSONException ignored) {
+        }
+        prefs(c).edit().putString(LIBRARY, all.toString()).apply();
     }
 
     static void open(Context c, Book b) {
@@ -266,9 +282,14 @@ public class BooksActivity extends Page {
             if (o != null && !o.optString("uri").equals(b.uri)) kept.put(o);
         }
         prefs(this).edit().putString(LIBRARY, kept.toString()).apply();
-        try {
-            getContentResolver().releasePersistableUriPermission(Uri.parse(b.uri), Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (SecurityException ignored) {
+        Uri u = Uri.parse(b.uri);
+        if ("file".equals(u.getScheme()) && u.getPath() != null && u.getPath().startsWith(getFilesDir().getPath())) {
+            new java.io.File(u.getPath()).delete();  // a book downloaded in Get Books
+        } else {
+            try {
+                getContentResolver().releasePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException ignored) {
+            }
         }
         refresh();
     }

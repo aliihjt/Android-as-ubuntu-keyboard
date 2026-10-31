@@ -32,6 +32,14 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- reader: translate / dictionary apps, and text-to-speech voices -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application
@@ -94,6 +102,10 @@
             </intent-filter>
         </service>
         <activity android:name=".BooksActivity" android:exported="false" />
+        <activity android:name=".GetBooksActivity" android:exported="false" />
+        <activity android:name=".PoemActivity" android:exported="false" />
+        <activity android:name=".HighlightsActivity" android:exported="false" />
+        <activity android:name=".VocabActivity" android:exported="false" />
         <activity android:name=".ReaderActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
         <activity android:name=".SketchActivity" android:exported="false"

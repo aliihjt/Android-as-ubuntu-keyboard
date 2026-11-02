@@ -44,6 +44,44 @@ update_app() {
   fi
 }
 
+# iiSU game launcher on the tablet (Controller page › "When a controller connects")
+IISU_PKG=com.iisulauncher
+IISU_RELEASES=https://api.github.com/repos/iisu-network/iiSU/releases?per_page=5
+
+install_iisu() {
+  if adb shell pm list packages "$IISU_PKG" 2>/dev/null | tr -d '\r' | grep -qx "package:$IISU_PKG"; then
+    echo "[tabletdesk] iiSU is already on the tablet."
+    return 0
+  fi
+  local cache="$HOME/.cache/tabletdesk" url out
+  mkdir -p "$cache"
+  # newest release (alpha builds included) that has an APK attached
+  url=$(curl -fsSL --max-time 15 -H "Accept: application/vnd.github+json" "$IISU_RELEASES" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    releases = json.load(sys.stdin)
+except ValueError:
+    releases = []
+for r in releases:
+    for a in r.get("assets", []):
+        if a.get("name", "").lower().endswith(".apk"):
+            print(a["browser_download_url"]); sys.exit()')
+  if [ -z "$url" ]; then
+    echo "[tabletdesk] Could not find the iiSU download (offline?). Get it from github.com/iisu-network/iiSU/releases"
+    return 1
+  fi
+  echo "[tabletdesk] Installing iiSU on the tablet: ${url##*/}"
+  curl -fsSL --max-time 300 -o "$cache/iiSU.apk" "$url" || { echo "[tabletdesk] iiSU download failed."; return 1; }
+  out=$(adb install -r "$cache/iiSU.apk" 2>&1)
+  if echo "$out" | grep -q Success; then
+    echo "[tabletdesk] iiSU installed."
+  else
+    echo "[tabletdesk] iiSU install failed: $out"
+    echo "             Watch the tablet for 'Install anyway', or Xiaomi: Developer options › Install via USB."
+    return 1
+  fi
+}
+
 # run directly: ./host/app-update.sh
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   adb wait-for-usb-device

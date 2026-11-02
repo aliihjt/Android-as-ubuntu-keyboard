@@ -14,7 +14,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
   {"t":"cmd","name":"settings"}            run a whitelisted desktop command
   {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
-  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd 0|1
+  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd/steambp 0|1
   {"t":"state?"}                           ask for the values above
   {"t":"cursor"}                           make a hidden mouse pointer visible again
   {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
@@ -723,6 +723,8 @@ def set_value(what, value):
               ("power-saver", "balanced", "performance")[min(v, 2)]])
     elif what == "awake":  # keep the PC from going idle / locking
         set_keep_awake(bool(v))
+    elif what == "steambp":  # Steam Big Picture when a controller connects (host/gamepad.py)
+        gamepad.steam_autostart(bool(v))
 
 
 AWAKE_FILE = os.path.expanduser("~/.config/tabletdesk/idle-delay")
@@ -905,6 +907,7 @@ def read_state():
         state["power"] = ("power-saver", "balanced", "performance").index(profile)
     state["awake"] = _run(["gsettings", "get", "org.gnome.desktop.session",
                            "idle-delay"]).split()[-1:] == ["0"]
+    state["steambp"] = gamepad.steam_autostart_on()
     state.update(pc_info())
     return state
 

@@ -15,10 +15,20 @@ Tablet -> host:
 Host -> tablet:
   {"t":"padok","p":0,"kind":"xbox","name":"…"}  or  {"t":"padok","p":0,"error":"…"}
   {"t":"padrumble","p":0,"s":0.8,"w":0.3,"ms":200}   strong / weak motor 0..1, ms 0 = stop
+
+Steam Big Picture when a controller connects (any controller: through the
+tablet, USB or Bluetooth on the laptop). It runs as its own small user service,
+so it works without the tablet too:
+  python3 host/gamepad.py --steam on|off|status     (or the switch on the Controller page)
 """
 
+import os
 import select
+import shutil
+import subprocess
+import sys
 import threading
+import time
 
 try:
     from evdev import AbsInfo, UInput, ecodes as e
@@ -259,3 +269,122 @@ class Gamepads:
             pads = [self.pads.pop(k) for k in gone]
         for pad in pads:
             pad.close()
+
+
+# ---- Steam Big Picture when a controller connects ----
+
+STEAM_SERVICE = "fedorapad-steam.service"
+STEAM_UNIT = os.path.expanduser("~/.config/systemd/user/" + STEAM_SERVICE)
+STEAM_FLATPAK = "com.valvesoftware.Steam"
+BTN_SOUTH, INPUT_PROP_ACCELEROMETER = 0x130, 6
+
+
+def _bits(words):
+    """A /proc/bus/input/devices bitmap ("7fdb000000000000 0 0") as one number."""
+    n = 0
+    for i, w in enumerate(reversed(words.split())):
+        try:
+            n |= int(w, 16) << (64 * i)
+        except ValueError:
+            pass
+    return n
+
+
+def connected_controllers(path="/proc/bus/input/devices"):
+    """Names of the real game controllers plugged in now, by their sysfs path.
+
+    Skips the controller's motion sensors and touchpad, and virtual pads without
+    a physical path (Steam makes those itself while it runs)."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            blocks = f.read().split("\n\n")
+    except OSError:
+        return {}
+    found = {}
+    for block in blocks:
+        info = {}
+        for line in block.splitlines():
+            if line[:3] in ("N: ", "P: ", "S: "):
+                k, _, v = line[3:].partition("=")
+                info[line[0] + k] = v.strip().strip('"')
+            elif line.startswith("B: "):
+                k, _, v = line[3:].partition("=")
+                info["B" + k] = v
+        keys, props = _bits(info.get("BKEY", "")), _bits(info.get("BPROP", ""))
+        if not keys >> BTN_SOUTH & 1 or props >> INPUT_PROP_ACCELEROMETER & 1:
+            continue
+        if not info.get("PPhys") or "steam" in info.get("NName", "").lower():
+            continue
+        found[info.get("SSysfs") or info.get("NName")] = info.get("NName", "controller")
+    return found
+
+
+def open_big_picture():
+    """Opens Steam in Big Picture mode (starts Steam first if it isn't running)."""
+    running = subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
+    if shutil.which("steam"):
+        argv = ["steam", "steam://open/bigpicture"] if running else ["steam", "-gamepadui"]
+    elif shutil.which("flatpak") and subprocess.run(["flatpak", "info", STEAM_FLATPAK],
+                                                    capture_output=True).returncode == 0:
+        argv = ["flatpak", "run", STEAM_FLATPAK] + (["steam://open/bigpicture"] if running else ["-gamepadui"])
+    else:
+        argv = ["gio", "open", "steam://open/bigpicture"]
+    try:
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        print("controller connected: opening Steam Big Picture", flush=True)
+        return True
+    except OSError as err:
+        print("could not start Steam:", err, file=sys.stderr, flush=True)
+        return False
+
+
+def watch_steam(interval=1.5, cooldown=60):
+    """Opens Big Picture when the first controller connects (none -> one or more)."""
+    known = set(connected_controllers())  # already plugged in at login: leave it be
+    last = float("-inf")  # time Big Picture was last opened
+    while True:
+        time.sleep(interval)
+        now = connected_controllers()
+        new = set(now) - known
+        if new and len(known & set(now)) == 0 and time.monotonic() - last > cooldown:
+            print("new controller:", ", ".join(now[k] for k in new), flush=True)
+            if open_big_picture():
+                last = time.monotonic()
+        known = set(now)
+
+
+def steam_autostart(on):
+    """Turns the watcher on (as a user service that starts at every login) or off."""
+    if on:
+        os.makedirs(os.path.dirname(STEAM_UNIT), exist_ok=True)
+        with open(STEAM_UNIT, "w", encoding="utf-8") as f:
+            f.write("[Unit]\nDescription=Fedora Pad - open Steam Big Picture when a controller connects\n"
+                    "After=graphical-session.target\nPartOf=graphical-session.target\n\n"
+                    f"[Service]\nExecStart=/usr/bin/python3 {os.path.abspath(__file__)} --steam-watch\n"
+                    "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=graphical-session.target\n")
+        cmds = [["daemon-reload"], ["enable", "--now", STEAM_SERVICE], ["restart", STEAM_SERVICE]]
+    else:
+        cmds = [["disable", "--now", STEAM_SERVICE]]
+    for c in cmds:
+        subprocess.run(["systemctl", "--user"] + c, capture_output=True)
+
+
+def steam_autostart_on():
+    r = subprocess.run(["systemctl", "--user", "is-enabled", STEAM_SERVICE], capture_output=True, text=True)
+    return r.stdout.strip() == "enabled"
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if args == ["--steam-watch"]:
+        watch_steam()
+    elif len(args) == 2 and args[0] == "--steam" and args[1] in ("on", "off", "status"):
+        if args[1] != "status":
+            steam_autostart(args[1] == "on")
+        print("Steam Big Picture when a controller connects:", "on" if steam_autostart_on() else "off")
+        if args[1] == "status":
+            for name in connected_controllers().values():
+                print("  connected:", name)
+    else:
+        sys.exit("usage: gamepad.py --steam on|off|status")

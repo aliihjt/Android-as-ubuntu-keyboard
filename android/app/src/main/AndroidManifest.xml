@@ -19,6 +19,12 @@
         <package android:name="com.anthropic.claude" />
         <package android:name="com.freerdp.afreerdp" />
         <package android:name="com.gaurav.avnc" />
+        <!-- iiSU game launcher (Controller page) -->
+        <package android:name="com.iisulauncher" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="vnc" />

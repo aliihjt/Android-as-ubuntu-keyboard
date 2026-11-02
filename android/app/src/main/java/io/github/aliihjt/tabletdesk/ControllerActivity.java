@@ -30,7 +30,7 @@ import java.util.Locale;
  * Android only gives controller input to the app on screen, so this page stays
  * open (and the tablet awake) while you play on the laptop.
  */
-public class ControllerActivity extends Page implements InputManager.InputDeviceListener {
+public class ControllerActivity extends Page implements InputManager.InputDeviceListener, HostLink.StateListener {
     /** Button bits sent to the PC, same order as BUTTONS in host/gamepad.py. */
     static final int[] KEYS = {KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X,
             KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1,
@@ -59,6 +59,9 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
     private TextView heroTitle, heroText;
     private LinearLayout list;
     private boolean plugged;  // padadd sent for the pads below
+    private android.widget.Switch steamSwitch;
+    private LinearLayout iisuHolder;
+    private boolean applying;
 
     @Override
     protected String title() {
@@ -120,6 +123,22 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
         add(th.caption("Xbox works in every game, Steam and emulators. PlayStation shows ✕ ○ □ △ in the "
                 + "games that support it; if a game doesn't see the controller, switch to Xbox."), 6);
 
+        section("When a controller connects");
+        add(th.segmented(new String[][]{{"off", "Nothing"}, {"smart", "Smart"}, {"iisu", "iiSU"}, {"fedora", "Fedora"}},
+                prefs.getString(ControllerAuto.PREF, "off"),
+                v -> prefs.edit().putString(ControllerAuto.PREF, v).apply()));
+        add(th.caption("Smart: while the tablet is connected to Fedora, this page opens and you play on the "
+                + "laptop; otherwise iiSU opens and you play on the tablet. iiSU / Fedora: always that one."), 6);
+        steamSwitch = th.toggle(link.lastState().optBoolean("steambp", false), on -> {
+            if (!applying) link.set("steambp", on ? 1 : 0);
+        });
+        iisuHolder = new LinearLayout(this);
+        add(th.group(
+                th.row("🎮", Theme.BLUE, "Open Steam Big Picture on Fedora",
+                        "When any controller connects to the laptop, even without the tablet", steamSwitch),
+                iisuHolder), 10);
+        add(th.caption("host/update.sh installs Steam on Fedora and iiSU on the tablet if they are missing."), 6);
+
         section("Pair a PS4 controller");
         add(th.caption("1. Hold SHARE and the PS button until the light bar flashes quickly.\n"
                 + "2. On the tablet: Bluetooth › Pair new device › Wireless Controller.\n"
@@ -146,8 +165,43 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
     // ---- controllers coming and going ----
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        ControllerAuto.pageOpen = true;
+    }
+
+    /** iiSU row: open it, or get it when it isn't on the tablet. */
+    private void showIisu() {
+        iisuHolder.removeAllViews();
+        boolean has = ControllerAuto.iisuIntent(this) != null;
+        LinearLayout r = th.row("🕹", Theme.PURPLE, has ? "Open iiSU" : "Get iiSU",
+                has ? "Game launcher for playing on the tablet" : "Not installed: opens the download page",
+                th.chevron());
+        th.click(r, v -> ControllerAuto.openIisu(this, true));
+        iisuHolder.addView(r, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
+
+    @Override
+    public void onState(JSONObject st) {
+        if (!st.has("steambp")) return;
+        applying = true;
+        steamSwitch.setChecked(st.optBoolean("steambp"));
+        applying = false;
+    }
+
+    @Override
+    protected void onPause() {
+        link.setStateListener(null);
+        super.onPause();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        link.setStateListener(this);
+        link.requestState();
+        showIisu();
         im.registerInputDeviceListener(this, null);
         for (int id : im.getInputDeviceIds()) onInputDeviceAdded(id);
         dim(prefs.getBoolean("pad_dim", false));
@@ -162,6 +216,7 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
     protected void onStop() {
         im.unregisterInputDeviceListener(this);
         unplugAll();  // the page is gone, so is the controller on Fedora
+        ControllerAuto.pageOpen = false;
         super.onStop();
     }
 

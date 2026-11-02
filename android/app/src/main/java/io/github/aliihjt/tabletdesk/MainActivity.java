@@ -73,6 +73,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         // the old built-in AI chat is gone (Claude app instead): don't keep its key or history
         prefs.edit().remove("claude_key").remove("claude_history").apply();
         super.onCreate(state);
+        ControllerAuto.register(this);  // also while Fedora Pad is the home screen
         // started by the PC when the cable is plugged in: just bring up the floating button
         if (getIntent().getBooleanExtra("autostart", false) && Settings.canDrawOverlays(this)) {
             OverlayService.start(this);

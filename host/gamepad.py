@@ -19,7 +19,7 @@ Host -> tablet:
 Steam Big Picture when a controller connects (any controller: through the
 tablet, USB or Bluetooth on the laptop). It runs as its own small user service,
 so it works without the tablet too:
-  python3 host/gamepad.py --steam on|off|status     (or the switch on the Controller page)
+  python3 host/gamepad.py --steam on|off|status|test  (or the switch on the Controller page)
 """
 
 import os
@@ -319,20 +319,44 @@ def connected_controllers(path="/proc/bus/input/devices"):
     return found
 
 
+def steam_kind():
+    """"native" (RPM / deb), "flatpak", or None when Steam isn't installed."""
+    if shutil.which("steam"):
+        return "native"
+    if shutil.which("flatpak") and subprocess.run(["flatpak", "info", STEAM_FLATPAK],
+                                                capture_output=True).returncode == 0:
+        return "flatpak"
+    return None
+
+
+def steam_running(kind):
+    if kind == "flatpak":
+        out = subprocess.run(["flatpak", "ps", "--columns=application"], capture_output=True, text=True).stdout
+        if STEAM_FLATPAK in out:
+            return True
+    return subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
+
+
 def open_big_picture():
     """Opens Steam in Big Picture mode (starts Steam first if it isn't running)."""
-    running = subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
-    if shutil.which("steam"):
+    kind = steam_kind()
+    running = kind is not None and steam_running(kind)
+    if kind == "native":
         argv = ["steam", "steam://open/bigpicture"] if running else ["steam", "-gamepadui"]
-    elif shutil.which("flatpak") and subprocess.run(["flatpak", "info", STEAM_FLATPAK],
-                                                    capture_output=True).returncode == 0:
-        argv = ["flatpak", "run", STEAM_FLATPAK] + (["steam://open/bigpicture"] if running else ["-gamepadui"])
+    elif kind == "flatpak":
+        # a running Flatpak Steam takes the link through its own steam:// handler
+        argv = (["flatpak", "run", STEAM_FLATPAK, "steam://open/bigpicture"] if running
+                else ["flatpak", "run", STEAM_FLATPAK, "-gamepadui"])
     else:
         argv = ["gio", "open", "steam://open/bigpicture"]
+    # its own scope, so Steam keeps running when this watcher restarts or stops
+    if shutil.which("systemd-run"):
+        argv = ["systemd-run", "--user", "--scope", "--collect", "--quiet", "--unit",
+                f"fedorapad-steam-{int(time.time())}"] + argv
+    print(f"opening Steam Big Picture (Steam: {kind or 'not found'}, "
+          f"{'running' if running else 'not running'}): {' '.join(argv)}", flush=True)
     try:
-        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-        print("controller connected: opening Steam Big Picture", flush=True)
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, start_new_session=True)  # output -> journal
         return True
     except OSError as err:
         print("could not start Steam:", err, file=sys.stderr, flush=True)
@@ -342,6 +366,8 @@ def open_big_picture():
 def watch_steam(interval=1.5, cooldown=60):
     """Opens Big Picture when the first controller connects (none -> one or more)."""
     known = set(connected_controllers())  # already plugged in at login: leave it be
+    print(f"watching for controllers (Steam: {steam_kind() or 'not installed'}; "
+          f"{len(known)} connected now)", flush=True)
     last = float("-inf")  # time Big Picture was last opened
     while True:
         time.sleep(interval)
@@ -379,12 +405,17 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     if args == ["--steam-watch"]:
         watch_steam()
+    elif len(args) == 2 and args[0] == "--steam" and args[1] == "test":
+        open_big_picture()  # what the watcher does when a controller connects
     elif len(args) == 2 and args[0] == "--steam" and args[1] in ("on", "off", "status"):
         if args[1] != "status":
             steam_autostart(args[1] == "on")
         print("Steam Big Picture when a controller connects:", "on" if steam_autostart_on() else "off")
         if args[1] == "status":
+            active = subprocess.run(["systemctl", "--user", "is-active", STEAM_SERVICE],
+                                    capture_output=True, text=True).stdout.strip()
+            print("  watcher:", active or "unknown", "| Steam:", steam_kind() or "not installed")
             for name in connected_controllers().values():
                 print("  connected:", name)
     else:
-        sys.exit("usage: gamepad.py --steam on|off|status")
+        sys.exit("usage: gamepad.py --steam on|off|status|test")

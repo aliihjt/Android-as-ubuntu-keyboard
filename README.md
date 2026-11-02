@@ -168,6 +168,7 @@ It also installs **Steam** (Flathub, no password) and the **iiSU** launcher on t
 | App doesn't update | Watch the tablet for an install prompt. Xiaomi: turn on **Install via USB**. |
 | Text on the tablet is tiny | Fedora Settings › Displays › tablet monitor › **Scale 200%** |
 | See what's happening | `journalctl --user -u tabletdesk -f` |
+| Steam Big Picture doesn't open | `python3 host/gamepad.py --steam status` (watcher active? Steam found?), then `--steam test`; log: `journalctl --user -u fedorapad-steam -n 30` |
 | A game doesn't see the controller | Controller page › **Fedora sees it as: Xbox controller**. Check it with `evtest` or the Steam controller settings. |
 
 ## 🔧 How it works

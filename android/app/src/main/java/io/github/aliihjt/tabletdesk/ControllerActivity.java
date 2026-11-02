@@ -60,6 +60,7 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
     private LinearLayout list;
     private boolean plugged;  // padadd sent for the pads below
     private android.widget.Switch steamSwitch;
+    private TextView steamHint;
     private LinearLayout iisuHolder;
     private boolean applying;
 
@@ -138,6 +139,9 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
                         "When any controller connects to the PC (Fedora or Windows), even without the tablet",
                         steamSwitch),
                 iisuHolder), 10);
+        steamHint = th.caption("");
+        steamHint.setTextColor(Theme.ORANGE);
+        add(steamHint, 6);
         add(th.caption("Updating Fedora Pad (host/update.sh on Fedora, Update.bat on Windows) installs Steam on "
                 + "the PC and iiSU on the tablet if they are missing."), 6);
 
@@ -186,7 +190,11 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
 
     @Override
     public void onState(JSONObject st) {
-        if (!st.has("steambp")) return;
+        boolean known = st.has("steambp");  // older PC side: it doesn't know the switch
+        steamSwitch.setEnabled(known);
+        steamHint.setText(known ? "" : "⚠️ The PC has an older Fedora Pad, so this switch does nothing yet. "
+                + "Update it: host/update.sh on Fedora, Update.bat on Windows.");
+        if (!known) return;
         applying = true;
         steamSwitch.setChecked(st.optBoolean("steambp"));
         applying = false;

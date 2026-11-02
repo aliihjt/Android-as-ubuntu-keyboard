@@ -134,10 +134,12 @@ public class ControllerActivity extends Page implements InputManager.InputDevice
         });
         iisuHolder = new LinearLayout(this);
         add(th.group(
-                th.row("🎮", Theme.BLUE, "Open Steam Big Picture on Fedora",
-                        "When any controller connects to the laptop, even without the tablet", steamSwitch),
+                th.row("🎮", Theme.BLUE, "Open Steam Big Picture on the PC",
+                        "When any controller connects to the PC (Fedora or Windows), even without the tablet",
+                        steamSwitch),
                 iisuHolder), 10);
-        add(th.caption("host/update.sh installs Steam on Fedora and iiSU on the tablet if they are missing."), 6);
+        add(th.caption("Updating Fedora Pad (host/update.sh on Fedora, Update.bat on Windows) installs Steam on "
+                + "the PC and iiSU on the tablet if they are missing."), 6);
 
         section("Pair a PS4 controller");
         add(th.caption("1. Hold SHARE and the PS button until the light bar flashes quickly.\n"

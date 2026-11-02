@@ -391,6 +391,8 @@ def set_value(inj, what, value):
         _run(["powercfg", "/setactive", POWER_SCHEMES[v]])
     elif what == "micmute":
         inj.combo("super+alt+k")  # Windows 11: mute the mic in calls
+    elif what == "steambp":  # Steam Big Picture when a controller connects (controllers.py)
+        steam_watch.set(bool(v))
 
 
 def read_state():
@@ -416,6 +418,7 @@ def read_state():
     for i, guid in enumerate(POWER_SCHEMES):
         if guid in active:
             state["power"] = i
+    state["steambp"] = steam_watch.enabled()
     state.update(pc_info())
     return state
 
@@ -1057,6 +1060,9 @@ def make_handler(inj, clients):
 
 sys.path.insert(0, os.path.join(REPO, "host"))
 import pad_extras  # noqa: E402
+import controllers  # noqa: E402  (this folder: Steam Big Picture when a controller connects)
+
+steam_watch = controllers.SteamWatch(os.path.join(CONF_DIR, "steam-bigpicture"))
 
 clip_history = pad_extras.ClipList()
 sleeper = None
@@ -1250,6 +1256,7 @@ def main():
     sleeper.start()
     pad_extras.Outbox(clients.broadcast, lambda: len(clients.files), _toast).start()  # AirDrop
     threading.Thread(target=watch_clipboard, daemon=True).start()
+    steam_watch.start()
     try:
         srv = Server(("127.0.0.1", args.port), make_handler(inj, clients))
     except OSError:

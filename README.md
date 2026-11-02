@@ -126,6 +126,7 @@ Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), t
 | ⏻ Shut down / Restart / Log out | opens Windows' own "Shut Down Windows" box, so you confirm on the PC |
 | 🔊 Volume | exact with pycaw (Setup installs it), otherwise in 2 % steps |
 | 📄 Log | `%LOCALAPPDATA%\FedoraPad\fedorapad.log` |
+| 🎮 Controller | with **Open Steam Big Picture on the PC** on (tablet › Controller), a PS4, Xbox or other controller plugged into or paired with the PC opens Steam Big Picture. Update.bat installs Steam, and iiSU on the plugged-in tablet, if they are missing. Playing on the PC with a controller paired to the *tablet* is Fedora only for now. |
 
 Not on Windows: turning the laptop keyboard off, "Same picture" mode, the GNOME tools (macOS look, Fedora Plus, Tailscale scripts) and now-playing titles (the media buttons still work).
 If spacedesk is set to *USB cable* mode it brings its own adb, which can fight with Fedora Pad's; use spacedesk over Wi-Fi.

@@ -83,7 +83,7 @@ The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple
 | 📖 | **Reading everywhere** | The tablet's library, progress, highlights and Words, kept on the PC: the iPhone / iPad **Reading** page shows them; *Read here* or *Get it from the tablet*. |
 | 📍 | **Remote control each other** | Ring a lost device, send a message, open StandBy / Focus / فال حافظ / Books / Home on it, and play, pause, skip or change the volume of the tablet's music from the iPad. |
 
-
+## 🚀 Setup (once)
 
 ### 📱 Tablet
 1. Settings › About tablet › tap **Build number** 7 times. Then Developer options › turn on **USB debugging**.

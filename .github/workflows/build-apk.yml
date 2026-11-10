@@ -18,9 +18,11 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    # one build at a time: two branches publishing the same release at once collide
+    # one publishing build at a time: two branches publishing the same release at
+    # once collide. Pull-request builds publish nothing, so they get their own
+    # group: otherwise one waiting PR build replaces (cancels) a waiting publish.
     concurrency:
-      group: apk-release
+      group: ${{ github.event_name == 'pull_request' && format('apk-pr-{0}', github.run_id) || 'apk-release' }}
       cancel-in-progress: false
     defaults:
       run:

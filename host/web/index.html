@@ -37,6 +37,35 @@ input,textarea{font:inherit;color:var(--text);-webkit-user-select:text;user-sele
 .dot{width:10px;height:10px;border-radius:5px;background:var(--gray)}
 .dot.on{background:var(--green)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+/* the iOS home screen: wallpaper, pages you swipe, Dock, widgets */
+body.ios{background:linear-gradient(160deg,#7fb3f5 0%,#b9a6f2 38%,#f1a7c8 70%,#fbd3a6 100%) fixed}
+@media(prefers-color-scheme:dark){body.ios{background:linear-gradient(160deg,#0f1b3d 0%,#3a1f6b 40%,#8a2e6e 75%,#d0565c 100%) fixed}}
+body.ios #app{padding-bottom:calc(env(safe-area-inset-bottom) + 120px)}
+.ios .top{display:flex;justify-content:space-between;align-items:center;color:#fff;font-size:13px;font-weight:600;
+ text-shadow:0 1px 3px #0006;margin:0 4px 10px;min-height:22px}
+.ios .top button{color:#fff;padding:4px 8px;font-size:13px;font-weight:600}
+.frost{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);
+ border:.5px solid rgba(255,255,255,.5)}
+@media(prefers-color-scheme:dark){.frost{background:rgba(30,30,30,.55);border-color:rgba(255,255,255,.15)}}
+.widgets{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.widget{border-radius:22px;padding:14px;min-height:96px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;color:var(--text)}
+.widget b{font-size:15px}.widget .big2{font-size:28px;font-weight:700}.widget small{color:var(--sub);font-size:12px}
+.pages{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pages::-webkit-scrollbar{display:none}
+.pg{flex:0 0 100%;scroll-snap-align:start;display:grid;grid-template-columns:repeat(4,1fr);gap:18px 6px;align-content:start;padding:2px}
+@media(min-width:600px){.pg{grid-template-columns:repeat(6,1fr)}}
+.ios .tile{background:none;padding:0;min-height:0;align-items:center;gap:6px;text-align:center}
+.ios .tile .chip{width:62px;height:62px;border-radius:15px;font-size:31px;box-shadow:0 2px 6px #0003}
+.ios .tile b{font-size:11.5px;font-weight:500;color:#fff;text-shadow:0 1px 3px #0008;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pdots{display:flex;justify-content:center;gap:8px;margin:14px 0 4px}.pdots i{width:7px;height:7px;border-radius:4px;background:#fff8}.pdots i.on{background:#fff}
+.spill{display:block;margin:10px auto 0;padding:7px 16px;border-radius:16px;color:#fff;font-size:14px;font-weight:600;background:rgba(255,255,255,.25);
+ -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 10px);display:flex;gap:16px;
+ padding:12px 16px;border-radius:30px;z-index:5}
+.dock .chip{width:60px;height:60px;border-radius:15px;font-size:30px}
+.cc{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.cc>button,.cc>div{background:var(--card);border-radius:20px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.cc>button span{font-size:26px}.cc .wide{grid-column:span 4;flex-direction:row;justify-content:space-between;padding:12px 16px;font-size:15px}
 /* a couplet: the halves side by side, or one under the other on a phone */
 .bayt{display:flex;gap:18px;margin-top:12px}.bayt>div{flex:1}.bayt>div:last-child{text-align:left}
 @media(max-width:600px){.bayt{flex-direction:column;gap:2px}.bayt>div:first-child{padding-left:12%}.bayt>div:last-child{padding-right:12%}}
@@ -228,6 +257,8 @@ let cleanup = [];
 function show(name, push = true, arg) {
   cleanup.forEach(f => f()); cleanup = [];
   app.innerHTML = "";
+  document.body.classList.toggle("ios", !PAGES[name] || name === "home");
+  const oldDock = document.querySelector(".dock"); if (oldDock) oldDock.remove();
   (PAGES[name] || PAGES.home)(arg);
   window.scrollTo(0, 0);
   if (push && name !== "home") history.pushState({p: name, a: arg}, "");
@@ -257,39 +288,118 @@ const TILES = [
 ];
 const PAGES = {};
 
+// the home screen, like iOS: widgets, pages of apps you swipe, the Dock;
+// swipe down from the top right for Control Center, top left for notifications, middle for Search
+const MAIN_TILES = ["keyboard", "trackpad", "devices", "notifs", "talk", "media", "books", "poem", "notes", "reading",
+  "sketch", "scan", "focus", "standby", "claude", "settings"];
+const DOCK = ["keyboard", "trackpad", "devices", "notifs"];
+function allTiles() { return [...PHONE_TILES, ...TILES]; }
+function openTile(id, arg) { if (id === "claude") window.open("https://claude.ai/new", "_blank"); else show(id, true, arg); }
+function tileButton([id, sym, label, color, arg]) {
+  return el("button", {class: "tile", onclick: () => openTile(id, arg)}, chip(sym, color), el("b", {}, label));
+}
 PAGES.home = () => {
-  const open = (id, arg) => id === "claude" ? window.open("https://claude.ai/new", "_blank") : show(id, true, arg);
-  const grid = list => el("div", {class: "tiles"}, list.map(([id, sym, label, color, arg]) =>
-    el("button", {class: "tile", "data-q": label.toLowerCase() + " " + id, onclick: () => open(id, arg)}, chip(sym, color), el("b", {}, label))));
-  const phone = grid(PHONE_TILES), pc = grid(TILES);
-  const heads = [el("div", {class: "h"}, /iPad/.test(navigator.userAgent) ? "This iPad" : "This phone"), el("div", {class: "h"}, link.host || "The PC")];
-  const q = el("input", {class: "search", type: "search", placeholder: "🔍 Search", style: "margin:0 0 4px"});
-  q.addEventListener("input", () => {
-    const s = q.value.trim().toLowerCase();
-    [phone, pc].forEach((g, i) => { let n = 0;
-      [...g.children].forEach(t => { const hit = !s || t.dataset.q.includes(s); t.style.display = hit ? "" : "none"; n += hit; });
-      heads[i].style.display = n ? "" : "none"; });
-  });
-  // the book closed on the tablet in the last 3 days, to continue here
-  const cont = el("div");
+  const tiles = allTiles(), byId = Object.fromEntries(tiles.map(t => [t[0], t]));
+  const first = MAIN_TILES.map(id => byId[id]).filter(Boolean), rest = tiles.filter(t => !MAIN_TILES.includes(t[0]));
+  const per = innerWidth >= 600 ? 24 : 20, pagesList = [first];
+  for (let i = 0; i < rest.length; i += per) pagesList.push(rest.slice(i, i + per));
+  const pages = el("div", {class: "pages"}, pagesList.map(p => el("div", {class: "pg"}, p.map(tileButton))));
+  const pdots = el("div", {class: "pdots"}, pagesList.map((_, i) => el("i", {class: i ? "" : "on"})));
+  pages.addEventListener("scroll", () => { const n = Math.round(pages.scrollLeft / pages.clientWidth);
+    [...pdots.children].forEach((d, i) => d.classList.toggle("on", i === n)); }, {passive: true});
+
+  // top: grabbers like iOS (notifications left, Control Center right) and the connection
+  const conn = el("span", {}, "");
+  const paintConn = () => { conn.textContent = link.connected ? "● " + link.host : "○ Connecting…"; };
+  paintConn(); every(2000, paintConn);
+  const top = el("div", {class: "top"}, el("button", {onclick: () => show("notifs")}, "🔔"), conn,
+    el("button", {onclick: controlCenter}, "◐ Control"));
+
+  // widgets: continue reading, the laptop, music
+  const cont = el("div"), wLaptop = el("button", {class: "widget frost", onclick: () => show("stats")}, el("b", {}, "💻 Laptop"), el("small", {}, "…"));
+  const wMusic = el("button", {class: "widget frost", onclick: () => send({t: "mediactl", a: "play-pause"})}, el("b", {}, "🎵 Music"), el("small", {}, "Nothing playing"));
   const paint = () => {
     cont.innerHTML = "";
     const lr = ((link.shared || {}).lastread || {}).value;
     if (!lr || !lr.title || Date.now() - (lr.time || 0) > 3 * 86400e3) return;
     const gid = (/gutenberg-(\d+)\.epub/.exec(lr.uri || "") || [])[1];
-    cont.append(el("div", {class: "card", style: "display:flex;gap:12px;align-items:center;margin:4px 0 6px"},
+    cont.append(el("div", {class: "widget frost", style: "flex-direction:row;align-items:center;gap:12px;min-height:0;margin-bottom:12px"},
       chip("📖", lr.type === "pdf" ? "red" : "indigo"),
-      el("div", {style: "flex:1;min-width:0"}, el("div", {class: "sub", style: "font-size:12px"}, "CONTINUE READING · FROM " + (((link.shared.lastread || {}).from) || "THE TABLET").toUpperCase()),
+      el("div", {style: "flex:1;min-width:0"}, el("small", {}, "CONTINUE READING · " + (((link.shared.lastread || {}).from) || "THE TABLET").toUpperCase()),
         el("b", {style: "display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"}, lr.title),
-        el("small", {class: "sub"}, lr.total ? (lr.type === "pdf" ? "Page " : "Part ") + (lr.pos + 1) + " of " + lr.total : "")),
+        el("small", {}, lr.total ? (lr.type === "pdf" ? "Page " : "Part ") + (lr.pos + 1) + " of " + lr.total : "")),
       gid ? el("button", {class: "btn", style: "padding:9px 14px", onclick: () => show("books", true, {book: {id: +gid, title: lr.title,
         epub: "https://www.gutenberg.org/ebooks/" + gid + ".epub3.images"}})}, "Read") :
         el("button", {class: "btn2", style: "padding:9px 14px", onclick: () => pickDevice("Which tablet?", d => { relay(d.id, {t: "remote", a: "sendbook", uri: lr.uri});
           toast("Asked " + d.name + " to send it"); }, d => d.kind === "android")}, "📥 Get")));
   };
-  on("shared", paint); cleanup.push(() => on("shared", null)); paint();
-  app.append(el("div", {class: "big"}, "Fedora Pad"), statusLine(), cont, q, heads[0], phone, heads[1], pc);
+  on("shared", paint); paint();
+  on("stats", st => { wLaptop.lastChild.textContent = (st.battery !== undefined ? (st.charging ? "⚡ " : "🔋 ") + st.battery + " %  ·  " : "")
+    + "CPU " + (st.cpu ?? "–") + " %"; });
+  on("media", m => { const none = !m.title || /Missing|Stopped/.test(m.status);
+    wMusic.firstChild.textContent = none ? "🎵 Music" : (m.status === "Playing" ? "⏸ " : "▶ ") + m.title;
+    wMusic.lastChild.textContent = none ? "Nothing playing" : m.artist || m.player || ""; });
+  every(10000, () => { if (link.connected) { send({t: "stats?"}); send({t: "media?"}); } });
+  cleanup.push(() => ["shared", "stats", "media"].forEach(t => on(t, null)));
+
+  const search = el("button", {class: "spill", onclick: searchSheet}, "🔍 Search");
+  app.append(top, cont, el("div", {class: "widgets"}, wLaptop, wMusic), pages, pdots, search);
+  const dock = el("div", {class: "dock frost"}, DOCK.map(id => byId[id]).filter(Boolean).map(([id, sym, label, color, arg]) =>
+    el("button", {"aria-label": label, onclick: () => openTile(id, arg)}, chip(sym, color))));
+  document.body.append(dock);
+  cleanup.push(() => dock.remove());
+  swipeDown(top);
 };
+function searchSheet() {
+  const q = el("input", {class: "search", type: "search", placeholder: "🔍 Search", style: "margin:0 0 12px"});
+  const list = el("div", {class: "group"});
+  const draw = () => { const s = q.value.trim().toLowerCase(); list.innerHTML = "";
+    allTiles().filter(t => !s || (t[2] + " " + t[0]).toLowerCase().includes(s)).forEach(t =>
+      list.append(el("button", {class: "row", onclick: () => { close(); openTile(t[0], t[4]); }}, chip(t[1], t[3]), el("div", {class: "grow"}, t[2])))); };
+  q.addEventListener("input", draw);
+  const close = sheet(q, el("div", {style: "max-height:60vh;overflow:auto"}, list));
+  draw(); setTimeout(() => q.focus(), 100);
+}
+// a swipe down: from the top right = Control Center, top left = notifications, elsewhere = Search
+function swipeDown() {
+  let x0 = 0, y0 = 0, done = false;
+  const start = e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; done = false; };
+  const move = e => {
+    if (done || document.querySelector(".modal")) return;
+    const t = e.touches[0], dy = t.clientY - y0, dx = t.clientX - x0;
+    if (dy < 70 || dy < 2 * Math.abs(dx) || window.scrollY > 0) return;
+    done = true;
+    if (y0 < 110 && x0 > innerWidth * 0.6) controlCenter();
+    else if (y0 < 110 && x0 < innerWidth * 0.4) show("notifs");
+    else searchSheet();
+  };
+  document.addEventListener("touchstart", start, {passive: true});
+  document.addEventListener("touchmove", move, {passive: true});
+  cleanup.push(() => { document.removeEventListener("touchstart", start); document.removeEventListener("touchmove", move); });
+}
+// Control Center: the PC's volume and brightness, music, and quick buttons
+function controlCenter() {
+  const btn = (sym, label, fn) => el("button", {onclick: () => { haptic(); fn(); }}, el("span", {}, sym), label);
+  const song = el("div", {class: "wide"}, el("b", {}, "🎵 Nothing playing"),
+    el("div", {style: "display:flex;gap:14px;font-size:24px"}, ...[["⏮", "previous"], ["⏯", "play-pause"], ["⏭", "next"]].map(([s2, a]) =>
+      el("button", {onclick: () => send({t: "mediactl", a})}, s2))));
+  const close = sheet(el("div", {class: "cc"},
+    song,
+    btn("🔉", "Quieter", () => combo("voldown")), btn("🔊", "Louder", () => combo("volup")), btn("🔇", "Mute", () => combo("mute")),
+    btn("🔒", "Lock PC", () => send({t: "lock"})),
+    btn("🔓", "Unlock PC", () => { close(); pcSheet(); }), btn("🔗", "Devices", () => { close(); show("devices"); }),
+    btn("📋", "Share clip", async () => { try { const t = await navigator.clipboard.readText(); if (t) { send({t: "uclip", s: t}); toast("Shared"); } } catch (e) { toast("Allow Paste"); } }),
+    btn("💤", "Sleep", () => { close(); show("sleep"); }),
+    btn("⏱", "Focus", () => { close(); show("focus"); }), btn("🕰", "StandBy", () => { close(); show("standby"); }),
+    btn("🖥", "Show on PC", () => { close(); show("mirror"); }), btn("🎛", "Controls", () => { close(); show("controls"); })));
+  // show the song here, and still on the page underneath
+  const cur = link.handlers.media, under = cur && cur.cc ? cur.under : cur;
+  const h = m => { if (song.isConnected) song.firstChild.textContent = m.title && !/Missing|Stopped/.test(m.status) ? "🎵 " + m.title : "🎵 Nothing playing";
+    if (under) under(m); };
+  h.cc = true; h.under = under;
+  on("media", h);
+  send({t: "media?"});
+}
 
 // ---- pairing
 function showPairing() {

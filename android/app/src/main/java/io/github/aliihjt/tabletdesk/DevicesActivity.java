@@ -94,6 +94,10 @@ public class DevicesActivity extends Page {
     }
 
     private void handleIntent(Intent i) {
+        if (i.getBooleanExtra("pc_actions", false)) {  // Control Center › Unlock PC
+            i.removeExtra("pc_actions");
+            list.post(this::pcActions);
+        }
         if (i.getBooleanExtra("stop_ring", false)) {
             Devices.stopRing();
             String who = i.getStringExtra("ring_from");

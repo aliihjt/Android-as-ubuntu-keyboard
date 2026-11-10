@@ -57,6 +57,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private ReaderHome readerHome;  // the calm reading home instead of the desktop
+    private IPadHome ipadHome;      // the iPad-style home screen (the default)
     private HomeWidgets widgets;
     private String style;
     private TextView hostName, hostInfo, clock, battery, dot;
@@ -100,9 +101,28 @@ public class MainActivity extends Page implements HostLink.StateListener {
     protected void build() {
         prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
         ((View) content.getParent()).setPadding(0, 0, 0, 0);  // edge to edge, like a desktop
-        style = prefs.getString("home_style", "desktop");
+        style = prefs.getString("home_style", "ipad");
+        if (style.equals("ipad")) {
+            ipadHome = new IPadHome(this, th, new IPadHome.Host() {
+                @Override
+                public View controlCenter() {
+                    return MainActivity.this.controlCenter(true);
+                }
+
+                @Override
+                public void controlCenterShown(boolean shown) {
+                    handler.removeCallbacks(mediaTick);
+                    if (shown) {
+                        link.requestState();
+                        handler.post(mediaTick);
+                    }
+                }
+            });
+            content.addView(ipadHome.view(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            return;
+        }
         if (style.equals("reader")) {
-            readerHome = new ReaderHome(this, th, () -> setStyle("desktop"));
+            readerHome = new ReaderHome(this, th, () -> setStyle("ipad"));
             content.addView(readerHome.view(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
             return;
         }
@@ -128,7 +148,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         // Control Center at the bottom, above the Dock
         LinearLayout ccRow = new LinearLayout(this);
         ccRow.setPadding(th.dp(12), 0, th.dp(12), th.dp(8));
-        ccRow.addView(controlCenter(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+        ccRow.addView(controlCenter(false), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         content.addView(ccRow, th.fullWidth(0));
 
@@ -276,6 +296,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
                 {"🔗", Theme.GREEN, "Devices", DevicesActivity.class},
+                {"📱", Theme.BLUE, "iPad Home", (Runnable) () -> setStyle("ipad")},
                 {"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")},
                 {"⬇️", Theme.GREEN, "Get Books", GetBooksActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
@@ -446,8 +467,14 @@ public class MainActivity extends Page implements HostLink.StateListener {
     @Override
     protected void onResume() {
         super.onResume();
-        if (!prefs.getString("home_style", "desktop").equals(style)) {
+        if (!prefs.getString("home_style", "ipad").equals(style)) {
             recreate();
+            return;
+        }
+        if (ipadHome != null) {
+            ipadHome.resume();
+            link.setStateListener(this);
+            link.on("media", this::showMedia);
             return;
         }
         if (readerHome != null) {
@@ -466,6 +493,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
     /** As the tablet's home screen there is nothing to go back to. */
     @Override
     public void onBackPressed() {
+        if (ipadHome != null && ipadHome.back()) return;
         if (!isHomeApp()) super.onBackPressed();
     }
 
@@ -478,6 +506,10 @@ public class MainActivity extends Page implements HostLink.StateListener {
     @Override
     protected void onPause() {
         if (readerHome != null) readerHome.pause();
+        if (ipadHome != null) {
+            ipadHome.closeOverlay();
+            ipadHome.pause();
+        }
         if (widgets != null) widgets.pause();
         handler.removeCallbacks(tick);
         handler.removeCallbacks(mediaTick);
@@ -508,7 +540,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
         }
     };
 
-    private View controlCenter() {
+    /** inPanel: inside the iPad home's Control Center panel, always open, no fold handle. */
+    private View controlCenter(boolean inPanel) {
         LinearLayout cc = new LinearLayout(this);
         cc.setOrientation(LinearLayout.VERTICAL);
         cc.setBackground(th.frosted(th.dp(22)));
@@ -518,7 +551,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         // handle: tap to fold the panel away, like pulling a sheet down
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        boolean open = prefs.getBoolean("cc_open", true);
+        boolean open = inPanel || prefs.getBoolean("cc_open", true);
         body.setVisibility(open ? View.VISIBLE : View.GONE);
         TextView handle = th.text(open ? "\u2304  Control Center" : "\u2303  Control Center", 12.5f, th.secondary, true);
         handle.setGravity(Gravity.CENTER);
@@ -529,7 +562,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
             prefs.edit().putBoolean("cc_open", show).apply();
             handle.setText(show ? "\u2304  Control Center" : "\u2303  Control Center");
         });
-        cc.addView(handle);
+        if (!inPanel) cc.addView(handle);
 
         // round toggles; upright screens get two rows of three
         int perRow = portrait() ? 3 : TOGGLES.length;

@@ -95,6 +95,21 @@ public class NotifyListener extends NotificationListenerService {
         return null;
     }
 
+    /** This tablet's notifications now (empty without notification access). */
+    static java.util.List<StatusBarNotification> active() {
+        java.util.List<StatusBarNotification> out = new java.util.ArrayList<>();
+        NotifyListener l = instance;
+        if (l == null) return out;
+        try {
+            for (StatusBarNotification s : l.getActiveNotifications()) {
+                if (!s.isOngoing() && !s.getPackageName().equals(l.getPackageName())
+                        && (s.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) == 0) out.add(s);
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return out;
+    }
+
     private static StatusBarNotification find(String key) {
         NotifyListener l = instance;
         if (l == null) return null;

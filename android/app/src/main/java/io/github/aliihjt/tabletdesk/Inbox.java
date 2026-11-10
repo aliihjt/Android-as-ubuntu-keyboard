@@ -57,6 +57,7 @@ final class Inbox {
         c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("From " + from, s));
         String t = s.trim();
         boolean link = t.matches("(?i)https?://\\S+");
+        Devices.remember(link ? "🔗" : "📋", (link ? "Link from " : "Text from ") + from, t);
         Intent open = link ? new Intent(Intent.ACTION_VIEW, Uri.parse(t))
                 : new Intent(c, ClipboardActivity.class);
         notify(c, link ? "🔗 Link from " + from : "📋 Text from " + from + " (copied)",
@@ -85,6 +86,7 @@ final class Inbox {
         Intent view = Build.VERSION.SDK_INT < 29 ? null : new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(saved, mime(name)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         String from = "From " + m.optString("from", "the PC");
+        Devices.remember("📥", name, from);
         notify(c, "📥 " + name, Build.VERSION.SDK_INT < 29 ? from + " · in Fedora Pad's Downloads folder"
                 : from + " · tap to open · in Downloads › Fedora Pad", view);
     }

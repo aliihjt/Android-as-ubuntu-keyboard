@@ -52,6 +52,40 @@ final class Devices {
         }
     }
 
+    /** What other devices and the PC sent, for the home screen's Notification Center. */
+    static final class Event {
+        final String icon, title, text;
+        final long time;
+
+        Event(String icon, String title, String text) {
+            this.icon = icon;
+            this.title = title;
+            this.text = text == null ? "" : text;
+            time = System.currentTimeMillis();
+        }
+    }
+
+    private static final java.util.LinkedList<Event> events = new java.util.LinkedList<>();
+
+    static void remember(String icon, String title, String text) {
+        synchronized (events) {
+            events.addFirst(new Event(icon, title, text));
+            while (events.size() > 40) events.removeLast();
+        }
+    }
+
+    static List<Event> history() {
+        synchronized (events) {
+            return new ArrayList<>(events);
+        }
+    }
+
+    static void clearHistory() {
+        synchronized (events) {
+            events.clear();
+        }
+    }
+
     static volatile List<Device> list = new ArrayList<>();
     static volatile String me = "", pc = "";
     static volatile boolean uclip = true;
@@ -119,6 +153,7 @@ final class Devices {
         else if (t.equals("notes") && m.optJSONArray("list") != null) {  // changed on the iPhone or the PC
             prefs(c).edit().putString("notes", m.optJSONArray("list").toString()).apply();
         } else if (t.equals("pcevent")) {
+            remember(m.optString("icon"), m.optString("title"), m.optString("text"));
             Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
         } else if (t.equals("unlockres")) {
             String text = m.optBoolean("ok") ? ("lock".equals(m.optString("what")) ? "🔒 Laptop locked" : "🔓 Laptop unlocked")
@@ -142,6 +177,7 @@ final class Devices {
     private static void pasteboard(Context c, String text, String from) {
         if (text.isEmpty()) return;
         lastClip = text;
+        remember("📋", "Copied on " + from, text);
         c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("From " + from, text));
         Toast.makeText(c, "📋 Copied on " + from, Toast.LENGTH_SHORT).show();
     }
@@ -183,6 +219,7 @@ final class Devices {
                 ring(c, who);
                 break;
             case "notice":
+                remember("💬", who, m.optString("text"));
                 Inbox.notify(c, "💬 " + who, m.optString("text"), new Intent(c, DevicesActivity.class));
                 break;
             case "media":

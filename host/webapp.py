@@ -27,6 +27,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from urllib.parse import parse_qs, urlsplit
 
 WEB_PORT = 7780
@@ -37,6 +39,10 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
          "/icon.png": ("icon.png", "image/png"),
          "/icon-512.png": ("icon-512.png", "image/png")}
+# the only sites the web app may reach through the PC (Get Books, Persian poetry):
+# Safari can't call them itself (no CORS, and the page only talks to the PC)
+NET_HOSTS = {"gutendex.com", "www.gutenberg.org", "gutenberg.org", "api.ganjoor.net"}
+NET_MAX = 60 * 1024 * 1024
 MAX_FRAME = 1 << 20  # file chunks are ~64 KB
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
@@ -224,6 +230,10 @@ class WebApp:
                 data = {}
             token = self.confirm_code(data.get("code", ""), data.get("name", "device"))
             return h.json(200 if token else 403, {"token": token} if token else {"error": "wrong or old code"})
+        if path == "/net" and method == "GET":
+            if not self.known((query.get("token") or [""])[0]):
+                return h.send(403, "text/plain", b"pair first")
+            return self.fetch(h, (query.get("u") or [""])[0])
         if path in FILES and method == "GET":
             name, ctype = FILES[path]
             try:
@@ -233,6 +243,29 @@ class WebApp:
                 return h.send(404, "text/plain", b"missing")
             return h.send(200, ctype, data, {"Cache-Control": "no-cache"})
         return h.send(404, "text/plain", b"not found")
+
+    def fetch(self, h, url):
+        """Gets a page from one of NET_HOSTS for the web app, following redirects only within them."""
+        if urlsplit(url).scheme != "https" or urlsplit(url).hostname not in NET_HOSTS:
+            return h.send(403, "text/plain", b"not allowed")
+
+        class Stay(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                u = urlsplit(newurl)
+                if u.scheme != "https" or u.hostname not in NET_HOSTS:
+                    raise urllib.error.HTTPError(newurl, 403, "redirect not allowed", hdrs, fp)
+                return super().redirect_request(req, fp, code, msg, hdrs, newurl)
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "FedoraPad"})
+            with urllib.request.build_opener(Stay).open(req, timeout=40) as r:
+                data = r.read(NET_MAX + 1)
+                ctype = r.headers.get("Content-Type", "application/octet-stream")
+        except (urllib.error.URLError, OSError, ValueError) as err:
+            return h.json(502, {"error": str(getattr(err, "reason", err))[:200]})
+        if len(data) > NET_MAX:
+            return h.send(413, "text/plain", b"too big")
+        return h.send(200, ctype, data, {"Cache-Control": "no-store"})
 
     def websocket(self, h, headers, token):
         key = headers.get("sec-websocket-key", "")
@@ -389,8 +422,8 @@ class _Handler(socketserver.StreamRequestHandler):
         raise NotImplementedError
 
     def send(self, status, ctype, data, extra=None):
-        reason = {200: "OK", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
-                  429: "Too Many Requests"}.get(status, "OK")
+        reason = {200: "OK", 400: "Bad Request", 403: "Forbidden", 404: "Not Found", 413: "Too Large",
+                  429: "Too Many Requests", 502: "Bad Gateway"}.get(status, "OK")
         head = [f"HTTP/1.1 {status} {reason}", f"Content-Type: {ctype}", f"Content-Length: {len(data)}",
                 "Connection: close", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer",
                 "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; "

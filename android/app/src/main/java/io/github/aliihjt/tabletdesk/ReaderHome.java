@@ -4,16 +4,12 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.pdf.PdfRenderer;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -161,7 +157,7 @@ final class ReaderHome {
         page.setScaleType(ImageView.ScaleType.CENTER_CROP);
         cover.addView(page, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
-        if (book.type.equals("pdf")) pdfCover(book, page);
+        if (book.type.equals("pdf")) BooksActivity.pdfCover(a, book, th.dp(92), page);
         row.addView(cover, new LinearLayout.LayoutParams(th.dp(92), th.dp(130)));
 
         LinearLayout texts = new LinearLayout(a);
@@ -184,22 +180,6 @@ final class ReaderHome {
         card.addView(row);
         th.click(cover, v -> BooksActivity.open(a, book));
         return card;
-    }
-
-    private void pdfCover(BooksActivity.Book b, ImageView into) {
-        new Thread(() -> {
-            try (ParcelFileDescriptor fd = a.getContentResolver().openFileDescriptor(Uri.parse(b.uri), "r");
-                 PdfRenderer r = new PdfRenderer(fd)) {
-                PdfRenderer.Page p = r.openPage(0);
-                int w = th.dp(92), h = Math.round(w * (float) p.getHeight() / p.getWidth());
-                Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                bmp.eraseColor(Color.WHITE);
-                p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                p.close();
-                handler.post(() -> into.setImageBitmap(bmp));
-            } catch (Exception ignored) {  // moved or deleted: the coloured cover stays
-            }
-        }, "cover").start();
     }
 
     // ---- today's goal, streak, week ----

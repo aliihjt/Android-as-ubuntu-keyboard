@@ -37,12 +37,19 @@ input,textarea{font:inherit;color:var(--text);-webkit-user-select:text;user-sele
 .dot{width:10px;height:10px;border-radius:5px;background:var(--gray)}
 .dot.on{background:var(--green)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-@media(max-width:430px){.tiles{grid-template-columns:1fr 1fr;gap:10px}}
+/* a couplet: the halves side by side, or one under the other on a phone */
+.bayt{display:flex;gap:18px;margin-top:12px}.bayt>div{flex:1}.bayt>div:last-child{text-align:left}
+@media(max-width:600px){.bayt{flex-direction:column;gap:2px}.bayt>div:first-child{padding-left:12%}.bayt>div:last-child{padding-right:12%}}
 .tile{background:var(--card);border-radius:18px;padding:16px;text-align:left;display:flex;flex-direction:column;gap:10px;
  min-height:108px;transition:transform .08s}
 .tile:active{transform:scale(.96)}
 .chip{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;font-size:24px;color:#fff}
 .tile b{font-size:16px}
+/* phones: an iOS-style icon grid */
+@media(max-width:430px){.tiles{grid-template-columns:repeat(4,1fr);gap:16px 6px}
+ .tile{background:none;padding:0;min-height:0;align-items:center;gap:6px;text-align:center}
+ .tile .chip{width:60px;height:60px;border-radius:14px;font-size:30px;box-shadow:0 1px 3px #0002}
+ .tile b{font-size:11.5px;font-weight:500;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
 .card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .group{background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:14px}
 .row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:.5px solid var(--sep);min-height:52px;width:100%;text-align:left}
@@ -216,35 +223,51 @@ function receiveText(text) {
 
 // ---------------------------------------------------------------- pages
 let cleanup = [];
-function show(name, push = true) {
+function show(name, push = true, arg) {
   cleanup.forEach(f => f()); cleanup = [];
   app.innerHTML = "";
-  (PAGES[name] || PAGES.home)();
+  (PAGES[name] || PAGES.home)(arg);
   window.scrollTo(0, 0);
-  if (push && name !== "home") history.pushState({p: name}, "");
+  if (push && name !== "home") history.pushState({p: name, a: arg}, "");
 }
-window.addEventListener("popstate", ev => show(ev.state && ev.state.p || "home", false));
+window.addEventListener("popstate", ev => show(ev.state && ev.state.p || "home", false, ev.state && ev.state.a));
 function every(ms, fn) { fn(); const id = setInterval(fn, ms); cleanup.push(() => clearInterval(id)); }
 function page(title, right) {
   app.append(el("div", {class: "bar"},
     el("button", {class: "back", onclick: () => history.length > 1 ? history.back() : show("home", false)}, "‹ Home"),
     el("h1", {}, title), el("div", {class: "right"}, right || "")));
 }
+// the phone's own tools first (as in the Android app's "This tablet"), then the PC remote
+const PHONE_TILES = [
+  ["books", "📚", "Get Books", "orange"], ["poem", "🎲", "فال حافظ", "pink", {faal: 1}], ["notes", "🗒", "Notes", "yellow"],
+  ["sketch", "✍️", "Handwriting", "blue"], ["scan", "📄", "Scanner", "blue"], ["focus", "⏱", "Focus", "red"],
+  ["standby", "🕰", "StandBy", "orange"], ["claude", "✨", "Claude", "#d97757"],
+];
 const TILES = [
   ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["talk", "🎙", "Push to Talk", "red"],
   ["media", "🎵", "Media", "pink"],
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
   ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
-  ["notes", "🗒", "Notes", "yellow"], ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
+  ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
   ["mirror", "🖥", "Show on PC", "blue"], ["clips", "📋", "Clipboard History", "teal"], ["sleep", "💤", "Sleep", "indigo"],
   ["webcam", "📷", "Webcam", "red"], ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
 ];
 const PAGES = {};
 
 PAGES.home = () => {
-  app.append(el("div", {class: "big"}, "Fedora Pad"), statusLine(),
-    el("div", {class: "tiles"}, TILES.map(([id, sym, label, color]) =>
-      el("button", {class: "tile", onclick: () => show(id)}, chip(sym, color), el("b", {}, label)))));
+  const open = (id, arg) => id === "claude" ? window.open("https://claude.ai/new", "_blank") : show(id, true, arg);
+  const grid = list => el("div", {class: "tiles"}, list.map(([id, sym, label, color, arg]) =>
+    el("button", {class: "tile", "data-q": label.toLowerCase() + " " + id, onclick: () => open(id, arg)}, chip(sym, color), el("b", {}, label))));
+  const phone = grid(PHONE_TILES), pc = grid(TILES);
+  const heads = [el("div", {class: "h"}, /iPad/.test(navigator.userAgent) ? "This iPad" : "This phone"), el("div", {class: "h"}, link.host || "The PC")];
+  const q = el("input", {class: "search", type: "search", placeholder: "🔍 Search", style: "margin:0 0 4px"});
+  q.addEventListener("input", () => {
+    const s = q.value.trim().toLowerCase();
+    [phone, pc].forEach((g, i) => { let n = 0;
+      [...g.children].forEach(t => { const hit = !s || t.dataset.q.includes(s); t.style.display = hit ? "" : "none"; n += hit; });
+      heads[i].style.display = n ? "" : "none"; });
+  });
+  app.append(el("div", {class: "big"}, "Fedora Pad"), statusLine(), q, heads[0], phone, heads[1], pc);
 };
 
 // ---- pairing
@@ -1007,6 +1030,325 @@ PAGES.settings = () => {
       actionRow("🔓", "red", "Forget this device", () => confirmThen("Unpair? You will need a new code from the PC.", () => {
         store.set("token", ""); if (link.ws) link.ws.close(); showPairing(); }))),
     el("p", {class: "sub"}, "Add to Home Screen (Share › Add to Home Screen) to open Fedora Pad like an app."));
+};
+
+// ---------------------------------------------------------------- the phone's own tools (like the Android app)
+
+// web pages the PC fetches for us (Get Books, Persian poetry)
+async function net(url, asBlob) {
+  const r = await fetch("/net?token=" + encodeURIComponent(store.get("token", "")) + "&u=" + encodeURIComponent(url));
+  if (!r.ok) { let why = r.status; try { why = (await r.json()).error || why; } catch (e) {} throw new Error(why); }
+  return asBlob ? r.blob() : r.json();
+}
+// a file to the PC's Downloads › Fedora Pad, like Send Files
+async function sendBlob(name, blob, progress) {
+  if (!link.connected) { toast("Not connected to the PC"); return false; }
+  const id = Math.random().toString(36).slice(2), CHUNK = 48 * 1024;
+  for (let at = 0; at < blob.size || at === 0; at += CHUNK) {
+    const buf = new Uint8Array(await blob.slice(at, at + CHUNK).arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    while (link.ws && link.ws.bufferedAmount > 512 * 1024) await new Promise(r => setTimeout(r, 30));
+    send({t: "file", id, name, data: btoa(bin), last: at + CHUNK >= blob.size});
+    if (progress) progress(Math.min(100, Math.round((at + CHUNK) * 100 / Math.max(blob.size, 1))));
+    if (blob.size === 0) break;
+  }
+  return true;
+}
+// share sheet when the phone has one (Save to Files / Photos / Books), else a download
+async function shareBlob(name, blob) {
+  const file = new File([blob], name, {type: blob.type});
+  if (navigator.canShare && navigator.canShare({files: [file]})) return navigator.share({files: [file]}).catch(() => {});
+  const a = el("a", {href: URL.createObjectURL(blob), download: name}); document.body.append(a); a.click(); a.remove();
+}
+// a note in the PC's Notes (the same notes as the Notes page)
+function addNote(text) {
+  on("notes", m => { on("notes", null); const list = m.list || [];
+    list.push({id: Date.now().toString(36), text, color: "yellow"}); send({t: "setnotes", list}); toast("Saved in Notes"); });
+  send({t: "notes?"});
+}
+// Claude: the question is copied, and claude.ai (or the Claude app) opens with it
+function askClaude(question) {
+  if (navigator.clipboard) navigator.clipboard.writeText(question).catch(() => {});
+  window.open("https://claude.ai/new?q=" + encodeURIComponent(question), "_blank");
+}
+function speak(text, lang) {
+  if (!window.speechSynthesis) return toast("This browser can't read aloud");
+  if (speechSynthesis.speaking) { speechSynthesis.cancel(); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang; u.rate = lang.startsWith("fa") ? 0.85 : 1;
+  const v = speechSynthesis.getVoices().find(v => v.lang.replace("_", "-").toLowerCase().startsWith(lang.slice(0, 2)));
+  if (v) u.voice = v; else if (lang.startsWith("fa")) toast("No Persian voice on this device: it reads with another voice");
+  speechSynthesis.speak(u);
+  cleanup.push(() => speechSynthesis.cancel());
+}
+const loading = box => { box.innerHTML = ""; box.append(el("p", {class: "sub"}, "Loading…  در حال بارگذاری…")); };
+const failed = (box, err, what) => { box.innerHTML = ""; box.append(el("p", {class: "sub"},
+  "Couldn't reach " + what + " (" + err.message + "). The PC fetches it: check the PC's internet.")); };
+
+// ---- Get Books: free classics, Persian poetry, Iranian stores
+const POETS = [["حافظ", 9], ["سعدی", 118], ["مولوی", 97], ["فردوسی", 32], ["خیام", 30], ["عطار", 151],
+  ["نظامی", 110], ["پروین اعتصامی", 146], ["سنایی", 188], ["جامی", 285]];
+const STORES = [["طاقچه · Taaghche", "https://taaghche.com", "E-books and audiobooks, many free; has its own app"],
+  ["فیدیبو · Fidibo", "https://fidibo.com", "E-books, audiobooks and podcasts"],
+  ["کتابراه · Ketabrah", "https://www.ketabrah.ir", "E-books and audiobooks, many free"],
+  ["نوار · Navaar", "https://www.navaar.ir", "Persian audiobooks"],
+  ["کتابناک · Ketabnak", "https://ketabnak.com", "Free Persian e-books (PDF / EPUB)"],
+  ["ویکی‌نبشته · Wikisource", "https://fa.wikisource.org", "Free Persian classic texts"],
+  ["گنجور · Ganjoor", "https://ganjoor.net", "Every Persian poet, online"]];
+const GANJOOR = "https://api.ganjoor.net/api/ganjoor/";
+
+PAGES.books = () => {
+  page("Get Books");
+  const pane = el("div", {style: "margin-top:14px"});
+  let tab = store.get("bookstab", "en");
+  const tabs = el("div", {class: "seg"}, [["en", "📚 Classics"], ["fa", "🌹 شعر فارسی"], ["ir", "🇮🇷 Stores"]].map(([id, label]) =>
+    el("button", {class: id === tab ? "on" : "", onclick: e => { tab = id; store.set("bookstab", id);
+      [...tabs.children].forEach(b => b.classList.toggle("on", b === e.currentTarget)); draw(); }}, label)));
+  app.append(tabs, pane);
+  const draw = () => { pane.innerHTML = ""; ({en: classics, fa: poetry, ir: stores})[tab](); };
+
+  function classics() {
+    const q = el("input", {class: "search", type: "search", placeholder: "🔍 Search 75,000 free books (title or author)", enterkeyhint: "search"});
+    const results = el("div");
+    const go = url => { loading(results); net(url).then(d => {
+      results.innerHTML = "";
+      if (!d.results.length) results.append(el("p", {class: "sub"}, "Nothing found. Try an author's surname."));
+      const g = el("div", {class: "group"}); results.append(g);
+      d.results.forEach(b => {
+        const who = (b.authors || []).map(a => a.name.includes(", ") ? a.name.split(", ").reverse().join(" ") : a.name).join(", ");
+        const epub = (b.formats || {})["application/epub+zip"];
+        g.append(el("button", {class: "row", onclick: () => epub ? book(b, who, epub) : toast("No EPUB of this one")},
+          chip("📖", "indigo"), el("div", {class: "grow"}, b.title, el("small", {}, who + " · " + (b.languages || []).join(", ").toUpperCase())),
+          el("span", {class: "sub"}, epub ? "⬇️" : "")));
+      });
+      if (d.next) results.append(el("button", {class: "btn2", style: "width:100%", onclick: () => go(d.next)}, "More…"));
+    }).catch(e => failed(results, e, "Project Gutenberg")); };
+    q.addEventListener("keydown", e => { if (e.key === "Enter") { q.blur(); go("https://gutendex.com/books/?search=" + encodeURIComponent(q.value.trim())); } });
+    pane.append(q, el("p", {class: "sub", style: "margin:0 4px 12px"}, "Project Gutenberg: books old enough to be free. "
+      + "Download one, then open it in Books (Apple Books) or send it to the tablet."), results);
+    go("https://gutendex.com/books/");
+  }
+  function book(b, who, epub) {
+    const status = el("div", {class: "sub", style: "margin:8px 0"}, "");
+    const about = ((b.summaries || [])[0] || "").slice(0, 500);
+    let blob = null;
+    const name = b.title.replace(/[\\/:*?"<>|]/g, " ").slice(0, 80).trim() + ".epub";
+    const get = async () => { if (blob) return blob; status.textContent = "Downloading through the PC…";
+      blob = await net(epub, true); blob = new Blob([blob], {type: "application/epub+zip"});
+      status.textContent = "✓ " + (blob.size / 1e6).toFixed(1) + " MB"; return blob; };
+    const close = sheet(el("b", {}, b.title), el("div", {class: "sub", style: "margin:4px 0 8px"}, who),
+      about ? el("p", {style: "font-size:15px;max-height:30vh;overflow:auto"}, about + (about.length >= 500 ? "…" : "")) : null, status,
+      el("div", {class: "btns"},
+        el("button", {class: "btn", onclick: () => get().then(x => shareBlob(name, x)).catch(e => status.textContent = "⚠️ " + e.message)}, "📲 Open in Books"),
+        el("button", {class: "btn2", onclick: () => get().then(x => sendBlob(name, x, p => status.textContent = "To the PC… " + p + " %"))
+          .then(ok => { if (ok) status.textContent = "✓ In the PC's Downloads › Fedora Pad"; }).catch(e => status.textContent = "⚠️ " + e.message)}, "💻 To the PC"),
+        el("button", {class: "btn2", onclick: () => close()}, "Close")));
+  }
+  function poetry() {
+    pane.append(el("button", {class: "btn", style: "width:100%;font-size:19px", onclick: () => show("poem", true, {faal: 1})}, "🎲 فال حافظ · Fal-e Hafez"),
+      el("p", {class: "sub center"}, "نیت کنید و بزنید — make a wish, then tap."),
+      el("div", {class: "h"}, "شاعران · Poets"),
+      el("div", {class: "group", dir: "rtl"}, POETS.map(([name, cat], i) =>
+        el("button", {class: "row", onclick: () => show("poem", true, {cat, title: name})}, chip("🌹", i % 2 ? "purple" : "pink"),
+          el("div", {class: "grow"}, name), el("span", {class: "sub"}, "‹")))));
+  }
+  function stores() {
+    pane.append(el("p", {class: "sub"}, "Buy or borrow Persian books. Their apps work best; these open in Safari."),
+      el("div", {class: "group"}, STORES.map(([name, url, about], i) =>
+        el("a", {class: "row", href: url, target: "_blank", rel: "noopener", style: "text-decoration:none;color:inherit"},
+          chip("📗", i < 4 ? "orange" : "green"), el("div", {class: "grow"}, name, el("small", {}, about)), el("span", {class: "sub"}, "›")))));
+  }
+  draw();
+};
+
+// ---- Persian poetry from Ganjoor: a poet's books and poems, one poem, or Fal-e Hafez
+PAGES.poem = (arg = {}) => {
+  page(arg.faal ? "فال حافظ" : arg.title || "گنجور");
+  const box = el("div", {dir: "rtl"});
+  app.append(box);
+  if (arg.cat) {
+    loading(box);
+    net(GANJOOR + "cat/" + arg.cat + "?poems=true").then(d => {
+      box.innerHTML = "";
+      const g = el("div", {class: "group"});
+      (d.cat.children || []).forEach(c => g.append(el("button", {class: "row", onclick: () => show("poem", true, {cat: c.id, title: c.title})},
+        chip("📚", "purple"), el("div", {class: "grow"}, c.title), el("span", {class: "sub"}, "‹"))));
+      (d.cat.poems || []).forEach(p => g.append(el("button", {class: "row", onclick: () => show("poem", true, {poem: p.id, title: p.title})},
+        el("div", {class: "grow"}, p.title, el("small", {}, p.excerpt || "")))));
+      box.append(g.children.length ? g : el("p", {class: "sub"}, "خالی است · Nothing here"));
+    }).catch(e => failed(box, e, "Ganjoor"));
+    return;
+  }
+  let meanings = false, poem = null;
+  const url = id => GANJOOR + "poem/" + id + "?catInfo=false&catPoems=false&rhymes=false&recitations=false&images=false"
+    + "&songs=false&comments=false&verseDetails=true&navigation=true";
+  const load = u => { loading(box); net(u).then(p => { poem = p; draw(); window.scrollTo(0, 0); }).catch(e => failed(box, e, "Ganjoor")); };
+  const draw = () => {
+    box.innerHTML = "";
+    const card = el("div", {class: "card", style: "padding:20px 18px;font-size:19px;line-height:1.9"});
+    let couplet = null;
+    (poem.verses || []).forEach(v => {
+      if (v.versePosition === 0 || v.versePosition === 1) {
+        if (v.versePosition === 0 || !couplet) { couplet = el("div", {class: "bayt"}); card.append(couplet); }
+        couplet.append(el("div", {}, v.text));
+      } else { card.append(el("div", {class: "center", style: "margin-top:12px"}, v.text)); couplet = null; }
+      if (meanings && v.coupletSummary) { card.append(el("div", {style: "font-size:14px;color:var(--blue);margin-top:4px;line-height:1.6"}, v.coupletSummary)); couplet = null; }
+    });
+    const text = (poem.plainText || "").trim() + "\n— " + poem.fullTitle;
+    box.append(...[arg.title === poem.title ? null : el("div", {class: "center", style: "font-size:21px;font-weight:700"}, poem.title)].filter(Boolean),
+      el("div", {class: "sub center", style: "margin:4px 0 12px"}, poem.fullTitle), card,
+      el("div", {class: "btns", dir: "ltr"},
+        el("button", {class: "btn2", onclick: () => speak(poem.plainText || "", "fa-IR")}, "🔊 خواندن"),
+        el("button", {class: "btn2", onclick: () => { meanings = !meanings; draw(); }}, meanings ? "📝 بدون معنی" : "📝 معنی"),
+        el("button", {class: "btn2", onclick: () => addNote(text)}, "🗒 Notes"),
+        el("button", {class: "btn2", onclick: () => askClaude((arg.faal ? "This is my Fal-e Hafez (فال حافظ). Interpret it for me in simple Persian and English:\n\n"
+          : "Explain this Persian poem line by line in simple Persian, then summarise it in English:\n\n") + text)}, "✨ Claude")),
+      el("div", {class: "btns", style: "margin-top:10px"}, arg.faal
+        ? el("button", {class: "btn", onclick: () => load(GANJOOR + "hafez/faal")}, "🎲 فال دوباره")
+        : [poem.previous ? el("button", {class: "btn2", onclick: () => load(url(poem.previous.id))}, "→ " + poem.previous.title) : null,
+           poem.next ? el("button", {class: "btn2", onclick: () => load(url(poem.next.id))}, poem.next.title + " ←") : null]));
+  };
+  load(arg.faal ? GANJOOR + "hafez/faal" : url(arg.poem));
+};
+
+// ---- Focus: a timer with breaks
+PAGES.focus = () => {
+  page("Focus");
+  const st = store.get("focus", {work: 25, rest: 5});
+  let left = st.work * 60, phase = "work", timer = null, endAt = 0, rounds = 0;
+  const ring = el("div", {style: "width:230px;height:230px;border-radius:50%;margin:10px auto 18px;display:grid;place-items:center"});
+  const clock = el("div", {style: "font-size:54px;font-weight:300;font-variant-numeric:tabular-nums;background:var(--bg);width:200px;height:200px;border-radius:50%;display:grid;place-items:center"});
+  ring.append(clock);
+  const label = el("div", {class: "center sub", style: "margin-top:-6px;margin-bottom:14px"});
+  const start = el("button", {class: "btn"}, "Start");
+  const total = () => (phase === "work" ? st.work : st.rest) * 60;
+  const paint = () => {
+    const pct = 100 - left * 100 / total(), color = phase === "work" ? "var(--red)" : "var(--green)";
+    ring.style.background = `conic-gradient(${color} ${pct}%, var(--fill) 0)`;
+    clock.textContent = String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
+    label.textContent = (phase === "work" ? "🎯 Focus" : "☕ Break") + (rounds ? "  ·  " + rounds + " done today" : "");
+    start.textContent = timer ? "Pause" : left < total() ? "Resume" : "Start";
+  };
+  const tick = () => {
+    left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+    if (left === 0) {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      if (phase === "work") rounds++;
+      phase = phase === "work" ? "rest" : "work"; left = total(); endAt = Date.now() + left * 1000;
+      toast(phase === "work" ? "Break over: focus!" : "Well done: take a break ☕");
+    }
+    paint();
+  };
+  const stop = () => { clearInterval(timer); timer = null; paint(); };
+  start.addEventListener("click", () => { if (timer) return stop();
+    endAt = Date.now() + left * 1000; timer = setInterval(tick, 500); paint();
+    if (navigator.wakeLock) navigator.wakeLock.request("screen").then(l => cleanup.push(() => l.release())).catch(() => {}); });
+  const choose = (key, values) => el("div", {class: "seg"}, values.map(v => el("button", {class: st[key] === v ? "on" : "", onclick: e => {
+    st[key] = v; store.set("focus", st); [...e.currentTarget.parentNode.children].forEach(b => b.classList.toggle("on", b === e.currentTarget));
+    if (!timer) { left = total(); paint(); } }}, v + " min")));
+  app.append(ring, label, el("div", {class: "btns"}, start, el("button", {class: "btn2", onclick: () => { stop(); phase = "work"; left = total(); paint(); }}, "Reset")),
+    el("div", {class: "h"}, "Focus"), choose("work", [15, 25, 45, 60]), el("div", {class: "h"}, "Break"), choose("rest", [5, 10, 15]),
+    el("p", {class: "sub"}, "The screen stays on while the timer runs. When a round ends, this device vibrates (on phones that can)."));
+  cleanup.push(() => clearInterval(timer));
+  paint();
+};
+
+// ---- StandBy: a big clock, the date and what's playing on the PC
+PAGES.standby = () => {
+  app.style.maxWidth = "none";
+  cleanup.push(() => { app.style.maxWidth = ""; });
+  const time = el("div", {style: "font-size:min(30vw,42vh);font-weight:200;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em"});
+  const date = el("div", {style: "font-size:min(6vw,7vh);color:var(--red);font-weight:600"});
+  const song = el("div", {class: "sub", style: "font-size:min(4vw,5vh);margin-top:2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"});
+  const play = el("button", {class: "btn2", style: "font-size:24px;padding:10px 22px", onclick: () => send({t: "mediactl", a: "play-pause"})}, "⏯");
+  const box = el("div", {style: "height:calc(100vh - 40px);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center"},
+    time, date, song, el("div", {class: "btns", style: "margin-top:2vh;gap:14px;flex:none"},
+      el("button", {class: "btn2", style: "font-size:24px;padding:10px 22px", onclick: () => send({t: "mediactl", a: "previous"})}, "⏮"), play,
+      el("button", {class: "btn2", style: "font-size:24px;padding:10px 22px", onclick: () => send({t: "mediactl", a: "next"})}, "⏭")),
+    el("button", {class: "sub", style: "margin-top:3vh", onclick: () => history.back()}, "‹ Done"));
+  app.append(box);
+  every(1000, () => { const d = new Date();
+    time.textContent = d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hourCycle: "h23"});
+    date.textContent = d.toLocaleDateString([], {weekday: "long", day: "numeric", month: "long"}); });
+  on("media", m => { song.textContent = m.title && !/Missing|Stopped/.test(m.status) ? "🎵 " + m.title + (m.artist ? " · " + m.artist : "") : "";
+    play.textContent = m.status === "Playing" ? "⏸" : "▶"; });
+  every(3000, () => send({t: "media?"}));
+  if (navigator.wakeLock) navigator.wakeLock.request("screen").then(l => cleanup.push(() => l.release())).catch(() => {});
+  cleanup.push(() => on("media", null));
+};
+
+// ---- Handwriting: draw or write with a finger or Apple Pencil, send it to the PC or ask Claude
+PAGES.sketch = () => {
+  page("Handwriting");
+  const canvas = el("canvas", {style: "width:100%;height:calc(100vh - 250px);min-height:280px;background:#fff;border-radius:16px;touch-action:none;display:block"});
+  let color = "#1d1d1f", width = 3, strokes = [];
+  const pens = el("div", {class: "btns", style: "margin:10px 0"},
+    [["#1d1d1f", "⚫"], ["#007aff", "🔵"], ["#ff3b30", "🔴"], ["#34c759", "🟢"], ["#ffffff", "🧽"]].map(([c, s]) =>
+      el("button", {class: "btn2", onclick: () => { color = c; width = c === "#ffffff" ? 24 : 3; }}, s)),
+    el("button", {class: "btn2", onclick: () => { strokes.pop(); redraw(); }}, "↩️"),
+    el("button", {class: "btn2", onclick: () => { strokes = []; redraw(); }}, "🗑"));
+  const ctx = canvas.getContext("2d");
+  const size = () => { const r = canvas.getBoundingClientRect(), s = devicePixelRatio || 1;
+    canvas.width = r.width * s; canvas.height = r.height * s; ctx.setTransform(s, 0, 0, s, 0, 0); redraw(); };
+  const line = st => { ctx.strokeStyle = st.c; ctx.lineWidth = st.w; ctx.lineCap = ctx.lineJoin = "round"; ctx.beginPath();
+    st.p.forEach(([x, y, f], i) => { ctx.lineWidth = st.w * (0.6 + f * 0.8); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); };
+  const redraw = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height); strokes.forEach(line); };
+  let cur = null;
+  const pt = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, e.pressure || 0.5]; };
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); cur = {c: color, w: width, p: [pt(e)]}; strokes.push(cur); });
+  canvas.addEventListener("pointermove", e => { if (!cur) return; cur.p.push(pt(e)); line(cur); });
+  const end = () => { cur = null; };
+  canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
+  const png = () => new Promise(r => canvas.toBlob(r, "image/png"));
+  const stamp = () => "Handwriting " + new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "-") + ".png";
+  app.append(canvas, pens, el("div", {class: "btns"},
+    el("button", {class: "btn", onclick: async () => { if (await sendBlob(stamp(), await png())) toast("Sent to the PC › Downloads › Fedora Pad"); }}, "💻 PC"),
+    el("button", {class: "btn2", onclick: async () => shareBlob(stamp(), await png())}, "📤 Share"),
+    el("button", {class: "btn2", onclick: async () => { await shareBlob(stamp(), await png());
+      toast("Pick Claude in the share sheet, or paste the picture in Claude"); }}, "✨ Claude")));
+  setTimeout(size, 0);
+  window.addEventListener("resize", size); cleanup.push(() => window.removeEventListener("resize", size));
+};
+
+// ---- Scanner: photograph a page, it is cleaned up (white paper, dark text) and sent to the PC
+PAGES.scan = () => {
+  page("Scanner");
+  const pick = el("input", {type: "file", accept: "image/*", capture: "environment", style: "display:none"});
+  const pages = el("div", {class: "notes"});
+  const shots = [];
+  const mode = el("div", {class: "seg", style: "margin:12px 0"}, [["doc", "📄 Document"], ["photo", "🖼 Photo"]].map(([id, label], i) =>
+    el("button", {class: i ? "" : "on", "data-m": id, onclick: e => [...mode.children].forEach(b => b.classList.toggle("on", b === e.currentTarget))}, label)));
+  const clean = async file => {
+    const img = await createImageBitmap(file), scale = Math.min(1, 2200 / Math.max(img.width, img.height));
+    const c = el("canvas"); c.width = img.width * scale; c.height = img.height * scale;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0, c.width, c.height);
+    if (mode.querySelector(".on").dataset.m === "doc") {  // grey, then stretch so paper is white and ink is dark
+      const d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const g = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2];
+        const v = Math.max(0, Math.min(255, (g - 70) * 255 / 140));
+        p[i] = p[i + 1] = p[i + 2] = v;
+      }
+      x.putImageData(d, 0, 0);
+    }
+    return new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+  };
+  pick.addEventListener("change", async () => {
+    for (const f of pick.files) {
+      const blob = await clean(f); shots.push(blob);
+      pages.append(el("img", {src: URL.createObjectURL(blob), style: "width:100%;border-radius:10px;background:#fff"}));
+    }
+    pick.value = "";
+  });
+  const name = i => "Scan " + new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "-") + (shots.length > 1 ? " p" + (i + 1) : "") + ".jpg";
+  app.append(el("button", {class: "btn", style: "width:100%", onclick: () => pick.click()}, "📷 Scan a page"), pick, mode, pages,
+    el("div", {class: "btns", style: "margin-top:12px"},
+      el("button", {class: "btn2", onclick: async () => { if (!shots.length) return toast("Scan a page first");
+        for (let i = 0; i < shots.length; i++) if (!await sendBlob(name(i), shots[i])) return;
+        toast("Sent to the PC › Downloads › Fedora Pad"); }}, "💻 To the PC"),
+      el("button", {class: "btn2", onclick: () => shots.length ? shareBlob(name(0), shots[shots.length - 1]) : toast("Scan a page first")}, "📤 Share"),
+      el("button", {class: "btn2", onclick: () => { shots.length = 0; pages.innerHTML = ""; }}, "🗑 Clear")),
+    el("p", {class: "sub"}, "Lay the page flat in good light. Document mode makes the paper white and the writing dark."));
 };
 
 // ---------------------------------------------------------------- start

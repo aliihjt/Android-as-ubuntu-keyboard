@@ -108,7 +108,9 @@ Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Pus
 
 Off: `./host/webapp-setup.sh --off` · unpair every phone: `./host/webapp-setup.sh --forget` (Windows: `WebApp.bat off` / `WebApp.bat forget`).
 **🎙 Push to Talk** works on the phone too: hold the big button and speak, let go and the words are typed on the PC. *iPhone speech* shows the words live (internet; Fedora and Windows); *PC (offline)* sends the phone's mic to Whisper on Fedora (`./host/voice-setup.sh`, better for Persian).
-Safari can't do a few things the Android app does: the floating button over other apps, and Books / Handwriting / home-screen features.
+**The phone's own tools** (top of the web app's home, like the tablet's): 📚 **Get Books** (Project Gutenberg classics → Open in Books or send to the PC; 🌹 Persian poetry from Ganjoor with meanings and read aloud; 🇮🇷 Iranian stores), 🎲 **فال حافظ**, 🗒 Notes, ✍️ **Handwriting** (finger or Apple Pencil → PC or share), 📄 **Scanner** (camera → clean black-and-white page → PC), ⏱ **Focus** timer, 🕰 **StandBy** clock with the PC's music, and ✨ Claude. Book and poetry pages are fetched by the PC, so they work wherever the PC has internet. 🔍 Search on the home screen finds any page.
+
+Safari can't do a few things the Android app does: the floating button over other apps, reading books inside the app (use Apple Books), and being the home screen.
 
 ## 🪟 Windows version
 Booted into Windows? Fedora Pad works there too: keyboard (with فا Persian), trackpad, Media, Controls, Shortcuts, Apps, Stream Deck, Windows switcher, Notes, Terminal Pad, Send Files, Text & Clipboard, Stats and Ambient Light.

@@ -35,7 +35,6 @@ import java.util.Locale;
 public class BooksActivity extends Page {
     private static final String LIBRARY = "books";
     private static final int PICK = 51;
-    private final Handler main = new Handler(Looper.getMainLooper());
     private LinearLayout grid;
 
     static final class Book {
@@ -63,6 +62,13 @@ public class BooksActivity extends Page {
         top.addView(th.secondaryButton("📚 Get free books", v -> startActivity(new Intent(this, GetBooksActivity.class))),
                 th.weighted(10));
         add(top, 6);
+        LinearLayout more = new LinearLayout(this);
+        more.addView(th.secondaryButton("🖍 Highlights", v -> startActivity(new Intent(this, HighlightsActivity.class))),
+                th.weighted(0));
+        more.addView(th.secondaryButton("⭐ Words", v -> startActivity(new Intent(this, VocabActivity.class))), th.weighted(10));
+        more.addView(th.secondaryButton("🎲 فال حافظ", v -> startActivity(new Intent(this, PoemActivity.class)
+                .putExtra("mode", "faal"))), th.weighted(10));
+        add(more, 10);
         add(th.caption("PDF, EPUB and text files from the tablet, a USB stick or the cloud. "
                 + "In a book: select text to ask Claude about it or save it as a note."), 8);
         grid = new LinearLayout(this);
@@ -242,7 +248,7 @@ public class BooksActivity extends Page {
         art.addView(page, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         cell.addView(art, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, th.dp(190)));
-        if (b.type.equals("pdf")) pdfCover(b, page);
+        if (b.type.equals("pdf")) pdfCover(this, b, th.dp(150), page);
 
         String progress = b.total > 0 ? (b.type.equals("pdf") ? "Page " : "Chapter ") + (b.position + 1) + " of " + b.total
                 : "Not started";
@@ -258,17 +264,33 @@ public class BooksActivity extends Page {
         return cell;
     }
 
-    /** First page of the PDF as the cover, drawn in the background. */
-    private void pdfCover(Book b, ImageView into) {
+    /** First pages already drawn, so the shelf and the Reader home don't draw them again. */
+    private static final android.util.LruCache<String, Bitmap> COVERS = new android.util.LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        @Override
+        protected int sizeOf(String k, Bitmap b) {
+            return b.getByteCount();
+        }
+    };
+
+    /** First page of the PDF as the cover, drawn in the background (once, then from memory). */
+    static void pdfCover(Context c, Book b, int widthPx, ImageView into) {
+        String key = b.uri + "@" + widthPx;
+        Bitmap cached = COVERS.get(key);
+        if (cached != null) {
+            into.setImageBitmap(cached);
+            return;
+        }
+        Handler main = new Handler(Looper.getMainLooper());
         new Thread(() -> {
-            try (ParcelFileDescriptor fd = getContentResolver().openFileDescriptor(Uri.parse(b.uri), "r");
+            try (ParcelFileDescriptor fd = c.getContentResolver().openFileDescriptor(Uri.parse(b.uri), "r");
                  PdfRenderer r = new PdfRenderer(fd)) {
                 PdfRenderer.Page p = r.openPage(0);
-                int w = th.dp(150), h = Math.round(w * (float) p.getHeight() / p.getWidth());
-                Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                int h = Math.round(widthPx * (float) p.getHeight() / p.getWidth());
+                Bitmap bmp = Bitmap.createBitmap(widthPx, h, Bitmap.Config.ARGB_8888);
                 bmp.eraseColor(Color.WHITE);
                 p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 p.close();
+                COVERS.put(key, bmp);
                 main.post(() -> into.setImageBitmap(bmp));
             } catch (Exception ignored) {  // moved or deleted: the coloured cover stays
             }

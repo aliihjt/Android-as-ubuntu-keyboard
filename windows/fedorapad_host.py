@@ -479,6 +479,9 @@ def stats():
     if WINDOWS:
         kernel32.GetTickCount64.restype = ctypes.c_ulonglong
         out["uptime_min"] = int(kernel32.GetTickCount64() // 60000)
+    bat = pad_extras.battery()  # the laptop's battery, for the tablet's widget and Stats
+    if bat:
+        out["battery"], out["charging"] = bat
     return out
 
 
@@ -967,6 +970,14 @@ def handle(inj, msg, reply=None):
                "free AirPlay receiver that Fedora Pad can start."})
     elif t == "cliphist?" and reply:
         reply({"t": "cliphist", "list": clip_history.list()})
+    elif t == "lock" and reply:
+        ok = bool(WINDOWS and user32.LockWorkStation())
+        reply({"t": "unlockres", "ok": ok, "what": "lock", "error": "" if ok else "Couldn't lock the screen."})
+    elif t == "unlock" and reply:
+        reply({"t": "unlockres", "ok": False, "what": "unlock",
+               "error": "Windows doesn't let another device unlock it. Use Windows Hello or the password."})
+    elif t == "unlock?" and reply:
+        reply({"t": "unlockinfo", "enabled": False, "os": "windows"})
     elif t == "clipclear":
         clip_history.clear()
     elif t == "wake?" and reply:
@@ -1260,8 +1271,9 @@ def main():
     inj = Injector(dry_run=args.dry_run)
     clients = Clients()
     global hub
-    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied)
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, _toast)
     hub.watch_pc_clipboard()
+    pad_extras.PcEvents(hub.event).start()  # downloads and battery -> every device
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     if os.path.exists(WEB_FLAG):
         start_web_app(inj, clients)

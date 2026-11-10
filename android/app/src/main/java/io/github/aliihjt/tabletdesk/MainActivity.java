@@ -57,6 +57,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private ReaderHome readerHome;  // the calm reading home instead of the desktop
+    private HomeWidgets widgets;
     private String style;
     private TextView hostName, hostInfo, clock, battery, dot;
     private final Runnable tick = new Runnable() {
@@ -117,6 +118,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
         middle.addView(widget(), new LinearLayout.LayoutParams(
                 portrait() ? screenW - 2 * side : Math.min(th.dp(460), screenW - 2 * side),
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+        widgets = new HomeWidgets(this, th, false);  // the Control Center below shows the music
+        middle.addView(widgets.view(), th.fullWidth(16));
         middle.addView(launchpad(), th.fullWidth(28));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(middle);
@@ -452,6 +455,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
             return;
         }
         handler.post(tick);
+        if (widgets != null) widgets.resume();
         link.setStateListener(this);
         link.requestState();
         link.on("media", this::showMedia);
@@ -474,6 +478,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
     @Override
     protected void onPause() {
         if (readerHome != null) readerHome.pause();
+        if (widgets != null) widgets.pause();
         handler.removeCallbacks(tick);
         handler.removeCallbacks(mediaTick);
         link.setStateListener(null);

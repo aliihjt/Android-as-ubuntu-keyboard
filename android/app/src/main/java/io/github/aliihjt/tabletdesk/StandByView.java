@@ -286,7 +286,7 @@ final class StandByView extends FrameLayout {
         }, "weather").start();
     }
 
-    private static String get(String url) throws Exception {
+    static String get(String url) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(8000);
@@ -302,7 +302,7 @@ final class StandByView extends FrameLayout {
     }
 
     /** WMO weather codes as one emoji. */
-    private static String icon(int code) {
+    static String icon(int code) {
         if (code == 0) return "☀️";
         if (code <= 2) return "🌤";
         if (code == 3) return "☁️";

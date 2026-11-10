@@ -11,11 +11,16 @@ its reply function; the hub then
                                       get it; text copied on the PC goes to the devices too
   - keeps data the devices share      {"t":"share","key":k,"value":v} / {"t":"shared?"}
                                       (reading progress, highlights, words), saved on the PC
+  - mirrors the tablet's notifications {"t":"notif",...} from the tablet goes to the other
+                                      devices and the PC's screen; {"t":"notifs?"} lists them
+  - keeps notes the same everywhere   a device's {"t":"setnotes"} goes to the others too
+  - tells devices about the PC        event(): download finished, battery low, long task done
 
 A device says who it is with {"t":"iam","name":"Ali's iPad","kind":"ipad"}.
 Only devices already allowed to control the PC (cable, paired Wi-Fi, paired
 web app) get here, so the hub adds no new way in.
 """
+import collections
 import json
 import os
 import secrets
@@ -24,18 +29,20 @@ import time
 
 # what one device may send another through the hub
 RELAY_TYPES = {"pushtext", "pushfile", "remote"}
-SHARED_KEYS = {"reading", "highlights", "words"}
+SHARED_KEYS = {"reading", "highlights", "words", "lastread"}
 MAX_SHARED = 2 * 1024 * 1024
 KINDS = {"android", "ipad", "iphone", "phone", "browser"}
 
 
 class Hub:
-    def __init__(self, conf_dir, pc_name, set_clip=None, latest_clip=None):
+    def __init__(self, conf_dir, pc_name, set_clip=None, latest_clip=None, notify=None):
         self.lock = threading.RLock()
         self.devices = {}        # reply -> {"id", "name", "kind", "since"}
         self.pc_name = pc_name
         self.set_clip = set_clip            # (text): put text on the PC's clipboard
         self.latest_clip = latest_clip      # (): newest text copied on the PC, or None
+        self.notify = notify                # (title, text): a notification on the PC's screen
+        self.notifs = collections.deque(maxlen=50)  # the tablet's latest notifications
         self.file = os.path.join(conf_dir, "shared.json")
         self.settings_file = os.path.join(conf_dir, "hub.json")
         self.clip = ""                      # the last text that went round
@@ -126,6 +133,25 @@ class Hub:
         if t == "share":
             self._share(msg, reply)
             return True
+        if t == "notif":
+            self._notif(msg, reply)
+            return True
+        if t == "notifgone":
+            key = str(msg.get("key", ""))
+            with self.lock:
+                for n in list(self.notifs):
+                    if n["key"] == key:
+                        self.notifs.remove(n)
+            self._others(reply, {"t": "notifgone", "key": key})
+            return True
+        if t == "notifs?":
+            with self.lock:
+                lst = list(self.notifs)
+            self._send(reply, {"t": "notifs", "list": lst[::-1]})
+            return True
+        if t == "setnotes" and isinstance(msg.get("list"), list):
+            self._others(reply, {"t": "notes", "list": msg["list"]})
+            return False  # the host saves them
         if t == "shared?":
             with self.lock:
                 data = dict(self.shared)
@@ -148,6 +174,38 @@ class Hub:
             self._send(r, out)
         if not targets and (m.get("t") != "pushfile" or m.get("last")):  # once per file, not per piece
             self._send(reply, {"t": "relayfail", "to": msg.get("to")})
+
+    def _others(self, reply, msg):
+        for r, _ in self._snapshot():
+            if r != reply:
+                self._send(r, msg)
+
+    # ---- the tablet's notifications on the other devices and the PC
+
+    def _notif(self, msg, reply):
+        with self.lock:
+            sender = self.devices.get(reply)
+            if not sender:
+                return
+            n = {"key": str(msg.get("key", ""))[:200], "app": str(msg.get("app", ""))[:60],
+                 "title": str(msg.get("title", ""))[:200], "text": str(msg.get("text", ""))[:1000],
+                 "reply": bool(msg.get("reply")), "time": int(msg.get("time") or time.time() * 1000),
+                 "from": sender["name"], "fromid": sender["id"]}
+            for old in list(self.notifs):  # an update of the same notification replaces it
+                if old["key"] == n["key"]:
+                    self.notifs.remove(old)
+            self.notifs.append(n)
+        self._others(reply, dict(n, t="notif"))
+        if self.notify:
+            try:
+                self.notify(n["app"] + " · " + sender["name"], (n["title"] + "\n" + n["text"]).strip())
+            except Exception:  # noqa: BLE001
+                pass
+
+    def event(self, icon, title, text=""):
+        """Something on the PC every device should know: download finished, battery low..."""
+        for r, _ in self._snapshot():
+            self._send(r, {"t": "pcevent", "icon": icon, "title": title, "text": text, "pc": self.pc_name})
 
     # ---- one clipboard for every device
 

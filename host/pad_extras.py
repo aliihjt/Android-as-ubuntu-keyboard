@@ -331,3 +331,139 @@ def tablet_on_cable(adb):
     if "unauthorized" in (out.stdout + out.stderr):
         return "On the tablet, tap Allow (USB debugging), then try again."
     return "Plug the tablet in with the USB cable: Show on PC works over the cable."
+
+
+# ---------------------------------------------------------------- the PC tells the devices what happened
+
+def events_dir():
+    return os.path.join(data_dir(), "events")
+
+
+def battery():
+    """(percent, charging) of the laptop battery, or None (desktop PC, unknown)."""
+    if WINDOWS:
+        import ctypes
+
+        class Status(ctypes.Structure):
+            _fields_ = [("ac", ctypes.c_byte), ("flag", ctypes.c_byte), ("percent", ctypes.c_byte),
+                        ("saver", ctypes.c_byte), ("life", ctypes.c_ulong), ("full", ctypes.c_ulong)]
+        st = Status()
+        if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(st)) or st.percent < 0 or st.flag & 128:
+            return None
+        return st.percent, st.ac == 1
+    for bat in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+        try:
+            with open(os.path.join(bat, "capacity")) as f:
+                pct = int(f.read())
+            with open(os.path.join(bat, "status")) as f:
+                charging = f.read().strip() in ("Charging", "Full", "Not charging")
+            return pct, charging
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+class PcEvents:
+    """Downloads that finished, the battery running low or full, and long terminal
+    commands that ended (host/status-setup.sh) go to every device as {"t":"pcevent"}."""
+    SKIP = (".part", ".crdownload", ".download", ".tmp", ".partial", ".opdownload")
+
+    def __init__(self, event, downloads=None):
+        self.event = event  # (icon, title, text)
+        self.downloads = downloads or os.path.join(os.path.expanduser("~"), "Downloads")
+        os.makedirs(events_dir(), exist_ok=True)
+
+    def start(self):
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _files(self):
+        out = {}
+        try:
+            for e in os.scandir(self.downloads):
+                if e.is_file() and not e.name.startswith(".") and not e.name.lower().endswith(self.SKIP):
+                    out[e.name] = e.stat().st_size
+        except OSError:
+            pass
+        return out
+
+    def _loop(self):
+        known = set(self._files())  # what was there before: not news
+        growing = {}
+        low_told = full_told = False
+        while True:
+            time.sleep(4)
+            # downloads: a new file whose size stopped changing
+            now = self._files()
+            for name, size in now.items():
+                if name in known:
+                    continue
+                if growing.get(name) == size:
+                    known.add(name)
+                    growing.pop(name, None)
+                    mb = size / 1e6
+                    self.event("⬇️", "Download finished", name + ("  ·  %.1f MB" % mb if mb >= 0.1 else ""))
+                else:
+                    growing[name] = size
+            known &= set(now)
+            # battery
+            b = battery()
+            if b:
+                pct, charging = b
+                if pct <= 15 and not charging and not low_told:
+                    low_told = True
+                    self.event("🪫", "Laptop battery low", "%d %% — plug in the charger" % pct)
+                if charging or pct > 20:
+                    low_told = False
+                if pct >= 100 and charging and not full_told:
+                    full_told = True
+                    self.event("🔋", "Laptop fully charged", "You can unplug it")
+                if pct < 95:
+                    full_told = False
+            # long commands (and anything else that drops a note in the events folder)
+            for path in sorted(glob.glob(os.path.join(events_dir(), "*.json")))[:20]:
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        e = json.load(f)
+                except (OSError, ValueError):
+                    e = None
+                try:
+                    os.remove(path)
+                except OSError:
+                    continue
+                if isinstance(e, dict) and e.get("title"):
+                    self.event(str(e.get("icon", "✅"))[:4], str(e["title"])[:120], str(e.get("text", ""))[:300])
+
+
+# ---------------------------------------------------------------- unlock the laptop from a device (Fedora)
+
+class Unlocker:
+    """Checks the unlock PIN set with host/unlock-setup.sh (only a salted hash is kept),
+    and stops guessing: 5 wrong tries lock it for 5 minutes."""
+
+    def __init__(self, conf_dir):
+        self.file = os.path.join(conf_dir, "unlock.json")
+        self.fails, self.until = 0, 0.0
+        self.lock = threading.Lock()
+
+    def enabled(self):
+        return os.path.exists(self.file)
+
+    def check(self, pin):
+        import hashlib
+        import hmac
+        with self.lock:
+            if time.time() < self.until:
+                return "Too many wrong tries: wait %d minutes." % ((self.until - time.time()) // 60 + 1)
+            try:
+                with open(self.file) as f:
+                    d = json.load(f)
+                want = hashlib.pbkdf2_hmac("sha256", str(pin).encode(), bytes.fromhex(d["salt"]), int(d["iter"])).hex()
+            except (OSError, ValueError, KeyError, TypeError):
+                return "Unlock isn't set up: run ./host/unlock-setup.sh on the laptop."
+            if hmac.compare_digest(want, str(d.get("hash", ""))):
+                self.fails = 0
+                return True
+            self.fails += 1
+            if self.fails >= 5:
+                self.fails, self.until = 0, time.time() + 300
+            return "Wrong PIN."

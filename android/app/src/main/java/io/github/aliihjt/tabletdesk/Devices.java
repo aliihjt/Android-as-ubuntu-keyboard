@@ -116,6 +116,25 @@ final class Devices {
         else if (t.equals("relayfail")) main.post(() -> Toast.makeText(c, "That device isn't connected any more",
                 Toast.LENGTH_SHORT).show());
         else if (t.equals("remote")) main.post(() -> remote(c, m));
+        else if (t.equals("notes") && m.optJSONArray("list") != null) {  // changed on the iPhone or the PC
+            prefs(c).edit().putString("notes", m.optJSONArray("list").toString()).apply();
+        } else if (t.equals("pcevent")) {
+            Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
+        } else if (t.equals("unlockres")) {
+            String text = m.optBoolean("ok") ? ("lock".equals(m.optString("what")) ? "🔒 Laptop locked" : "🔓 Laptop unlocked")
+                    : "⚠️ " + m.optString("error", "Didn't work");
+            main.post(() -> Toast.makeText(c, text, Toast.LENGTH_LONG).show());
+        }
+    }
+
+    /** The book just closed in the reader: the iPhone offers to continue it. */
+    static void shareLastRead(Context c, String uri, String title, String type, int pos, int total) {
+        try {
+            HostLink.get().send(new JSONObject().put("t", "share").put("key", "lastread").put("value",
+                    new JSONObject().put("uri", uri).put("title", title).put("type", type).put("pos", pos)
+                            .put("total", total).put("time", System.currentTimeMillis())));
+        } catch (JSONException ignored) {
+        }
     }
 
     // ---- one clipboard for every device
@@ -168,6 +187,13 @@ final class Devices {
                 break;
             case "media":
                 media(c, m.optString("key"));
+                break;
+            case "reply":
+                boolean sent = NotifyListener.reply(c, m.optString("key"), m.optString("text"));
+                Toast.makeText(c, sent ? "↩️ Reply sent from " + who : "Couldn't reply: the message is gone", Toast.LENGTH_SHORT).show();
+                break;
+            case "dismiss":
+                NotifyListener.dismiss(m.optString("key"));
                 break;
             case "sendbook":
                 sendBook(c, m.optString("uri"), m.optString("fromid"), who);

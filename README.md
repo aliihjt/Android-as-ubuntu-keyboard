@@ -56,6 +56,9 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | 🔎 | **Tap a word** | Double-tap any word: translate or define it with your apps (Google Translate, a dictionary…), Wiktionary, or Claude (English ↔ Persian), or ⭐ save it to **Words** with its sentence. Words has search and ✨ Quiz me. |
 | 🖍 | **Highlights** | Select text › 🖍 Highlight: 4 colours and an optional note; they stay in the book. 📑 shows a book's highlights; ⇪ Export as Markdown to Downloads, the PC, Notes or any app (Obsidian, Keep…). |
 | ⬇️ | **Get Books** | Free classics from Project Gutenberg (search, one tap downloads the EPUB into Books); 🌹 Persian poetry from Ganjoor — Hafez, Saadi, Rumi, Ferdowsi, Khayyam… with meanings, read aloud, and 🎲 **فال حافظ**; 🇮🇷 Iranian stores: Taaghche, Fidibo, Ketabrah, Navaar, Ketabnak, Wikisource. |
+| ✨ | **Reading helper** | ✨ in a book: summarise this part, quiz me, explain like I'm 10, key words with Persian meanings, خلاصه به فارسی, what happened so far, or explain the selected text — sent to the Claude app. Switch *Answers in Persian* on in the same menu. |
+| 🎧 | **Audiobook** | 🎧 in a book (EPUB / text): keeps reading aloud with the screen off, part after part, from where you are. Play / pause / skip on the lock screen, with headphone buttons, or from the iPhone (Devices › the tablet). Remembers the place. |
+| 🧩 | **Widgets** | On both home screens: weather (tap to set your city), the next event in the tablet's calendar, the laptop's battery and CPU, and on the Reader home what the laptop is playing (tap to pause). |
 | 📖 | **Reader home** | Settings › Home screen › 📖 Reader (or the Reader Home icon): a calm home with a big clock, Continue reading, today's goal ring, 🔥 streak and the week, reading tools, your pinned apps and ✨ Ask Claude. 🖥 switches back to the desktop. Tap the goal card to change the daily minutes. |
 | ✍️ | **Handwriting** | Write or draw with a finger or stylus (palm ignored with a stylus): pens, highlighter, eraser, undo, lined or grid paper. Save to the Gallery, send to Fedora, or let Claude read it. |
 | 🗒 | **Notes** | Sticky notes, also on the Fedora desktop. Book quotes and AI answers can be saved here. |
@@ -81,6 +84,12 @@ The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple
 | 📋 | **Universal Clipboard** | Copy on the PC, tablet, iPad or iPhone, paste on any other. On the iPhone / iPad a banner appears: tap it to copy (Safari only copies on a tap). The tablet shares what it copied when a Fedora Pad screen opens (Android's rule), or with *Send the tablet's clipboard now*. Turn it off in Devices. |
 | 📲 | **Handoff** | 📲 in the reader and on a poem: continue on another device. Free (Gutenberg) books download there; other books are sent as a file. From the iPad: Get Books › *To the tablet*. |
 | 📖 | **Reading everywhere** | The tablet's library, progress, highlights and Words, kept on the PC: the iPhone / iPad **Reading** page shows them; *Read here* or *Get it from the tablet*. |
+| 🔔 | **Notifications everywhere** | Devices › *Show notifications on other devices* (Android asks to allow it once): the tablet's messages and alerts appear on the iPhone (banner + Notifications page) and the laptop. **Reply** to Telegram, WhatsApp and other messages from the iPhone. |
+| 📝 | **Notes everywhere** | One set of notes: a change on the tablet, the iPhone or the PC shows on the others right away. |
+| 📷 | **iPhone camera for the tablet** | Scanner and Handwriting on the iPhone › **📲 To the tablet**: the picture lands in the tablet's Downloads › Fedora Pad with a notification. |
+| 📖 | **Continue reading** | Close a book on the tablet and the iPhone's home shows *Continue reading* with the part you were on: **Read** (free books) or **Get** it from the tablet. |
+| 💻 | **The laptop tells you** | A notification on the tablet and iPhone when a download finishes, the battery is low or full, or a long terminal command ends (`./host/status-setup.sh` once). |
+| 🔓 | **Unlock the laptop from the phone** | `./host/unlock-setup.sh` once (choose a PIN). Then Devices › your PC › **Unlock** (the tablet asks for its own fingerprint/PIN first; the iPhone asks for the PIN) or **Lock**. Fedora only; 5 wrong PINs block it for 5 minutes. |
 | 📍 | **Remote control each other** | Ring a lost device, send a message, open StandBy / Focus / فال حافظ / Books / Home on it, and play, pause, skip or change the volume of the tablet's music from the iPad. |
 
 ## 🚀 Setup (once)
@@ -147,10 +156,12 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 ## 🧰 Fedora extras (optional)
 | Script | What it does |
 |---|---|
-| `./host/macos-look.sh` | Makes Fedora look and feel like a MacBook: Dock, window buttons on the left, macOS theme, icons and cursors, top-left menu like the Apple menu, genie minimise, rounded corners, day/night macOS wallpapers, Inter font, Mac shortcuts (Super = Cmd: Super+Q, Super+Space Spotlight, Super+Shift+3/4/5 screenshots), two-finger right click, Firefox theme. `--undo` puts it back. |
+| `./host/macos-look.sh` | Makes Fedora look and feel like a MacBook: Dock, window buttons on the left, macOS theme, icons and cursors, top-left menu like the Apple menu, genie minimise, rounded corners, day/night macOS wallpapers, Inter font, Mac shortcuts (Super = Cmd: Super+Q, Super+Space Spotlight, Super+Shift+3/4/5 screenshots), two-finger right click, Firefox theme, **window snapping** (drag to an edge or corner, Super+arrows) and the blue accent colour of the tablet. `--undo` puts it back. |
 | `./host/tune-up.sh` | Safe speed and battery tune-up: faster boot and downloads, cleanup, SSD TRIM, firmware check. |
 | `./host/apps-pack.sh` | Installs codecs, VLC, Chrome, Telegram, VS Code, GIMP, OBS, Persian fonts and handy tools. |
 | `./host/ai-setup.sh` | Adds an AI assistant on Ctrl+Alt+Space. |
+| `./host/unlock-setup.sh` | Choose the PIN that unlocks the laptop from the tablet or iPhone (only a salted hash is kept). `--off` turns it off. |
+| `./host/status-setup.sh` | The tablet and iPhone get a notification when a terminal command of 30 s or more finishes (a few lines in `~/.bashrc`). `--off` removes them. |
 | `./host/mirror-setup.sh` | Tablet Mirroring (scrcpy) and iPhone Mirroring (AirPlay receiver UxPlay with its plugins), plus launchers in Activities. `--undo` removes them. |
 | `./host/wake-setup.sh` | Lets the tablet wake this PC from sleep (wake-on-LAN on Ethernet, wake-on-Wi-Fi when the card supports it). `--off` turns it off. |
 | `./host/webcam-setup.sh` | Makes the phone or tablet a webcam and microphone on Fedora: virtual camera driver (with the Secure Boot step if needed) and scrcpy. `--undo` removes it. |

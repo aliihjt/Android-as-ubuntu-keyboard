@@ -159,6 +159,7 @@ public class ReaderActivity extends Page {
         tools.addView(tool("A+", v -> scale(1)));
         tools.addView(tool("🌙", v -> toggleNight()));
         tools.addView(tool("🔊 Listen", v -> startListening()));
+        tools.addView(tool("🎧 Audiobook", v -> audiobook()));
         tools.addView(tool("🖍 Highlight", v -> highlight()));
         tools.addView(tool("🗒 Note", v -> note()));
         tools.addView(tool("✨ Ask Claude", v -> askAi()));
@@ -531,25 +532,51 @@ public class ReaderActivity extends Page {
         });
     }
 
+    /** Claude as a reading helper: summary, quiz, explain simply, key words, Persian summary. */
+    private static final String[][] HELP = {
+            {"📝  Summarise this part", "Summarise this part of “%s” in a few short lines."},
+            {"❓  Quiz me on this part", "Ask me 5 questions about this part of “%s”, one at a time. Wait for my answer each time, "
+                    + "tell me if I was right, then ask the next."},
+            {"🧒  Explain like I'm 10", "Explain this part of “%s” as if I were 10 years old."},
+            {"🔤  Key words and meanings", "List the hardest words in this part of “%s” with a simple meaning "
+                    + "and their Persian (فارسی) translation."},
+            {"🇮🇷  خلاصه به فارسی", "این بخش از کتاب «%s» را به فارسی ساده خلاصه کن."},
+            {"🧭  What happened so far", "I'm at this part of “%s”. Without spoilers beyond it, remind me what has happened so far."}};
+
     private void askAi() {
-        if (pdf != null) {  // a PDF page goes to Claude as a picture
-            if (pageBitmap == null) return;
-            ClaudeApp.ask(this, "Explain this page of “" + bookTitle + "” simply.", pageBitmap);
-            return;
-        }
         selection(sel -> {
-            if (!sel.isEmpty()) {
-                open("Explain this passage from “" + bookTitle + "”:\n\n" + sel);
-                return;
-            }
-            web.evaluateJavascript("document.body.innerText.substring(0,20000)", v -> {
-                String text = "";
-                try {
-                    text = new JSONArray("[" + v + "]").getString(0).trim();
-                } catch (Exception ignored) {
-                }
-                open("Summarise this part of “" + bookTitle + "” in a few lines:\n\n" + text);
-            });
+            java.util.List<String> labels = new java.util.ArrayList<>();
+            if (!sel.isEmpty()) labels.add("💬  Explain the selected text");
+            for (String[] h : HELP) labels.add(h[0]);
+            boolean fa = prefs.getBoolean("ai_persian", false);
+            labels.add(fa ? "🌐  Answers in Persian: on (tap to turn off)" : "🌐  Answers in Persian: off (tap to turn on)");
+            new AlertDialog.Builder(this).setTitle("✨ Reading helper")
+                    .setItems(labels.toArray(new String[0]), (d, w) -> {
+                        int i = sel.isEmpty() ? w : w - 1;
+                        if (w == labels.size() - 1) {
+                            prefs.edit().putBoolean("ai_persian", !fa).apply();
+                            askAi();
+                            return;
+                        }
+                        String lang = fa ? "\n\nAnswer in Persian (فارسی)." : "";
+                        if (i < 0) {
+                            open("Explain this passage from “" + bookTitle + "”:\n\n" + sel + lang);
+                            return;
+                        }
+                        String prompt = String.format(HELP[i][1], bookTitle) + lang;
+                        if (pdf != null) {  // a PDF page goes to Claude as a picture
+                            if (pageBitmap != null) ClaudeApp.ask(this, prompt + "\n\n(This is page " + (index + 1) + ".)", pageBitmap);
+                            return;
+                        }
+                        web.evaluateJavascript("document.body.innerText.substring(0,20000)", v -> {
+                            String text = "";
+                            try {
+                                text = new JSONArray("[" + v + "]").getString(0).trim();
+                            } catch (Exception ignored) {
+                            }
+                            open(prompt + "\n\n---\n" + text);
+                        });
+                    }).show();
         });
     }
 
@@ -831,6 +858,28 @@ public class ReaderActivity extends Page {
                 }).show();
     }
 
+    // ---- audiobook: keeps reading with the screen off ----
+
+    private void audiobook() {
+        if (web == null) {
+            Toast.makeText(this, "Audiobook works with EPUB and text books.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        stopListening();
+        web.evaluateJavascript(PARAS, v -> {
+            float where = 0;
+            try {
+                JSONObject o = new JSONObject(new JSONArray("[" + v + "]").getString(0));
+                int n = o.getJSONArray("p").length();
+                where = n == 0 ? 0 : o.optInt("s") / (float) n;
+            } catch (Exception ignored) {
+            }
+            AudiobookService.start(this, uri, bookTitle, type, index, where);
+            Toast.makeText(this, "🎧 Playing in the background: lock the screen any time. Controls are in the notification.",
+                    Toast.LENGTH_LONG).show();
+        });
+    }
+
     // ---- continue on another device ----
 
     /** A free (Gutenberg) book is downloaded there; any other book is sent as a file. */
@@ -870,6 +919,7 @@ public class ReaderActivity extends Page {
     @Override
     protected void onPause() {
         ReadingData.addSeconds(this, (SystemClock.elapsedRealtime() - readSince) / 1000);
+        Devices.shareLastRead(this, uri, bookTitle, type, index, total);  // "Continue reading" on the iPhone
         if (web != null) {
             web.evaluateJavascript("Math.round(1000*scrollY/Math.max(1,document.body.scrollHeight))", v -> {
                 try {

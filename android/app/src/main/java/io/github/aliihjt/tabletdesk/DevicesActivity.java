@@ -23,7 +23,7 @@ import java.util.List;
  * sheet, and the screen shown when another device rings this tablet.
  */
 public class DevicesActivity extends Page {
-    private static final int PICK = 71;
+    private static final int PICK = 71, CONFIRM = 72;
     private LinearLayout list;
     private android.widget.Switch uclipSwitch;
     private Devices.Device target;  // for the file picker
@@ -66,6 +66,18 @@ public class DevicesActivity extends Page {
                 "The PC, this tablet and the phones share what you copy", uclipSwitch), now));
         add(th.caption("Android lets only the app in front read the clipboard: what you copy on the tablet is "
                 + "shared the next time a Fedora Pad screen opens, or with the button."), 6);
+
+        section("Notifications");
+        android.widget.Switch mirror = th.toggle(NotifyListener.enabled(this), on -> {
+            getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE).edit().putBoolean(NotifyListener.PREF, on).apply();
+            if (on && !NotifyListener.allowed(this)) {
+                toast("Turn on Fedora Pad here, then come back");
+                startActivity(new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+            }
+        });
+        add(th.group(th.row("🔔", Theme.RED, "Show notifications on other devices",
+                "Messages and alerts from this tablet appear on the iPhone and the laptop; reply from the iPhone", mirror)));
+        add(th.caption("Only devices paired with your PC get them. Off by default; Android asks you to allow it once."), 6);
 
         section("This tablet");
         LinearLayout name = th.row("✏️", Theme.GRAY, "Name", Devices.myName(this), th.chevron());
@@ -115,8 +127,10 @@ public class DevicesActivity extends Page {
     private void draw() {
         list.removeAllViews();
         List<View> rows = new ArrayList<>();
-        rows.add(th.row("💻", Theme.INDIGO, link.isConnected() ? link.host() : "PC",
-                link.isConnected() ? "The hub · Keyboard, Trackpad and the other pages control it" : "Not connected", null));
+        LinearLayout pcRow = th.row("💻", Theme.INDIGO, link.isConnected() ? link.host() : "PC",
+                link.isConnected() ? "The hub · tap: unlock, lock, sleep" : "Not connected", th.chevron());
+        th.click(pcRow, v -> pcActions());
+        rows.add(pcRow);
         for (Devices.Device d : Devices.others()) {
             LinearLayout r = th.row(d.icon(), d.kind.equals("android") ? Theme.GREEN : Theme.BLUE, d.name,
                     d.kind.equals("android") ? "Android · tap for actions" : "Web app · tap for actions", th.chevron());
@@ -195,6 +209,66 @@ public class DevicesActivity extends Page {
         }
     }
 
+    // ---- the laptop itself
+
+    private void pcActions() {
+        new AlertDialog.Builder(this).setTitle("💻  " + link.host())
+                .setItems(new String[]{"🔓  Unlock the laptop", "🔒  Lock the laptop", "💤  Sleep timers", "📊  Battery, CPU, memory"},
+                        (d, w) -> {
+                            if (w == 0) unlock();
+                            else if (w == 1) link.send(obj("t", "lock"));
+                            else if (w == 2) startActivity(new Intent(this, WakeActivity.class));
+                            else startActivity(new Intent(this, StatsActivity.class));
+                        }).show();
+    }
+
+    /** The tablet's own screen lock first (fingerprint, PIN), then the laptop's unlock PIN. */
+    @SuppressWarnings("deprecation")
+    private void unlock() {
+        android.app.KeyguardManager km = getSystemService(android.app.KeyguardManager.class);
+        Intent confirm = km == null || !km.isDeviceSecure() ? null
+                : km.createConfirmDeviceCredentialIntent("Unlock " + link.host(), "Confirm it's you");
+        if (confirm != null) startActivityForResult(confirm, CONFIRM);
+        else sendPin();
+    }
+
+    private void sendPin() {
+        android.content.SharedPreferences p = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        String saved = p.getString("unlock_pin", "");
+        if (!saved.isEmpty()) {
+            link.send(obj("t", "unlock", "pin", saved));
+            return;
+        }
+        EditText field = new EditText(this);
+        field.setHint("Unlock PIN (from ./host/unlock-setup.sh)");
+        field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        android.widget.CheckBox keep = new android.widget.CheckBox(this);
+        keep.setText("Remember it (the tablet's screen lock still asks each time)");
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(th.dp(20), th.dp(8), th.dp(20), 0);
+        box.addView(field);
+        box.addView(keep);
+        new AlertDialog.Builder(this).setTitle("🔓 Unlock " + link.host()).setView(box)
+                .setPositiveButton("Unlock", (d, w) -> {
+                    String pin = field.getText().toString().trim();
+                    if (pin.isEmpty()) return;
+                    if (keep.isChecked()) p.edit().putString("unlock_pin", pin).apply();
+                    link.send(obj("t", "unlock", "pin", pin));
+                })
+                .setNeutralButton("Forget saved PIN", (d, w) -> p.edit().remove("unlock_pin").apply())
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private static JSONObject obj(String... kv) {
+        JSONObject o = new JSONObject();
+        try {
+            for (int i = 0; i + 1 < kv.length; i += 2) o.put(kv[i], kv[i + 1]);
+        } catch (JSONException ignored) {
+        }
+        return o;
+    }
+
     // ---- sending files
 
     private void pickFiles(Devices.Device d) {
@@ -206,6 +280,10 @@ public class DevicesActivity extends Page {
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == CONFIRM) {
+            if (result == RESULT_OK) sendPin();
+            return;
+        }
         if (request != PICK || result != RESULT_OK || data == null || target == null) return;
         List<Uri> uris = new ArrayList<>();
         if (data.getClipData() != null) {

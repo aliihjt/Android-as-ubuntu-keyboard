@@ -481,7 +481,8 @@ public final class HostLink {
                     WakeActivity.save(prefs, msg);
                 } else if ("pushfile".equals(t) || "pushtext".equals(t)) {
                     Inbox.receive(appContext, msg);  // AirDrop from the PC or another device (no page needs to be open)
-                } else if ("devices".equals(t) || "uclip".equals(t) || "remote".equals(t) || "relayfail".equals(t)) {
+                } else if ("devices".equals(t) || "uclip".equals(t) || "remote".equals(t) || "relayfail".equals(t)
+                        || "notes".equals(t) || "pcevent".equals(t) || "unlockres".equals(t)) {
                     Devices.message(appContext, msg);  // the other devices connected to the same PC
                 } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");

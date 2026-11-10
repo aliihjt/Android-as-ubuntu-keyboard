@@ -5,6 +5,8 @@
 #             icons, blur, menu-bar status icons
 #   features: Quick Look (select a file, press Space), natural scrolling,
 #             tap to click, battery percentage, new windows centred
+#   windows:  snapping like macOS: drag to an edge or corner (or Super + arrows) to fill
+#             half or a quarter of the screen, and pick a window for the other half
 #   MacBook:  menu in the top-left corner (About, Settings, Force Quit, Sleep...),
 #             genie minimise, rounded window corners, macOS wallpapers that
 #             change with the time of day, Inter font (like San Francisco),
@@ -19,6 +21,7 @@ TRAY=appindicatorsupport@rgcjonas.gmail.com
 MENU=logomenu@aryan_k
 GENIE=compiz-alike-magic-lamp-effect@hermes83.github.com
 CORNERS=rounded-window-corners@fxgn
+TILE=tiling-assistant@leleat-on-github
 SHELL_VER=$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
 
 # settings of an extension installed by dnf live next to the extension
@@ -64,7 +67,8 @@ SK=org.gnome.shell.keybindings
 MK=org.gnome.settings-daemon.plugins.media-keys
 
 if [ "${1:-}" = "--undo" ]; then
-  for e in $DOCK $BLUR $THEME $TRAY $MENU $GENIE $CORNERS; do gnome-extensions disable "$e" 2>/dev/null; done
+  for e in $DOCK $BLUR $THEME $TRAY $MENU $GENIE $CORNERS $TILE; do gnome-extensions disable "$e" 2>/dev/null; done
+  gsettings reset $I accent-color 2>/dev/null
   for k in font-name document-font-name; do gsettings reset $I $k; done
   for k in click-method tap-and-drag; do gsettings reset $TP $k; done
   gsettings reset org.gnome.desktop.background picture-uri
@@ -173,6 +177,16 @@ echo "==> Genie effect when minimising, rounded window corners"
 ego $GENIE
 ego $CORNERS
 
+echo "==> Window snapping like macOS: drag to an edge or corner, or Super + arrows"
+if ego $TILE; then
+  T=org.gnome.shell.extensions.tiling-assistant
+  ext_set $TILE $T enable-tiling-popup true          # pick a window for the other half
+  ext_set $TILE $T window-gap 8
+  ext_set $TILE $T single-screen-gap 8
+fi
+echo "==> Blue accent colour, the same as Fedora Pad on the tablet"
+gsettings set $I accent-color 'blue' 2>/dev/null || true   # GNOME 47 and newer
+
 echo "==> Trackpad like a MacBook: two-finger right click, tap and drag"
 gsettings set $TP click-method 'fingers'
 gsettings set $TP tap-and-drag true
@@ -198,5 +212,6 @@ Done. LOG OUT and back in to see everything.
     Super+Shift+3 screenshot,  Super+Shift+4 / 5 pick an area,  Super+Tab switch apps.
   * Keyboard language: Ctrl+Super+Space (Alt+Shift too, if you set it with fedora-plus.sh).
   * Two fingers click = right click.  Top-left menu = the Apple menu.
+  * Windows: drag one to the left or right edge (or a corner) to snap it; Super+arrows too.
 Undo any time:  ~/Android-as-ubuntu-keyboard/host/macos-look.sh --undo
 MSG

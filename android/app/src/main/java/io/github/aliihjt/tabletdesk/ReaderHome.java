@@ -67,13 +67,18 @@ final class ReaderHome {
         return scroll;
     }
 
+    private HomeWidgets widgets;
+
     void resume() {
         build();
+        widgets.resume();
+        handler.removeCallbacks(tick);
         handler.post(tick);
     }
 
     void pause() {
         handler.removeCallbacks(tick);
+        if (widgets != null) widgets.pause();
     }
 
     private void build() {
@@ -81,6 +86,9 @@ final class ReaderHome {
         column.addView(top());
         column.addView(continueCard(), th.fullWidth(22));
         column.addView(todayCard(), th.fullWidth(14));
+        if (widgets != null) widgets.pause();
+        widgets = new HomeWidgets(a, th, true);  // weather, calendar, laptop, music
+        column.addView(widgets.view(), th.fullWidth(14));
         column.addView(tiles(), th.fullWidth(22));
         View apps = pinned();
         if (apps != null) column.addView(apps, th.fullWidth(22));
@@ -238,7 +246,7 @@ final class ReaderHome {
         new AlertDialog.Builder(a).setTitle("Daily reading goal")
                 .setItems(names, (d, w) -> {
                     ReadingData.setGoal(a, options[w]);
-                    build();
+                    resume();
                 }).show();
     }
 
@@ -327,7 +335,7 @@ final class ReaderHome {
             row.addView(TabletApps.icon(a, th, app, 58, Color.WHITE, () -> new AlertDialog.Builder(a)
                     .setTitle(app.label).setItems(new String[]{"Unpin from home screen"}, (d, w) -> {
                         TabletApps.setPinned(a, app, false);
-                        build();
+                        resume();
                     }).show()), th.weighted(0));
         }
         int rest = apps.size() % 4;

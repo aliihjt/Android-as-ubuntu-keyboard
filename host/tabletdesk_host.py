@@ -524,6 +524,7 @@ sleeper = None     # sleep timers, set in main()
 mirror_proc = None   # the tablet's screen on the PC (scrcpy), set in main()
 gamepads = None     # game controllers from the tablet (host/gamepad.py), set in main()
 hub = None          # devices talking to each other through this PC (host/hub.py), set in main()
+unlocker = None     # unlock the laptop from a device with a PIN (host/unlock-setup.sh), set in main()
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -584,6 +585,27 @@ def screen_to_pc(t, on, audio, reply, code=None):
                        ("Code for the iPhone: " + st["pin"] + "  (asked only the first time)") if st["code"]
                        else "On the iPhone: Control Center › Screen Mirroring")
     reply(st)
+
+
+def graphical_session():
+    """The id of this user's desktop session, for loginctl lock / unlock."""
+    sid = _run(["loginctl", "show-user", os.environ.get("USER", ""), "-p", "Display", "--value"]).strip()
+    return sid or os.environ.get("XDG_SESSION_ID", "")
+
+
+def lock_or_unlock(msg, reply):
+    """{"t":"lock"} / {"t":"unlock","pin":"..."} from a device's Devices page."""
+    sid = graphical_session()
+    if msg.get("t") == "lock":
+        ok = bool(sid) and subprocess.run(["loginctl", "lock-session", sid], capture_output=True).returncode == 0
+        reply({"t": "unlockres", "ok": ok, "what": "lock", "error": "" if ok else "Couldn't lock the screen."})
+        return
+    verdict = unlocker.check(str(msg.get("pin", ""))[:64]) if unlocker else "Unlock isn't available."
+    if verdict is not True:
+        reply({"t": "unlockres", "ok": False, "what": "unlock", "error": verdict})
+        return
+    ok = bool(sid) and subprocess.run(["loginctl", "unlock-session", sid], capture_output=True).returncode == 0
+    reply({"t": "unlockres", "ok": ok, "what": "unlock", "error": "" if ok else "Fedora didn't accept the unlock."})
 
 
 def desktop_notify(title, text):
@@ -831,6 +853,9 @@ def stats():
             out["uptime_min"] = int(float(f.read().split()[0]) // 60)
     except (OSError, ValueError):
         pass
+    bat = pad_extras.battery()  # the laptop's battery, for the tablet's widget and Stats
+    if bat:
+        out["battery"], out["charging"] = bat
     return out
 
 
@@ -1362,6 +1387,10 @@ def handle(inj, msg, reply=None):
             items = []
         reply({"t": "cliphist", "list": items} if raw is not None else
               {"t": "cliphist", "list": [], "error": "Log out and back in once so the GNOME extension loads."})
+    elif t in ("lock", "unlock") and reply:
+        threading.Thread(target=lock_or_unlock, args=(msg, reply), daemon=True).start()
+    elif t == "unlock?" and reply:
+        reply({"t": "unlockinfo", "enabled": bool(unlocker and unlocker.enabled()), "os": "linux"})
     elif t == "clipclear":
         shell_call("ClipClear")
     elif t == "wake?" and reply:  # what the tablet needs to wake this PC later
@@ -1585,11 +1614,13 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd, gamepads, hub
+    global laptop_kbd, gamepads, hub, unlocker
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
-    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied)
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify)
     hub.watch_pc_clipboard()
+    pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
+    unlocker = pad_extras.Unlocker(CONF_DIR)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()

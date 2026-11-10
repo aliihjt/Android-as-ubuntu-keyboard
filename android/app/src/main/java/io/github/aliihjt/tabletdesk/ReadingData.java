@@ -139,6 +139,7 @@ final class ReadingData {
         } catch (JSONException ignored) {
         }
         prefs(c).edit().putString(HIGHLIGHTS, all.toString()).apply();
+        Devices.syncSoon(c);
     }
 
     static void removeHighlight(Context c, long time) {
@@ -148,6 +149,7 @@ final class ReadingData {
             if (o != null && o.optLong("time") != time) kept.put(o);
         }
         prefs(c).edit().putString(HIGHLIGHTS, kept.toString()).apply();
+        Devices.syncSoon(c);
     }
 
     /** All highlights (book = null) or one book's, oldest first. */
@@ -210,6 +212,7 @@ final class ReadingData {
         } catch (JSONException ignored) {
         }
         prefs(c).edit().putString(WORDS, all.toString()).apply();
+        Devices.syncSoon(c);
         return true;
     }
 
@@ -220,6 +223,7 @@ final class ReadingData {
             if (o != null && o.optLong("time") != time) kept.put(o);
         }
         prefs(c).edit().putString(WORDS, kept.toString()).apply();
+        Devices.syncSoon(c);
     }
 
     /** Newest first. */

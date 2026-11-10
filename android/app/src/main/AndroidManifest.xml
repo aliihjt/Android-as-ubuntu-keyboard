@@ -110,6 +110,20 @@
         </service>
         <activity android:name=".BooksActivity" android:exported="false" />
         <activity android:name=".GetBooksActivity" android:exported="false" />
+        <!-- Devices, and "Send to device" in Android's share sheet -->
+        <activity android:name=".DevicesActivity" android:exported="true" android:label="Send to device"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
         <activity android:name=".PoemActivity" android:exported="false" />
         <activity android:name=".HighlightsActivity" android:exported="false" />
         <activity android:name=".VocabActivity" android:exported="false" />

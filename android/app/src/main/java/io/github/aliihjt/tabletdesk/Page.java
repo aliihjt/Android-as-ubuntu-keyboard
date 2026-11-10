@@ -166,6 +166,13 @@ abstract class Page extends Activity implements HostLink.Listener {
         OverlayService.setBubbleHidden(true);  // our own pages don't need the floating button
     }
 
+    /** Coming to the front is the only time Android lets the app read the clipboard: share it with the other devices. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) Devices.checkClipboard(this);
+    }
+
     @Override
     protected void onPause() {
         link.removeListener(this);

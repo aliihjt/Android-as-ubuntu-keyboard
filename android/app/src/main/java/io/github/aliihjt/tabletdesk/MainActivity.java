@@ -272,6 +272,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
                 {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
                 {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
+                {"🔗", Theme.GREEN, "Devices", DevicesActivity.class},
                 {"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")},
                 {"⬇️", Theme.GREEN, "Get Books", GetBooksActivity.class},
                 {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},

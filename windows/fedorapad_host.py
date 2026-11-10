@@ -894,6 +894,8 @@ def set_keyboard_language(lang):
 # ---------------------------------------------------------------- the protocol
 
 def handle(inj, msg, reply=None):
+    if hub and reply and hub.handle(msg, reply):  # device to device: lists, relay, clipboard, shared data
+        return
     t = msg.get("t")
     if t == "move":
         inj.move(float(msg.get("dx", 0)), float(msg.get("dy", 0)))
@@ -1036,6 +1038,8 @@ def make_handler(inj, clients):
                 reply({"t": "app", "name": clients.last_app})
             with clients.lock:
                 clients.files.add(self.wfile)
+            if hub:
+                hub.join(reply, "Android tablet", "android")
             try:
                 for line in self.rfile:
                     try:
@@ -1045,6 +1049,8 @@ def make_handler(inj, clients):
             except OSError:
                 pass
             finally:
+                if hub:
+                    hub.leave(reply)
                 with clients.lock:
                     clients.files.discard(self.wfile)
                 inj.release_all()
@@ -1057,9 +1063,16 @@ def make_handler(inj, clients):
 
 sys.path.insert(0, os.path.join(REPO, "host"))
 import pad_extras  # noqa: E402
+import hub as hub_mod  # noqa: E402
 
 clip_history = pad_extras.ClipList()
 sleeper = None
+hub = None  # devices talking to each other through this PC, set in main()
+
+
+def newest_copied():
+    items = clip_history.list()
+    return items[0]["text"] if items else ""
 
 
 def watch_clipboard():
@@ -1214,12 +1227,16 @@ def start_web_app(inj, clients):
     def opened(ws):
         with clients.lock:
             clients.files.add(ws)
+        if hub:
+            hub.join(ws.send, "Web app", "browser")
         if clients.last_app:
             ws.send({"t": "app", "name": clients.last_app})
 
     def closed(ws):
         with clients.lock:
             clients.files.discard(ws)
+        if hub:
+            hub.leave(ws.send)
 
     webapp.WebApp(CONF_DIR, lambda msg, reply: handle(inj, msg, reply), hello, opened, closed,
                   _message, _lan_ips, _openssl()).start()
@@ -1242,6 +1259,9 @@ def main():
             pass
     inj = Injector(dry_run=args.dry_run)
     clients = Clients()
+    global hub
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied)
+    hub.watch_pc_clipboard()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     if os.path.exists(WEB_FLAG):
         start_web_app(inj, clients)

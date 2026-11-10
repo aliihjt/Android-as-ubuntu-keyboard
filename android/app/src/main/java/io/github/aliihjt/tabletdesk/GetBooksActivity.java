@@ -69,6 +69,11 @@ public class GetBooksActivity extends Page {
         pane.setOrientation(LinearLayout.VERTICAL);
         add(pane, 16);
         show();
+        // another device (the iPad) asked this tablet to download a book
+        String url = getIntent().getStringExtra("dl_url");
+        if (url != null && url.startsWith("https://www.gutenberg.org/")) {
+            download(getIntent().getIntExtra("dl_id", 0), getIntent().getStringExtra("dl_title"), url);
+        }
     }
 
     private void show() {

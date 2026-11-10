@@ -229,6 +229,25 @@ public final class HostLink {
         return true;
     }
 
+    /** A message for another device (through the PC); "*" = all of them. */
+    public void relay(String to, JSONObject m) {
+        try {
+            send(new JSONObject().put("t", "relay").put("to", to).put("m", m));
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** Like relay, but waits while the send queue is full: for file pieces, from a background thread. */
+    public boolean relayBlocking(String to, JSONObject m) throws InterruptedException {
+        if (!connected) return false;
+        try {
+            queue.put(new JSONObject().put("t", "relay").put("to", to).put("m", m).toString());
+        } catch (JSONException e) {
+            return false;
+        }
+        return true;
+    }
+
     /** Window switcher: bring a Fedora window to the front, or close it. */
     public void window(String id, boolean close) {
         send(obj("t", close ? "winclose" : "winfocus", "id", id));
@@ -461,7 +480,9 @@ public final class HostLink {
                 } else if ("wake".equals(t) && prefs != null && typedListener == null) {
                     WakeActivity.save(prefs, msg);
                 } else if ("pushfile".equals(t) || "pushtext".equals(t)) {
-                    Inbox.receive(appContext, msg);  // AirDrop from the PC (works with no page open)
+                    Inbox.receive(appContext, msg);  // AirDrop from the PC or another device (no page needs to be open)
+                } else if ("devices".equals(t) || "uclip".equals(t) || "remote".equals(t) || "relayfail".equals(t)) {
+                    Devices.message(appContext, msg);  // the other devices connected to the same PC
                 } else if ("hello".equals(t)) {
                     host = msg.optString("host", "Fedora");
                     user = msg.optString("user", "");
@@ -472,6 +493,7 @@ public final class HostLink {
                     requestApps();
                     requestState();
                     send("{\"t\":\"wake?\"}");  // remember how to wake this PC later
+                    Devices.hello(appContext);  // say who we are, share the library
                 } else if ("clip".equals(t)) {
                     ClipListener l = clipListener;
                     clipListener = null;

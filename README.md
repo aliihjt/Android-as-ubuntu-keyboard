@@ -71,7 +71,19 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | ⏰ | **Wake & Sleep** | Wake the sleeping PC from the tablet (run `./host/wake-setup.sh` once), and sleep it now, in 30–90 minutes, or every night, with a minute's warning you can cancel. The iPhone web app has the sleep timers. |
 | ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
-## 🚀 Setup (once)
+## 🔗 All your devices, connected
+
+The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple's Continuity. The PC is the hub: everything connected to it can talk to everything else. Open **🔗 Devices** on any of them.
+
+| | Feature | How |
+|---|---|---|
+| 📤 | **Send between devices** | Devices › pick one › Photos and files / Text or link. On the tablet also **Share › Send to device** from any app. Files land in Downloads › Fedora Pad (tablet) or a Save / Share sheet (iPhone, iPad). |
+| 📋 | **Universal Clipboard** | Copy on the PC, tablet, iPad or iPhone, paste on any other. On the iPhone / iPad a banner appears: tap it to copy (Safari only copies on a tap). The tablet shares what it copied when a Fedora Pad screen opens (Android's rule), or with *Send the tablet's clipboard now*. Turn it off in Devices. |
+| 📲 | **Handoff** | 📲 in the reader and on a poem: continue on another device. Free (Gutenberg) books download there; other books are sent as a file. From the iPad: Get Books › *To the tablet*. |
+| 📖 | **Reading everywhere** | The tablet's library, progress, highlights and Words, kept on the PC: the iPhone / iPad **Reading** page shows them; *Read here* or *Get it from the tablet*. |
+| 📍 | **Remote control each other** | Ring a lost device, send a message, open StandBy / Focus / فال حافظ / Books / Home on it, and play, pause, skip or change the volume of the tablet's music from the iPad. |
+
+
 
 ### 📱 Tablet
 1. Settings › About tablet › tap **Build number** 7 times. Then Developer options › turn on **USB debugging**.
@@ -182,6 +194,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + poi
 |---|---|
 | `host/tabletdesk_host.py` | Turns messages from the tablet into real keyboard and mouse input (works on Wayland), runs the whitelisted Tools and Control Center actions, and turns the laptop keyboard off while connected. |
 | `host/connect.sh` | Runs on every plug-in: `adb reverse`, screen mode, app updates, and a clean hand-back on unplug. |
+| `host/hub.py` | The PC as a hub between devices: the device list, messages passed between them, one clipboard for all, and the reading data they share (saved in `shared.json`). |
 | `host/webapp.py`, `host/web/` | The phone / iPad web app: HTTPS with a local certificate authority, pairing codes, and a WebSocket carrying the same messages as the Android app. |
 | `host/gamepad.py` | Controller page: turns the tablet's controllers into virtual Xbox 360 / DualShock 4 pads (uinput) and sends rumble back. |
 | `host/gnome-extension/` | Reports the focused app and the pointer position (GNOME 45–50). |

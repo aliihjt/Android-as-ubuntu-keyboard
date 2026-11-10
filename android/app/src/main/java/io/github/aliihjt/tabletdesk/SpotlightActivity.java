@@ -107,6 +107,7 @@ public class SpotlightActivity extends Page {
                 {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
                 {"📊", Theme.GREEN, "Stats", StatsActivity.class},
                 {"📚", Theme.ORANGE, "Books", BooksActivity.class},
+                {"🔗", Theme.GREEN, "Devices (iPad, iPhone, ring, send, clipboard)", DevicesActivity.class},
                 {"⬇️", Theme.GREEN, "Get Books (free classics, Persian poetry)", GetBooksActivity.class},
                 {"🖍", Theme.YELLOW, "Highlights", HighlightsActivity.class},
                 {"⭐", Theme.INDIGO, "Words (vocabulary)", VocabActivity.class},

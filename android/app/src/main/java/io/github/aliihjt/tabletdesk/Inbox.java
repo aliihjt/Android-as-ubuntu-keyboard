@@ -44,21 +44,22 @@ final class Inbox {
     static void receive(Context c, JSONObject m) {
         if (c == null) return;
         try {
-            if ("pushtext".equals(m.optString("t"))) text(c, m.optString("s"));
+            if ("pushtext".equals(m.optString("t"))) text(c, m.optString("s"), m.optString("from", "the PC"));
             else file(c, m);
         } catch (IOException | RuntimeException e) {
             notify(c, "Couldn't receive a file", String.valueOf(e.getMessage()), null);
         }
     }
 
-    private static void text(Context c, String s) {
+    private static void text(Context c, String s, String from) {
         if (s.isEmpty()) return;
-        c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("From the PC", s));
+        Devices.lastClip = s;  // not sent round again as a copy made on this tablet
+        c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("From " + from, s));
         String t = s.trim();
         boolean link = t.matches("(?i)https?://\\S+");
         Intent open = link ? new Intent(Intent.ACTION_VIEW, Uri.parse(t))
                 : new Intent(c, ClipboardActivity.class);
-        notify(c, link ? "🔗 Link from the PC" : "📋 Text from the PC (copied)",
+        notify(c, link ? "🔗 Link from " + from : "📋 Text from " + from + " (copied)",
                 t.length() > 120 ? t.substring(0, 117) + "…" : t, open);
     }
 
@@ -83,8 +84,9 @@ final class Inbox {
         // Android 9 and older: a file:// link can't be handed to other apps, so no tap-to-open there
         Intent view = Build.VERSION.SDK_INT < 29 ? null : new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(saved, mime(name)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        notify(c, "📥 " + name, Build.VERSION.SDK_INT < 29 ? "From the PC · in Fedora Pad's Downloads folder"
-                : "From the PC · tap to open · in Downloads › Fedora Pad", view);
+        String from = "From " + m.optString("from", "the PC");
+        notify(c, "📥 " + name, Build.VERSION.SDK_INT < 29 ? from + " · in Fedora Pad's Downloads folder"
+                : from + " · tap to open · in Downloads › Fedora Pad", view);
     }
 
     /** Into the tablet's Downloads › Fedora Pad (Android 10+), or the app's own Downloads before. */
@@ -123,7 +125,7 @@ final class Inbox {
         return m == null ? "application/octet-stream" : m;
     }
 
-    private static void notify(Context c, String title, String text, Intent tap) {
+    static void notify(Context c, String title, String text, Intent tap) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel(CHANNEL, "Files and links from the PC",
                 NotificationManager.IMPORTANCE_HIGH));

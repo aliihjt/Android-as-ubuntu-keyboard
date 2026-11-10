@@ -154,10 +154,12 @@ function connect() {
   link.ws = ws;
   ws.onmessage = ev => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-    if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus(); }
+    if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus();
+      send({t: "iam", name: myName(), kind: myKind()}); send({t: "shared?"}); }
+    if (hubMessage(m)) return;
     if (m.t === "app") { link.app = m.name || ""; refreshStatus(); }
     if (m.t === "pushfile") return receiveFile(m);   // AirDrop from the PC
-    if (m.t === "pushtext") return receiveText(m.s || "");
+    if (m.t === "pushtext") return receiveText(m.s || "", m.from);
     const h = link.handlers[m.t]; if (h) h(m);
   };
   ws.onclose = ev => {
@@ -200,7 +202,7 @@ function receiveFile(m) {
   const size = blob.size > 1e6 ? (blob.size / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(blob.size / 1e3)) + " KB";
   let close = null;
   const canShare = navigator.canShare && navigator.canShare({files: [file]});
-  close = sheet(el("b", {}, "📥 From " + (link.host || "the PC")), el("div", {class: "sub", style: "margin:4px 0 12px"}, m.name + " · " + size),
+  close = sheet(el("b", {}, "📥 From " + (m.from || link.host || "the PC")), el("div", {class: "sub", style: "margin:4px 0 12px"}, m.name + " · " + size),
     type.startsWith("image/") ? el("img", {src: url, style: "width:100%;max-height:45vh;object-fit:contain;border-radius:12px;background:#000"}) : null,
     el("div", {class: "btns", style: "margin-top:14px"},
       canShare ? el("button", {class: "btn", onclick: () => navigator.share({files: [file]}).catch(() => {})},
@@ -209,10 +211,10 @@ function receiveFile(m) {
       el("button", {class: "btn2", onclick: () => close()}, "Close")));
   haptic();
 }
-function receiveText(text) {
+function receiveText(text, from) {
   const t = text.trim(), isLink = /^https?:\/\/\S+$/i.test(t);
   let close = null;
-  close = sheet(el("b", {}, (isLink ? "🔗 Link" : "📋 Text") + " from " + (link.host || "the PC")),
+  close = sheet(el("b", {}, (isLink ? "🔗 Link" : "📋 Text") + " from " + (from || link.host || "the PC")),
     el("div", {class: "card", dir: "auto", style: "margin-top:10px;max-height:40vh;overflow:auto;-webkit-user-select:text;user-select:text;word-break:break-word"}, t),
     el("div", {class: "btns"},
       isLink ? el("a", {class: "btn", href: t, target: "_blank", rel: "noopener", style: "text-decoration:none"}, "Open") : null,
@@ -239,6 +241,7 @@ function page(title, right) {
 }
 // the phone's own tools first (as in the Android app's "This tablet"), then the PC remote
 const PHONE_TILES = [
+  ["devices", "🔗", "Devices", "green"], ["reading", "📖", "Reading", "indigo"],
   ["books", "📚", "Get Books", "orange"], ["poem", "🎲", "فال حافظ", "pink", {faal: 1}], ["notes", "🗒", "Notes", "yellow"],
   ["sketch", "✍️", "Handwriting", "blue"], ["scan", "📄", "Scanner", "blue"], ["focus", "⏱", "Focus", "red"],
   ["standby", "🕰", "StandBy", "orange"], ["claude", "✨", "Claude", "#d97757"],
@@ -1097,7 +1100,7 @@ const STORES = [["طاقچه · Taaghche", "https://taaghche.com", "E-books and 
   ["گنجور · Ganjoor", "https://ganjoor.net", "Every Persian poet, online"]];
 const GANJOOR = "https://api.ganjoor.net/api/ganjoor/";
 
-PAGES.books = () => {
+PAGES.books = (arg = {}) => {
   page("Get Books");
   const pane = el("div", {style: "margin-top:14px"});
   let tab = store.get("bookstab", "en");
@@ -1142,6 +1145,8 @@ PAGES.books = () => {
         el("button", {class: "btn", onclick: () => get().then(x => shareBlob(name, x)).catch(e => status.textContent = "⚠️ " + e.message)}, "📲 Open in Books"),
         el("button", {class: "btn2", onclick: () => get().then(x => sendBlob(name, x, p => status.textContent = "To the PC… " + p + " %"))
           .then(ok => { if (ok) status.textContent = "✓ In the PC's Downloads › Fedora Pad"; }).catch(e => status.textContent = "⚠️ " + e.message)}, "💻 To the PC"),
+        el("button", {class: "btn2", onclick: () => pickDevice("Which tablet?", d => { relay(d.id, {t: "remote", a: "open", page: "getbook",
+          arg: {id: b.id, title: b.title, epub}}); toast("📲 Downloading on " + d.name); }, d => d.kind === "android")}, "📲 To the tablet"),
         el("button", {class: "btn2", onclick: () => close()}, "Close")));
   }
   function poetry() {
@@ -1159,6 +1164,7 @@ PAGES.books = () => {
           chip("📗", i < 4 ? "orange" : "green"), el("div", {class: "grow"}, name, el("small", {}, about)), el("span", {class: "sub"}, "›")))));
   }
   draw();
+  if (arg.book) book(arg.book, arg.book.who || "", arg.book.epub);
 };
 
 // ---- Persian poetry from Ganjoor: a poet's books and poems, one poem, or Fal-e Hafez
@@ -1201,6 +1207,7 @@ PAGES.poem = (arg = {}) => {
         el("button", {class: "btn2", onclick: () => speak(poem.plainText || "", "fa-IR")}, "🔊 خواندن"),
         el("button", {class: "btn2", onclick: () => { meanings = !meanings; draw(); }}, meanings ? "📝 بدون معنی" : "📝 معنی"),
         el("button", {class: "btn2", onclick: () => addNote(text)}, "🗒 Notes"),
+        el("button", {class: "btn2", onclick: () => handoff("poem", {poem: poem.id, title: poem.title}, poem.title)}, "📲"),
         el("button", {class: "btn2", onclick: () => askClaude((arg.faal ? "This is my Fal-e Hafez (فال حافظ). Interpret it for me in simple Persian and English:\n\n"
           : "Explain this Persian poem line by line in simple Persian, then summarise it in English:\n\n") + text)}, "✨ Claude")),
       el("div", {class: "btns", style: "margin-top:10px"}, arg.faal
@@ -1349,6 +1356,191 @@ PAGES.scan = () => {
       el("button", {class: "btn2", onclick: () => shots.length ? shareBlob(name(0), shots[shots.length - 1]) : toast("Scan a page first")}, "📤 Share"),
       el("button", {class: "btn2", onclick: () => { shots.length = 0; pages.innerHTML = ""; }}, "🗑 Clear")),
     el("p", {class: "sub"}, "Lay the page flat in good light. Document mode makes the paper white and the writing dark."));
+};
+
+// ---------------------------------------------------------------- devices talking to each other (through the PC)
+const KIND_ICON = {android: ["📱", "green"], ipad: ["📲", "blue"], iphone: ["📱", "blue"], phone: ["📱", "teal"], browser: ["🌐", "gray"]};
+const myKind = () => /iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) ? "ipad"
+  : /iPhone/.test(navigator.userAgent) ? "iphone" : /Android|Mobile/.test(navigator.userAgent) ? "phone" : "browser";
+const myName = () => store.get("devname", "") || ({ipad: "iPad", iphone: "iPhone", phone: "Phone", browser: "Browser"})[myKind()];
+const others = () => (link.devices || []).filter(d => d.id !== link.me);
+function hubMessage(m) {  // true when handled here, whatever page is open
+  if (m.t === "devices") { link.devices = m.list || []; link.me = m.me; link.uclip = m.uclip !== false; const h = link.handlers.devices; if (h) h(m); return true; }
+  if (m.t === "uclip") { clipBanner(m.s || "", m.from); return true; }
+  if (m.t === "relayfail") { toast("That device isn't connected any more"); return true; }
+  if (m.t === "shared") { link.shared = Object.assign(link.shared || {}, m.all || {}); const h = link.handlers.shared; if (h) h(m); return true; }
+  if (m.t === "remote") { remote(m); return true; }
+  return false;
+}
+function relay(to, m) { send({t: "relay", to, m}); }
+// something another device asked this one to do
+function remote(m) {
+  const who = m.from || "another device";
+  if (m.a === "ring") return ring(who);
+  if (m.a === "notice") return sheet(el("b", {}, "💬 " + who), el("div", {class: "card", dir: "auto", style: "margin-top:10px"}, m.text || ""));
+  if (m.a === "open") {
+    if (m.page === "url") { const close = sheet(el("b", {}, "🔗 From " + who), el("div", {class: "sub", style: "margin:8px 0;word-break:break-all"}, m.arg && m.arg.u),
+      el("div", {class: "btns"}, el("a", {class: "btn", href: m.arg && m.arg.u, target: "_blank", rel: "noopener", style: "text-decoration:none", onclick: () => close()}, "Open"),
+        el("button", {class: "btn2", onclick: () => close()}, "Close"))); return; }
+    if (m.page === "getbook") return show("books", true, {book: m.arg});
+    if (PAGES[m.page] || m.page === "faal") { toast("📲 From " + who); show(m.page === "faal" ? "poem" : m.page, true, m.page === "faal" ? {faal: 1} : m.arg); }
+    return;
+  }
+  if (m.a === "sendbook") return toast(who + " asked for a book: only the tablet has the library");
+  if (m.a === "media") return toast("🎵 Media controls work on the tablet and the PC");
+}
+function ring(who) {
+  let stop = false, ctx = null;
+  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  const beep = () => { if (stop) return; if (navigator.vibrate) navigator.vibrate(300);
+    if (ctx) { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; g.gain.value = 0.25;
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.25); }
+    setTimeout(beep, 700); };
+  beep();
+  const close = sheet(el("div", {class: "center", style: "font-size:72px"}, "📍"),
+    el("div", {class: "center", style: "font-size:22px;font-weight:700"}, "Here I am!"),
+    el("div", {class: "sub center", style: "margin:6px 0 16px"}, who + " is looking for this " + myName()),
+    el("button", {class: "btn", style: "width:100%", onclick: () => { stop = true; close(); }}, "Found it"));
+  setTimeout(() => { stop = true; }, 30000);
+}
+// text copied on another device or the PC: one tap copies it here (Safari only copies on a tap)
+let clipBar = null;
+function clipBanner(text, who) {
+  if (clipBar) clipBar.remove();
+  const b = el("button", {style: "position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 8px);z-index:11;"
+    + "background:var(--card);color:var(--text);border-radius:16px;padding:10px 16px;box-shadow:0 6px 24px #0004;max-width:min(92vw,520px);"
+    + "display:flex;gap:10px;align-items:center;text-align:left", onclick: () => {
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast("Copied ✓"), () => toast("Couldn't copy"));
+      b.remove(); }},
+    el("span", {style: "font-size:22px"}, "📋"),
+    el("div", {style: "min-width:0"}, el("b", {style: "font-size:14px"}, "Copied on " + (who || "another device") + " · tap to copy here"),
+      el("div", {class: "sub", dir: "auto", style: "white-space:nowrap;overflow:hidden;text-overflow:ellipsis"}, text.slice(0, 200))));
+  clipBar = b; document.body.append(b);
+  setTimeout(() => { if (clipBar === b) b.remove(); }, 12000);
+}
+// pick a device, then do something with it
+function pickDevice(title, fn, filter) {
+  const list = others().filter(filter || (() => true));
+  if (!list.length) return toast(link.connected ? "No other device is connected" : "Not connected to the PC");
+  if (list.length === 1) return fn(list[0]);
+  const close = sheet(el("b", {}, title), el("div", {class: "group", style: "margin-top:12px"}, list.map(d =>
+    el("button", {class: "row", onclick: () => { close(); fn(d); }}, chip(...(KIND_ICON[d.kind] || KIND_ICON.browser)), el("div", {class: "grow"}, d.name)))));
+}
+async function sendFileTo(d, file, progress) {
+  const id = Math.random().toString(36).slice(2), CHUNK = 48 * 1024;
+  for (let at = 0; at < file.size || at === 0; at += CHUNK) {
+    const buf = new Uint8Array(await file.slice(at, at + CHUNK).arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    while (link.ws && link.ws.bufferedAmount > 512 * 1024) await new Promise(r => setTimeout(r, 30));
+    relay(d.id, {t: "pushfile", id, name: file.name || "file", size: file.size, data: btoa(bin), last: at + CHUNK >= file.size});
+    if (progress) progress(Math.min(100, Math.round((at + CHUNK) * 100 / Math.max(file.size, 1))));
+    if (file.size === 0) break;
+  }
+}
+
+PAGES.devices = () => {
+  page("Devices");
+  const list = el("div", {class: "group"});
+  const uToggle = el("div", {class: "toggle" + (link.uclip !== false ? " on" : "")});
+  const name = el("input", {class: "search", value: myName(), placeholder: "This device's name", style: "margin:0"});
+  name.addEventListener("change", () => { store.set("devname", name.value.trim()); send({t: "iam", name: myName(), kind: myKind()}); toast("Renamed"); });
+  app.append(el("p", {class: "sub", style: "margin:0 4px 12px"}, "Everything connected to " + (link.host || "the PC")
+      + " can send to each other, ring each other and share one clipboard."), list,
+    el("div", {class: "h"}, "Universal Clipboard"),
+    el("div", {class: "group"},
+      el("button", {class: "row", onclick: () => { const on = !uToggle.classList.contains("on"); uToggle.classList.toggle("on", on); send({t: "uclipset", on}); }},
+        chip("📋", "teal"), el("div", {class: "grow"}, "Copy on one, paste on all", el("small", {}, "PC, tablet and phones share what you copy")), uToggle),
+      actionRow("📤", "blue", "Send this device's clipboard", async () => {
+        try { const t = await navigator.clipboard.readText(); if (!t) return toast("The clipboard is empty"); send({t: "uclip", s: t}); toast("Shared with every device"); }
+        catch (e) { toast("Allow Paste to share it"); } }, "Safari asks once each time")),
+    el("div", {class: "h"}, "This device"), name);
+  const draw = () => {
+    list.innerHTML = "";
+    list.append(el("div", {class: "row"}, chip("💻", "indigo"), el("div", {class: "grow"}, link.host || "PC", el("small", {}, "The hub · use the other pages to control it"))));
+    others().forEach(d => list.append(el("button", {class: "row", onclick: () => deviceSheet(d)},
+      chip(...(KIND_ICON[d.kind] || KIND_ICON.browser)), el("div", {class: "grow"}, d.name, el("small", {}, d.kind === "android" ? "Android · tap for actions" : "Web app · tap for actions")),
+      el("span", {class: "sub"}, "›"))));
+    if (!others().length) list.append(el("div", {class: "row sub"}, "No other device yet. Open Fedora Pad on the tablet or another phone."));
+    uToggle.classList.toggle("on", link.uclip !== false);
+  };
+  on("devices", draw);
+  cleanup.push(() => on("devices", null));
+  draw(); send({t: "devices?"});
+};
+function deviceSheet(d) {
+  const pick = el("input", {type: "file", multiple: true, style: "display:none"});
+  const status = el("div", {class: "sub", style: "margin:6px 0"}, "");
+  pick.addEventListener("change", async () => { for (const f of pick.files) { await sendFileTo(d, f, p => status.textContent = "📤 " + f.name + "  " + p + " %"); }
+    status.textContent = "✓ Sent"; pick.value = ""; });
+  const open = (page, arg) => { relay(d.id, {t: "remote", a: "open", page, arg}); toast("Opened on " + d.name); };
+  const android = d.kind === "android";
+  const close = sheet(el("div", {style: "display:flex;gap:12px;align-items:center"}, chip(...(KIND_ICON[d.kind] || KIND_ICON.browser)), el("b", {style: "font-size:20px"}, d.name)),
+    status, pick,
+    el("div", {class: "grid3", style: "margin-top:8px"},
+      el("button", {class: "sc", onclick: () => pick.click()}, el("span", {}, "🖼"), "Photos & files"),
+      el("button", {class: "sc", onclick: () => { const t = prompt("Text or link to send to " + d.name); if (t) { relay(d.id, {t: "pushtext", s: t}); toast("Sent"); } }}, el("span", {}, "✍️"), "Text or link"),
+      el("button", {class: "sc", onclick: () => { relay(d.id, {t: "remote", a: "ring"}); toast("Ringing " + d.name); }}, el("span", {}, "📍"), "Ring"),
+      el("button", {class: "sc", onclick: () => { const t = prompt("Message for " + d.name); if (t) relay(d.id, {t: "remote", a: "notice", text: t}); }}, el("span", {}, "💬"), "Message"),
+      el("button", {class: "sc", onclick: () => open("standby")}, el("span", {}, "🕰"), "StandBy"),
+      el("button", {class: "sc", onclick: () => open("focus")}, el("span", {}, "⏱"), "Focus"),
+      el("button", {class: "sc", onclick: () => open("faal")}, el("span", {}, "🎲"), "فال حافظ"),
+      el("button", {class: "sc", onclick: () => open("books")}, el("span", {}, "📚"), android ? "Library" : "Get Books"),
+      el("button", {class: "sc", onclick: () => open("home")}, el("span", {}, "🏠"), "Home")),
+    android ? el("div", {class: "h"}, "Media on " + d.name) : null,
+    android ? el("div", {class: "btns"}, [["⏮", "previous"], ["⏯", "play-pause"], ["⏭", "next"], ["🔉", "voldown"], ["🔊", "volup"]].map(([s, a]) =>
+      el("button", {class: "btn2", style: "font-size:22px", onclick: () => relay(d.id, {t: "remote", a: "media", key: a})}, s))) : null,
+    el("button", {class: "btn2", style: "width:100%;margin-top:14px", onclick: () => close()}, "Done"));
+}
+// hand what you're looking at to another device
+function handoff(page, arg, label) {
+  pickDevice("Continue on…", d => { relay(d.id, {t: "remote", a: "open", page, arg}); toast("📲 " + (label || "Opened") + " on " + d.name); });
+}
+
+// ---- Reading: the tablet's books, highlights and words, shared through the PC
+PAGES.reading = () => {
+  page("Reading");
+  const box = el("div");
+  app.append(el("p", {class: "sub", style: "margin:0 4px 12px"}, "From the tablet's Books, kept on the PC so every device can see them."), box);
+  const draw = () => {
+    box.innerHTML = "";
+    const sh = link.shared || {}, books = (sh.reading || {}).value || [], hl = (sh.highlights || {}).value || [], words = (sh.words || {}).value || [];
+    box.append(el("div", {class: "h"}, "Books"));
+    const g = el("div", {class: "group"});
+    books.forEach(b => {
+      const gid = (/gutenberg-(\d+)\.epub/.exec(b.uri || "") || [])[1];
+      g.append(el("button", {class: "row", onclick: () => bookSheet(b, gid)}, chip("📖", b.type === "pdf" ? "red" : "indigo"),
+        el("div", {class: "grow"}, b.title, el("small", {}, b.total ? (b.type === "pdf" ? "Page " : "Part ") + (b.pos + 1) + " of " + b.total : "Not started")),
+        el("span", {class: "sub"}, b.total ? Math.round((b.pos + 1) * 100 / b.total) + " %" : "")));
+    });
+    box.append(books.length ? g : el("p", {class: "sub"}, "Open Fedora Pad on the tablet once: its library appears here."));
+    if (hl.length) {
+      box.append(el("div", {class: "h"}, "Highlights"));
+      const hg = el("div", {class: "group"});
+      hl.slice(-30).reverse().forEach(h => hg.append(el("button", {class: "row", style: "flex-direction:column;align-items:stretch", onclick: () => {
+        if (navigator.clipboard) navigator.clipboard.writeText(h.text).then(() => toast("Copied")); }},
+        el("div", {dir: "auto", style: "border-left:4px solid " + ({yellow: "#ffe066", green: "#9be58f", blue: "#8fc8ff", pink: "#ffa3c2"}[h.color] || "#ffe066") + ";padding-left:10px"}, h.text),
+        h.note ? el("small", {dir: "auto", style: "white-space:normal"}, "🗒 " + h.note) : null, el("small", {}, h.title + " · tap to copy"))));
+      box.append(hg);
+    }
+    if (words.length) {
+      box.append(el("div", {class: "h"}, "Words"));
+      box.append(el("div", {class: "group"}, words.slice(0, 40).map(w => el("button", {class: "row", onclick: () => askClaude(
+        "Explain \"" + w.word + "\" simply, give its Persian (فارسی) translation and one example sentence." + (w.sentence ? "\n\nIt appears here: " + w.sentence : ""))},
+        el("div", {class: "grow", dir: "auto"}, w.word, el("small", {}, w.sentence || w.book)), el("span", {class: "sub"}, "✨")))));
+    }
+  };
+  function bookSheet(b, gid) {
+    const close = sheet(el("b", {}, b.title), el("div", {class: "sub", style: "margin:4px 0 14px"}, b.total ? "On the tablet: " + ((b.type === "pdf" ? "page " : "part ") + (b.pos + 1)) + " of " + b.total : ""),
+      el("div", {class: "btns"},
+        gid ? el("button", {class: "btn", onclick: () => { close(); show("books", true, {book: {id: +gid, title: b.title,
+          epub: "https://www.gutenberg.org/ebooks/" + gid + ".epub3.images"}}); }}, "📲 Read here") : null,
+        el("button", {class: gid ? "btn2" : "btn", onclick: () => { pickDevice("Which tablet?", d => { relay(d.id, {t: "remote", a: "sendbook", uri: b.uri});
+          toast("Asked " + d.name + " to send it"); }, d => d.kind === "android"); close(); }}, "📥 Get it from the tablet"),
+        el("button", {class: "btn2", onclick: () => close()}, "Close")));
+  }
+  on("shared", draw);
+  cleanup.push(() => on("shared", null));
+  draw(); send({t: "shared?"});
 };
 
 // ---------------------------------------------------------------- start

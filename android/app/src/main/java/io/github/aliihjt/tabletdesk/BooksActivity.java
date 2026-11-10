@@ -119,6 +119,7 @@ public class BooksActivity extends Page {
                 JSONArray sorted = new JSONArray().put(o);
                 for (int j = 0; j < all.length(); j++) sorted.put(all.get(j));
                 prefs(c).edit().putString(LIBRARY, sorted.toString()).apply();
+                Devices.syncSoon(c);  // the iPad's Reading page follows along
                 return;
             }
         } catch (JSONException ignored) {

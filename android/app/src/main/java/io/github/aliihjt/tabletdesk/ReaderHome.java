@@ -281,6 +281,7 @@ final class ReaderHome {
                         .putExtra("mode", "faal"))},
                 {"🗒", Theme.YELLOW, "Notes", (Runnable) () -> a.startActivity(new Intent(a, NotesActivity.class))},
                 {"✍️", Theme.BLUE, "Handwriting", (Runnable) () -> a.startActivity(new Intent(a, SketchActivity.class))},
+                {"🔗", Theme.GREEN, "Devices", (Runnable) () -> a.startActivity(new Intent(a, DevicesActivity.class))},
                 {"▦", Theme.TEAL, "All Apps", (Runnable) () -> a.startActivity(new Intent(a, TabletAppsActivity.class))},
         };
         LinearLayout grid = new LinearLayout(a);

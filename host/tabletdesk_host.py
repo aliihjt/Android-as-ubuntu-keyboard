@@ -79,6 +79,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import webcam as webcam_module  # noqa: E402
 import pad_extras  # noqa: E402
 import gamepad  # noqa: E402
+import hub as hub_mod  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -522,6 +523,7 @@ laptop_kbd = None  # set in main()
 sleeper = None     # sleep timers, set in main()
 mirror_proc = None   # the tablet's screen on the PC (scrcpy), set in main()
 gamepads = None     # game controllers from the tablet (host/gamepad.py), set in main()
+hub = None          # devices talking to each other through this PC (host/hub.py), set in main()
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -866,6 +868,18 @@ def get_clipboard():
     out = _run(["wl-paste", "--no-newline", "--type", "text"]) if os.environ.get(
         "WAYLAND_DISPLAY") else _run(["xclip", "-o", "-selection", "clipboard"])
     return out[:65536]
+
+
+def newest_copied():
+    """The last text copied on the PC (the GNOME extension's history), None when unknown."""
+    raw = shell_call("ClipHistory")
+    if raw is None:
+        return None
+    try:
+        items = json.loads(raw)
+    except ValueError:
+        return None
+    return str(items[0].get("text", "")) if items and isinstance(items[0], dict) else ""
 
 
 def set_clipboard(text):
@@ -1253,6 +1267,8 @@ def save_mode(mode):
 
 
 def handle(inj, msg, reply=None):
+    if hub and reply and hub.handle(msg, reply):  # device to device: lists, relay, clipboard, shared data
+        return
     t = msg.get("t")
     if t == "pad" or (t in ("padadd", "padrm") and reply):  # game controller (host/gamepad.py)
         if gamepads:
@@ -1401,6 +1417,8 @@ def start_web_app(inj, clients):
 
     def opened(ws):
         clients.add(ws)
+        if hub:
+            hub.join(ws.send, "Web app", "browser")
         if clients.last_app:
             ws.send({"t": "app", "name": clients.last_app})
 
@@ -1410,6 +1428,8 @@ def start_web_app(inj, clients):
 
     def closed(ws):
         clients.remove(ws)
+        if hub:
+            hub.leave(ws.send)
         if webcam.source == "web":  # the phone that was the webcam went away
             webcam.stop()
 
@@ -1474,6 +1494,8 @@ def make_handler(inj, clients, lan=False):
                     except (OSError, ValueError):  # tablet already gone
                         pass
 
+            if hub:
+                hub.join(reply, "Android tablet", "android")
             try:
                 self.wfile.write((json.dumps(hello) + "\n").encode())
                 if not lan and wifi_enabled():
@@ -1494,6 +1516,8 @@ def make_handler(inj, clients, lan=False):
             except OSError:
                 pass
             finally:
+                if hub:
+                    hub.leave(reply)
                 clients.remove(self.wfile)
                 inj.release_all()
                 if gamepads:
@@ -1561,9 +1585,11 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd, gamepads
+    global laptop_kbd, gamepads, hub
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied)
+    hub.watch_pc_clipboard()
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()

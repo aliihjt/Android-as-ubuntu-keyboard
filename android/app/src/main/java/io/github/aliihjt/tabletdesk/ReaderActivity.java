@@ -162,6 +162,7 @@ public class ReaderActivity extends Page {
         tools.addView(tool("🖍 Highlight", v -> highlight()));
         tools.addView(tool("🗒 Note", v -> note()));
         tools.addView(tool("✨ Ask Claude", v -> askAi()));
+        tools.addView(tool("📲", v -> handoff()));
         tools.addView(tool("📑", v -> startActivity(new Intent(this, HighlightsActivity.class)
                 .putExtra("uri", uri).putExtra("title", bookTitle))));
         HorizontalScrollView scroll = new HorizontalScrollView(this);
@@ -828,6 +829,30 @@ public class ReaderActivity extends Page {
                     if (minutes[w] > 0) main.postDelayed(sleepStop, minutes[w] * 60_000L);
                     sleepButton.setText(minutes[w] == 0 ? "⏲" : minutes[w] < 0 ? "⏲ part" : "⏲ " + minutes[w] + "m");
                 }).show();
+    }
+
+    // ---- continue on another device ----
+
+    /** A free (Gutenberg) book is downloaded there; any other book is sent as a file. */
+    private void handoff() {
+        java.util.regex.Matcher g = java.util.regex.Pattern.compile("gutenberg-(\\d+)\\.epub").matcher(uri);
+        Devices.pick(this, "Continue on…", d -> {
+            if (g.find()) {
+                try {
+                    Devices.remoteAction(d.id, new JSONObject().put("a", "open").put("page", "getbook").put("arg",
+                            new JSONObject().put("id", Integer.parseInt(g.group(1))).put("title", bookTitle)
+                                    .put("epub", "https://www.gutenberg.org/ebooks/" + g.group(1) + ".epub3.images")));
+                    Toast.makeText(this, "📲 “" + bookTitle + "” → " + d.name, Toast.LENGTH_SHORT).show();
+                } catch (org.json.JSONException ignored) {
+                }
+                return;
+            }
+            String ext = "pdf".equals(type) ? ".pdf" : "epub".equals(type) ? ".epub" : ".txt";
+            Toast.makeText(this, "📤 Sending “" + bookTitle + "” to " + d.name, Toast.LENGTH_SHORT).show();
+            Devices.sendFile(this, Uri.parse(uri), bookTitle.replaceAll("[\\\\/:*?\"<>|]", " ").trim() + ext, d.id, pct -> {
+                if (pct == 100) Toast.makeText(this, "✓ Sent to " + d.name + ": open it in Books there", Toast.LENGTH_LONG).show();
+            });
+        });
     }
 
     // ---- remember the place ----

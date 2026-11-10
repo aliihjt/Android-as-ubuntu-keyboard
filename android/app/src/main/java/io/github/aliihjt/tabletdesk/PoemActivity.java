@@ -179,6 +179,13 @@ public class PoemActivity extends Page {
             NotesActivity.addNote(this, poem.optString("plainText").trim() + "\n— " + poem.optString("fullTitle"));
             Toast.makeText(this, "Saved in Notes", Toast.LENGTH_SHORT).show();
         }), th.weighted(8));
+        tools.addView(th.secondaryButton("📲", v -> {
+            try {
+                Devices.handoff(this, "poem", new JSONObject().put("poem", poem.optInt("id"))
+                        .put("title", poem.optString("title")), poem.optString("title"));
+            } catch (org.json.JSONException ignored) {
+            }
+        }), th.weighted(8));
         tools.addView(th.secondaryButton("✨ Claude", v -> ClaudeApp.ask(this, ("faal".equals(mode)
                 ? "This is my Fal-e Hafez (فال حافظ). Interpret it for me in simple Persian and English:\n\n"
                 : "Explain this Persian poem line by line in simple Persian, then summarise it in English:\n\n")

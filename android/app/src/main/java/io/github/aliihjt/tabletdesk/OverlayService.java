@@ -83,6 +83,7 @@ public class OverlayService extends Service {
         instance = this;
         registerReceiver(charging, new android.content.IntentFilter(Intent.ACTION_POWER_CONNECTED));
         FocusTimer.schedule(this);  // a focus timer keeps running while this service lives
+        ControllerAuto.register(this);  // "When a controller connects" on the Controller page
     }
 
     /** StandBy when charging starts (Settings › StandBy), like an iPhone on its side. */

@@ -259,6 +259,11 @@ public final class HostLink {
         send(o.toString());
     }
 
+    /** A message that is already JSON (the Controller page's fast stick and button updates). */
+    void raw(String json) {
+        send(json);
+    }
+
     /** play-pause, next or previous on the PC's media player. */
     public void media(String action) {
         send(obj("t", "mediactl", "a", action));

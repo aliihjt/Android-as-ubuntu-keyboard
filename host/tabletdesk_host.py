@@ -14,7 +14,7 @@ Tablet -> host messages (one JSON object per line):
   {"t":"text","s":"Hello"}                 type text (US layout, unicode fallback)
   {"t":"cmd","name":"settings"}            run a whitelisted desktop command
   {"t":"mode","m":"extend|mirror|input"}   remember the screen mode
-  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd 0|1
+  {"t":"set","what":"volume","value":40}   volume/brightness 0-100, dark/dnd/laptopkbd/steambp 0|1
   {"t":"state?"}                           ask for the values above
   {"t":"cursor"}                           make a hidden mouse pointer visible again
   {"t":"clip?"} / {"t":"setclip","s":"…"}  read / set the PC clipboard
@@ -36,6 +36,7 @@ Tablet -> host messages (one JSON object per line):
 Host -> tablet also: {"t":"pushfile","id","name","size","data","last"} / {"t":"pushtext","s"}  AirDrop from the PC
   {"t":"file","id":"…","name":"a.jpg","data":"<base64>","last":true}  file -> ~/Downloads/Fedora Pad
   {"t":"apps?"} / {"t":"launch","id":"firefox.desktop"}   favourite apps (Dock)
+  {"t":"padadd"|"pad"|"padrm","p":0,…}    game controller on the tablet -> virtual gamepad (host/gamepad.py)
   {"t":"ping"}
 The same messages also arrive from the phone / iPad web app (host/webapp.py).
 
@@ -77,6 +78,7 @@ except ImportError:  # allows --dry-run on machines without python3-evdev
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import webcam as webcam_module  # noqa: E402
 import pad_extras  # noqa: E402
+import gamepad  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -519,6 +521,7 @@ class LaptopKeyboard:
 laptop_kbd = None  # set in main()
 sleeper = None     # sleep timers, set in main()
 mirror_proc = None   # the tablet's screen on the PC (scrcpy), set in main()
+gamepads = None     # game controllers from the tablet (host/gamepad.py), set in main()
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -720,6 +723,8 @@ def set_value(what, value):
               ("power-saver", "balanced", "performance")[min(v, 2)]])
     elif what == "awake":  # keep the PC from going idle / locking
         set_keep_awake(bool(v))
+    elif what == "steambp":  # Steam Big Picture when a controller connects (host/gamepad.py)
+        gamepad.steam_autostart(bool(v))
 
 
 AWAKE_FILE = os.path.expanduser("~/.config/tabletdesk/idle-delay")
@@ -902,6 +907,7 @@ def read_state():
         state["power"] = ("power-saver", "balanced", "performance").index(profile)
     state["awake"] = _run(["gsettings", "get", "org.gnome.desktop.session",
                            "idle-delay"]).split()[-1:] == ["0"]
+    state["steambp"] = gamepad.steam_autostart_on()
     state.update(pc_info())
     return state
 
@@ -1248,7 +1254,10 @@ def save_mode(mode):
 
 def handle(inj, msg, reply=None):
     t = msg.get("t")
-    if t == "move":
+    if t == "pad" or (t in ("padadd", "padrm") and reply):  # game controller (host/gamepad.py)
+        if gamepads:
+            gamepads.message(reply, msg, reply)
+    elif t == "move":
         inj.move(float(msg.get("dx", 0)), float(msg.get("dy", 0)))
     elif t == "btn":
         inj.button(msg.get("b", "left"), msg.get("s", "click"))
@@ -1456,6 +1465,15 @@ def make_handler(inj, clients, lan=False):
                      "session": os.environ.get("XDG_SESSION_TYPE", "unknown"),
                      # for "Show Fedora Screen" over Wi-Fi (Remote Desktop login name)
                      "user": os.environ.get("USER", "")}
+
+            def reply(obj):
+                with clients.lock:  # don't interleave with focus broadcasts
+                    try:
+                        self.wfile.write((json.dumps(obj) + "\n").encode())
+                        self.wfile.flush()
+                    except (OSError, ValueError):  # tablet already gone
+                        pass
+
             try:
                 self.wfile.write((json.dumps(hello) + "\n").encode())
                 if not lan and wifi_enabled():
@@ -1468,14 +1486,6 @@ def make_handler(inj, clients, lan=False):
                     self.wfile.write((json.dumps(
                         {"t": "app", "name": clients.last_app}) + "\n").encode())
                 self.wfile.flush()
-                def reply(obj):
-                    with clients.lock:  # don't interleave with focus broadcasts
-                        try:
-                            self.wfile.write((json.dumps(obj) + "\n").encode())
-                            self.wfile.flush()
-                        except (OSError, ValueError):  # tablet already gone
-                            pass
-
                 for line in self.rfile:
                     try:
                         handle(inj, json.loads(line), reply)
@@ -1486,6 +1496,8 @@ def make_handler(inj, clients, lan=False):
             finally:
                 clients.remove(self.wfile)
                 inj.release_all()
+                if gamepads:
+                    gamepads.drop(reply)  # unplug this tablet's controllers
                 print("tablet disconnected", flush=True)
 
         def authorised(self):
@@ -1549,8 +1561,9 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd
+    global laptop_kbd, gamepads
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
+    gamepads = gamepad.Gamepads(dry_run=args.dry_run)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     threading.Thread(target=follow_pointer, args=(clients,), daemon=True).start()

@@ -40,6 +40,7 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | 🗒 | **Notes** | Sticky notes written on the tablet. **Show on Fedora** opens them as coloured cards on the Fedora desktop, and they update live. Also saved as `~/Documents/Fedora Pad Notes.md`. |
 | >_ | **Terminal Pad** | Your saved Fedora commands as big buttons: one tap runs it, the output shows on the tablet. Edit the list in `~/.config/tabletdesk/commands.json`. |
 | 🌈 | **Ambient Light** | The tablet glows in the colours of the Fedora screen, like a bias light behind a TV. |
+| 🎮 | **Controller** | A **PS4 DualShock 4**, Xbox, 8BitDo or any controller paired with the tablet becomes a real controller on Fedora for Steam, emulators and games, with **rumble**. Fedora sees it as an Xbox controller (works everywhere) or a PlayStation one (✕ ○ □ △). Up to 4 players, over the cable or Wi-Fi; a live picture shows every button. Keep the page open while you play. **When a controller connects:** open the **iiSU** game launcher to play on the tablet, or this page to play on Fedora (*Smart* picks Fedora while connected, iiSU otherwise). **Steam Big Picture** can open on Fedora whenever a controller connects to the laptop, even without the tablet (`python3 host/gamepad.py --steam on`). |
 | ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
 | ● | **Floating button** | The only thing over the Fedora screen. Drag it anywhere; tap it for a floating **keyboard** or **trackpad**, Media, Shortcuts or Home. |
 | ⌨️ | **Laptop keyboard** | Stays on by default. Settings › Laptop keyboard can turn it off while the tablet is connected (touchpad stays on); unplug and it's back. |
@@ -156,7 +157,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 ```bash
 ~/Android-as-ubuntu-keyboard/host/update.sh
 ```
-The tablet app also updates itself every time you plug in. The app shows its **Build** number on its home screen.
+It also installs **Steam** (Flathub, no password) and the **iiSU** launcher on the plugged-in tablet if they are missing. The tablet app also updates itself every time you plug in. The app shows its **Build** number on its home screen.
 
 ## 🛟 Troubleshooting
 
@@ -168,6 +169,7 @@ The tablet app also updates itself every time you plug in. The app shows its **B
 | App doesn't update | Watch the tablet for an install prompt. Xiaomi: turn on **Install via USB**. |
 | Text on the tablet is tiny | Fedora Settings › Displays › tablet monitor › **Scale 200%** |
 | See what's happening | `journalctl --user -u tabletdesk -f` |
+| A game doesn't see the controller | Controller page › **Fedora sees it as: Xbox controller**. Check it with `evtest` or the Steam controller settings. |
 
 ## 🔧 How it works
 ```
@@ -181,6 +183,7 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + poi
 | `host/tabletdesk_host.py` | Turns messages from the tablet into real keyboard and mouse input (works on Wayland), runs the whitelisted Tools and Control Center actions, and turns the laptop keyboard off while connected. |
 | `host/connect.sh` | Runs on every plug-in: `adb reverse`, screen mode, app updates, and a clean hand-back on unplug. |
 | `host/webapp.py`, `host/web/` | The phone / iPad web app: HTTPS with a local certificate authority, pairing codes, and a WebSocket carrying the same messages as the Android app. |
+| `host/gamepad.py` | Controller page: turns the tablet's controllers into virtual Xbox 360 / DualShock 4 pads (uinput) and sends rumble back. |
 | `host/gnome-extension/` | Reports the focused app and the pointer position (GNOME 45–50). |
 | `windows/` | Fedora Pad for Windows: the same protocol with SendInput, plus setup and plug-in scripts. |
 | `android/` | The app, in plain Java with no extra libraries. |

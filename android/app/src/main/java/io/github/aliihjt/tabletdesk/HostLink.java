@@ -471,12 +471,15 @@ public final class HostLink {
     private static javax.net.ssl.SSLSocketFactory pinned(String fingerprint) throws IOException {
         javax.net.ssl.X509TrustManager tm = new javax.net.ssl.X509TrustManager() {
             @Override
-            public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String auth) {
+            public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String auth)
+                    throws java.security.cert.CertificateException {
+                throw new java.security.cert.CertificateException("the tablet is never the server");
             }
 
             @Override
             public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String auth)
                     throws java.security.cert.CertificateException {
+                if (chain == null || chain.length == 0) throw new java.security.cert.CertificateException("no certificate");
                 try {
                     byte[] d = java.security.MessageDigest.getInstance("SHA-256").digest(chain[0].getEncoded());
                     StringBuilder hex = new StringBuilder();

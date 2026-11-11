@@ -117,7 +117,7 @@ final class Devices {
     /** The PC said hello: tell it who we are and share the library. */
     static void hello(Context c) {
         if (c == null) return;
-        appCtx = c;
+        appCtx = c.getApplicationContext();  // not the page itself: it would stay in memory after closing
         try {
             HostLink.get().send(new JSONObject().put("t", "iam").put("name", myName(c)).put("kind", "android"));
         } catch (JSONException ignored) {

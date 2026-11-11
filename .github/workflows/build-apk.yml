@@ -50,7 +50,8 @@ jobs:
           FEDORAPAD_KEY_PASSWORD: ${{ secrets.FEDORAPAD_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # lint stops the build on errors such as calling an Android 9 function on Android 8
+          ./gradlew assembleDebug lintDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../TabletDesk.apk
           echo "$GITHUB_RUN_NUMBER" > ../version.txt
       # A copy of Google's adb for Windows next to the app, for PCs that can't

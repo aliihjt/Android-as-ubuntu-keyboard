@@ -1435,9 +1435,11 @@ def make_handler(inj, clients, lan=False):
                 self.wfile.flush()
                 for line in self.rfile:
                     try:
-                        handle(inj, json.loads(line), reply)
-                    except (ValueError, TypeError) as err:
-                        print("bad message:", err, file=sys.stderr)
+                        msg = json.loads(line)
+                        if isinstance(msg, dict):
+                            handle(inj, msg, reply)
+                    except Exception as err:  # noqa: BLE001 - one bad message mustn't drop the tablet
+                        print("bad message:", repr(err), file=sys.stderr)
             except OSError:
                 pass
             finally:

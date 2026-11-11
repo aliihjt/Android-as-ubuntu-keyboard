@@ -38,9 +38,16 @@ final class AppUpdate {
     private AppUpdate() {
     }
 
+    @SuppressWarnings("deprecation")
+    private static long versionCode(android.content.pm.PackageInfo info) {
+        return info.versionCode;
+    }
+
     static long installed(Context c) {
         try {
-            return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).getLongVersionCode();
+            android.content.pm.PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+            // getLongVersionCode is Android 9+: on Android 8 tablets it crashed the update check
+            return android.os.Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : versionCode(info);
         } catch (PackageManager.NameNotFoundException e) {
             return 0;
         }

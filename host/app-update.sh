@@ -46,7 +46,7 @@ update_app() {
 
 # iiSU game launcher on the tablet (Controller page › "When a controller connects")
 IISU_PKG=com.iisulauncher
-IISU_RELEASES=https://api.github.com/repos/iisu-network/iiSU/releases?per_page=5
+IISU_RELEASES="https://api.github.com/repos/iisu-network/iiSU/releases?per_page=5"
 
 install_iisu() {
   if adb shell pm list packages "$IISU_PKG" 2>/dev/null | tr -d '\r' | grep -qx "package:$IISU_PKG"; then

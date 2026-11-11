@@ -303,8 +303,8 @@ class WebApp:
                     msg = json.loads(text)
                     if isinstance(msg, dict):
                         self.handle(msg, ws.send)
-                except (ValueError, TypeError, OSError) as err:
-                    print("web app: bad message:", err, file=sys.stderr)
+                except Exception as err:  # noqa: BLE001 - one bad message mustn't drop the phone
+                    print("web app: bad message:", repr(err), file=sys.stderr)
         finally:
             self.on_close(ws)
             print("web app disconnected", flush=True)

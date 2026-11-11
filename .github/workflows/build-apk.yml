@@ -18,11 +18,12 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    # one publishing build at a time: two pushes publishing the same release at
-    # once collide. Pull-request builds publish nothing, so they get their own
-    # group: otherwise one waiting PR build replaces (cancels) a waiting publish.
+    # One publishing build at a time: only pushes to main publish, so only they
+    # share this queue. GitHub keeps one waiting run per queue and drops the
+    # older one, so every other build (branches, pull requests) gets a queue
+    # of its own; otherwise a branch pushed together with main cancels main's.
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && format('apk-pr-{0}', github.run_id) || 'apk-release' }}
+      group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'apk-release' || format('apk-{0}', github.run_id) }}
       cancel-in-progress: false
     defaults:
       run:

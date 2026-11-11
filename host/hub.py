@@ -98,6 +98,9 @@ class Hub:
     def handle(self, msg, reply):
         """True when the message was for the hub (the host then ignores it)."""
         t = msg.get("t")
+        if t == "ping":  # devices check the connection is alive (a sleeping PC or lost Wi-Fi shows at once)
+            self._send(reply, {"t": "pong", "id": msg.get("id")})
+            return True
         if t == "iam":
             with self.lock:
                 d = self.devices.get(reply)

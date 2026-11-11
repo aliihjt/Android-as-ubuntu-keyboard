@@ -181,8 +181,11 @@ function connect() {
   if (link.ws && link.ws.readyState <= 1) return;
   const ws = new WebSocket("wss://" + location.host + "/ws?token=" + encodeURIComponent(token));
   link.ws = ws;
+  link.heard = Date.now();
   ws.onmessage = ev => {
+    link.heard = Date.now();
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.t === "pong") { link.rtt = Date.now() - (link.pingAt || Date.now()); return; }
     if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus();
       send({t: "iam", name: myName(), kind: myKind()}); send({t: "shared?"}); }
     if (hubMessage(m)) return;
@@ -194,10 +197,19 @@ function connect() {
   ws.onclose = ev => {
     link.connected = false; refreshStatus();
     if (ev.code === 4401) { store.set("token", ""); return showPairing(); }
-    link.retry = setTimeout(connect, 2000);
+    link.retry = setTimeout(connect, document.hidden ? 5000 : 1500);
   };
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) connect(); });
+// a connection that went quiet (PC asleep, Wi-Fi changed, Safari was in the background) is dropped and redone
+setInterval(() => {
+  const ws = link.ws;
+  if (!ws || ws.readyState !== 1 || document.hidden) return;
+  if (Date.now() - (link.heard || 0) > 12000) { try { ws.close(); } catch (e) {} link.ws = null; link.connected = false; refreshStatus(); connect(); return; }
+  link.pingAt = Date.now(); send({t: "ping"});
+}, 4000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { link.heard = Date.now(); connect(); } });
+window.addEventListener("online", () => connect());
+window.addEventListener("pageshow", () => connect());
 let statusEls = [];
 function statusLine() {
   const s = el("div", {class: "status"}, el("span", {class: "dot"}), el("span"));
@@ -205,7 +217,7 @@ function statusLine() {
 }
 function paintStatus(s) {
   s.firstChild.className = "dot" + (link.connected ? " on" : "");
-  s.lastChild.textContent = link.connected ? link.host + (link.app ? " · " + link.app : "") : "Connecting…";
+  s.lastChild.textContent = link.connected ? link.host + (link.app ? " · " + link.app : "") : "Reconnecting…";
 }
 function refreshStatus() { statusEls = statusEls.filter(s => s.isConnected); statusEls.forEach(paintStatus); }
 

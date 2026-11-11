@@ -467,3 +467,36 @@ class Unlocker:
             if self.fails >= 5:
                 self.fails, self.until = 0, time.time() + 300
             return "Wrong PIN."
+
+
+# ---------------------------------------------------------------- the tablet finds the PC on Wi-Fi
+
+BEACON_PORT = 7779
+
+
+def beacon(port, fingerprint, name):
+    """Says "Fedora Pad is here" on the home network every few seconds, so a paired
+    tablet finds the PC again when its Wi-Fi address changes. Only the address goes
+    out: the tablet still checks the PC's certificate and sends its secret token."""
+    def loop():
+        msg = json.dumps({"t": "fedorapad", "port": port, "fp": fingerprint, "host": name}).encode()
+        while True:
+            targets = {"255.255.255.255"}
+            try:
+                for card in wake_info():
+                    if card.get("up") and card.get("broadcast"):
+                        targets.add(card["broadcast"])
+            except Exception:  # noqa: BLE001 - a missing tool mustn't stop the beacon
+                pass
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    for t in targets:
+                        try:
+                            s.sendto(msg, (t, BEACON_PORT))
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+            time.sleep(3)
+    threading.Thread(target=loop, daemon=True).start()

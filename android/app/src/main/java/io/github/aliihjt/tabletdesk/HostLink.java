@@ -63,6 +63,8 @@ public final class HostLink {
     private volatile android.content.SharedPreferences prefs;
     private volatile String via = "USB";
     private volatile String wifiIp = "";
+    private volatile long pingAt, rtt = -1;        // the last ping sent, and how long the answer took (ms)
+    private volatile Socket current;               // to drop it when the PC stops answering
     private volatile String user = "";
     private volatile String os = "linux";
     private volatile android.content.Context appContext;  // for files and links sent from the PC
@@ -105,6 +107,11 @@ public final class HostLink {
     /** "USB" or "Wi-Fi": how the tablet is connected right now. */
     public String via() {
         return via;
+    }
+
+    /** How long the PC takes to answer, in ms (-1 = not known yet). */
+    public long latency() {
+        return rtt;
     }
 
     /** True once the PC has paired this tablet for Wi-Fi mode (over the cable). */
@@ -363,15 +370,23 @@ public final class HostLink {
         while (true) {
             try (Socket s = open()) {
                 s.setTcpNoDelay(true);
+                current = s;
+                rtt = -1;
                 queue.clear();
                 Thread reader = new Thread(() -> readLoop(s), "HostLink-reader");
                 reader.setDaemon(true);
                 reader.start();
                 OutputStream out = s.getOutputStream();
+                long lastPing = 0;
                 while (!s.isClosed()) {
                     String msg = queue.poll(1, TimeUnit.SECONDS);
-                    if (msg == null) msg = "{\"t\":\"ping\"}";
-                    out.write((msg + "\n").getBytes(StandardCharsets.UTF_8));
+                    long now = System.currentTimeMillis();
+                    if (now - lastPing >= 1000) {  // every second, even while busy: the PC answers "pong"
+                        lastPing = now;
+                        pingAt = now;
+                        out.write("{\"t\":\"ping\"}\n".getBytes(StandardCharsets.UTF_8));
+                    }
+                    if (msg != null) out.write((msg + "\n").getBytes(StandardCharsets.UTF_8));
                     out.flush();
                 }
             } catch (IOException | InterruptedException ignored) {
@@ -416,7 +431,40 @@ public final class HostLink {
                 raw.close();
             }
         }
+        // not at the addresses we know: listen for the PC saying where it is now (host: pad_extras.beacon)
+        String found = listenForBeacon(p.getString("wifi_fp", ""));
+        if (found != null && !p.getString("wifi_ips", "").contains(found)) {
+            p.edit().putString("wifi_ips", found + "," + p.getString("wifi_ips", "")).apply();
+            return open();
+        }
         throw new IOException("PC not found on Wi-Fi");
+    }
+
+    /** The paired PC's new address, from its announcement on the home network (3 s at most). */
+    private String listenForBeacon(String fingerprint) {
+        if (fingerprint.isEmpty() || appContext == null) return null;
+        android.net.wifi.WifiManager wm = appContext.getApplicationContext().getSystemService(android.net.wifi.WifiManager.class);
+        android.net.wifi.WifiManager.MulticastLock lock = wm == null ? null : wm.createMulticastLock("fedorapad-find");
+        try (java.net.DatagramSocket ds = new java.net.DatagramSocket(null)) {
+            if (lock != null) lock.acquire();
+            ds.setReuseAddress(true);
+            ds.bind(new InetSocketAddress(7779));
+            ds.setSoTimeout(3500);
+            byte[] buf = new byte[2048];
+            long until = System.currentTimeMillis() + 3500;
+            while (System.currentTimeMillis() < until) {
+                java.net.DatagramPacket pk = new java.net.DatagramPacket(buf, buf.length);
+                ds.receive(pk);
+                JSONObject o = new JSONObject(new String(pk.getData(), 0, pk.getLength(), StandardCharsets.UTF_8));
+                if ("fedorapad".equals(o.optString("t")) && fingerprint.equals(o.optString("fp"))) {
+                    return pk.getAddress().getHostAddress();
+                }
+            }
+        } catch (IOException | JSONException | RuntimeException ignored) {
+        } finally {
+            if (lock != null && lock.isHeld()) lock.release();
+        }
+        return null;
     }
 
     /** TLS that trusts exactly one certificate: the PC's, learned over the cable. */
@@ -463,6 +511,12 @@ public final class HostLink {
             while ((line = in.readLine()) != null) {
                 JSONObject msg = new JSONObject(line);
                 String t = msg.optString("t");
+                if ("pong".equals(t)) {
+                    // this PC answers pings: from now on, 7 s of silence means it is gone (asleep, out of Wi-Fi)
+                    if (rtt < 0) s.setSoTimeout(7000);
+                    rtt = Math.max(0, System.currentTimeMillis() - pingAt);
+                    continue;
+                }
                 java.util.function.Consumer<JSONObject> typedListener = typed.get(t);
                 if (typedListener != null) main.post(() -> typedListener.accept(msg));
                 if ("pair".equals(t) && prefs != null && "USB".equals(via)) {

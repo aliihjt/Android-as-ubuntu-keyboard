@@ -234,7 +234,7 @@ abstract class Page extends Activity implements HostLink.Listener {
     @Override
     public void onStatus(boolean connected, String host) {
         if (statusDot != null) {
-            statusDot.setText(connected ? "\u25CF " + host + " \u00B7 " + link.via() : "\u25CB Not connected");
+            statusDot.setText(connected ? "\u25CF " + host + " \u00B7 " + link.via() : "\u25CB Reconnecting…");
             statusDot.setTextColor(connected ? Theme.GREEN : th.secondary);
         }
     }

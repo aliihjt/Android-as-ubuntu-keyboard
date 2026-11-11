@@ -1600,6 +1600,8 @@ def start_wifi(inj, clients):
         return
     print(f"Wi-Fi mode on, port {LAN_PORT} (encrypted, paired tablets only)", flush=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    _, _, _, fp = lan_identity()
+    pad_extras.beacon(LAN_PORT, fp, socket.gethostname())  # the tablet finds the PC when its address changes
 
 
 def main():

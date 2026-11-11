@@ -132,7 +132,8 @@ public class DevicesActivity extends Page {
         list.removeAllViews();
         List<View> rows = new ArrayList<>();
         LinearLayout pcRow = th.row("💻", Theme.INDIGO, link.isConnected() ? link.host() : "PC",
-                link.isConnected() ? "The hub · tap: unlock, lock, sleep" : "Not connected", th.chevron());
+                link.isConnected() ? link.via() + (link.latency() >= 0 ? " · " + link.latency() + " ms" : "")
+                        + " · tap: unlock, lock, sleep" : "Not connected · plug in the cable, or check Wi-Fi", th.chevron());
         th.click(pcRow, v -> pcActions());
         rows.add(pcRow);
         for (Devices.Device d : Devices.others()) {

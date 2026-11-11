@@ -189,6 +189,8 @@ class Universal:
         self.devices = {}               # fd -> (InputDevice, converter or "keyboard")
         self.grabbed = []
         self.mods = set()
+        self.mode = None                # while grabbed: "tablet", or "iphone" (host/iphone_hid.py)
+        self.iphone = None              # the iPhone's Bluetooth keyboard + mouse, while controlling it
 
     # ---- settings
 
@@ -275,17 +277,43 @@ class Universal:
             if self.active or not self.target or not self.conf["on"]:
                 return
             self._grab()
-            self.active, self.acked = True, False
+            self.active, self.acked, self.mode = True, False, "tablet"
             self.enter_at = self.alive_at = time.monotonic()
             self.mods.clear()
             print("Universal Control: on the tablet", flush=True)
         self._send({"a": "enter", "y": round(self.edge_y, 4), "side": self.conf["side"]})
 
+    def control_iphone(self, sink):
+        """The laptop's mouse, touchpad and keyboard drive the iPhone (sink: iphone_hid.IPhone)
+        until Ctrl+Alt+Esc or control_iphone(None). Started from the laptop (Super+Shift+I)."""
+        if sink is None:
+            if self.mode == "iphone":
+                self.leave(tell=False)
+            return
+        if self.active:
+            self.leave()
+        with self.lock:
+            if not self.devices:
+                self._scan()
+            self.iphone = sink
+            self._grab()
+            self.active, self.mode = True, "iphone"
+            self.mods.clear()
+            print("Controlling the iPhone (Ctrl+Alt+Esc to stop)", flush=True)
+
     def leave(self, tell=True):
         with self.lock:
             if not self.active:
                 return
-            self.active = False
+            was = self.mode
+            self.active, self.mode = False, None
+            if was == "iphone" and self.iphone:
+                try:
+                    self.iphone.release()  # every key and button up on the iPhone
+                except Exception:  # noqa: BLE001
+                    pass
+                self.iphone = None
+                tell = False
             self._ungrab()
             for conv in self.devices.values():
                 if hasattr(conv[1], "push"):
@@ -296,7 +324,7 @@ class Universal:
 
     def check_alive(self, now):
         """Give the devices back if the tablet doesn't answer (its helper stopped)."""
-        if self.active and ((not self.acked and now - self.enter_at > ACK_S)
+        if self.active and self.mode == "tablet" and ((not self.acked and now - self.enter_at > ACK_S)
                             or (self.acked and now - self.alive_at > ALIVE_S)):
             print("Universal Control: the tablet stopped answering", file=sys.stderr)
             self.leave(tell=False)
@@ -322,7 +350,12 @@ class Universal:
     # ---- input devices
 
     def _out(self, msg):
-        if self.active:
+        if not self.active:
+            return
+        if self.mode == "iphone":
+            if self.iphone:
+                self.iphone.pointer(msg)
+        else:
             self._send(msg)
 
     def _key(self, name, value):
@@ -330,6 +363,10 @@ class Universal:
             (self.mods.add if value else self.mods.discard)(name[-4:] if "CTRL" in name else name[-3:])
         if name == "KEY_ESC" and value == 1 and {"CTRL", "ALT"} <= self.mods:
             self.leave()  # Ctrl+Alt+Esc: always back to the laptop
+            return
+        if self.mode == "iphone":
+            if self.iphone:
+                self.iphone.key(name, value)
             return
         code = android_key(name)
         if code:
@@ -434,7 +471,7 @@ class Universal:
     def _input_loop(self):
         scanned = 0.0
         while True:
-            if not (self.conf["on"] and self.target):
+            if not (self.conf["on"] and self.target) and self.mode != "iphone":
                 if self.devices and not self.active:
                     for d, _ in self.devices.values():
                         d.close()

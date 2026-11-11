@@ -39,4 +39,6 @@ One Apple-style ecosystem made from the owner's own devices, with the laptop in 
 - Only pushes to `main` publish the APK that tablets install; other branches only build and test.
 - `host/tablet-clean.txt` is the tablet's bloatware list (the owner's tablet is a Samsung), used by
   `host/tablet-clean.sh` and `windows/TabletClean.bat`.
+- The laptop's mouse/keyboard hand-over (grab, touchpad/mouse conversion) lives in `host/universal.py`, used by
+  Universal Control (to the tablet) and iPhone control (`host/iphone_hid.py`, Bluetooth HID); don't duplicate it.
 - README.md explains every feature and the setup steps.

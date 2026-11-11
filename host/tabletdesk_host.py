@@ -84,6 +84,7 @@ import pc_notifs  # noqa: E402
 import pen as pen_mod  # noqa: E402
 import walkaway  # noqa: E402
 import universal as universal_mod  # noqa: E402
+import iphone_hid  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -716,6 +717,36 @@ def screens(max_age=3.0):
             value = None
     _screens.update(at=now, value=value)
     return value
+
+
+_iphone = {"dev": None}
+
+
+def iphone_command(what):
+    """Super+Shift+I (host/iphone_hid.py --toggle): the laptop's mouse and keyboard drive the iPhone."""
+    if universal is None:
+        return "not ready"
+    dev = _iphone["dev"]
+    if dev is None:
+        dev = iphone_hid.IPhone(os.path.join(CONF_DIR, "iphone.json"), lambda text: desktop_notify("📱 " + text, ""))
+        if not dev.start():
+            return "Bluetooth isn't available (turn it on in Settings › Bluetooth)"
+        _iphone["dev"] = dev
+    what = what.strip() or "toggle"
+    if what == "pair":
+        dev.pair()
+        return "pairing: on the iPhone, Settings › Bluetooth › Fedora Pad"
+    if universal.mode == "iphone" or what == "off":
+        universal.control_iphone(None)
+        desktop_notify("📱 iPhone control off", "The mouse and keyboard are back on the laptop.")
+        return "off"
+    if not dev.conf.get("device"):
+        return "pair the iPhone first: ./host/iphone-setup.sh"
+    dev.begin()
+    universal.control_iphone(dev)
+    desktop_notify("📱 Controlling the iPhone", "The laptop's mouse and keyboard now work on the iPhone. "
+                   "Ctrl+Alt+Esc gives them back to the laptop.")
+    return "on"
 
 
 def run_command(name):
@@ -1565,7 +1596,7 @@ def main():
     hub.watch_pc_clipboard()
     pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
     pc_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device
-    pad_extras.TabServer(hub.set_tab).start()  # Chrome Handoff: the page open in Chrome -> every device
+    pad_extras.TabServer(hub.set_tab, commands={"/iphone": iphone_command}).start()  # Chrome Handoff, iPhone control
     walkaway.Watcher(lambda: lock_or_unlock({"t": "lock"}, lambda r: None)).start()  # iPhone away -> lock
     unlocker = pad_extras.Unlocker(CONF_DIR)
     clients = Clients()

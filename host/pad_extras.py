@@ -710,8 +710,11 @@ class TabServer:
     Only a Chrome extension may report: a web page can't send an extension's Origin,
     so sites can't push a fake "continue this page" to your devices."""
 
-    def __init__(self, on_tab, port=HANDOFF_PORT):
+    def __init__(self, on_tab, port=HANDOFF_PORT, commands=None):
         self.on_tab, self.port = on_tab, port
+        # local commands from this laptop's own scripts (e.g. "/iphone": the Super+Shift+I shortcut):
+        # need the X-Fedora-Pad header and no Origin, which a web page can't send
+        self.commands = commands or {}
 
     def start(self):
         import http.server
@@ -719,6 +722,23 @@ class TabServer:
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_POST(self):
+                if self.path in outer.commands:
+                    if self.headers.get("X-Fedora-Pad") != "1" or self.headers.get("Origin"):
+                        self.send_response(403)
+                        self.end_headers()
+                        return
+                    size = min(int(self.headers.get("Content-Length") or 0), 1024)
+                    try:
+                        answer = str(outer.commands[self.path](self.rfile.read(size).decode("utf-8", "replace")))
+                    except Exception as err:  # noqa: BLE001
+                        answer = "failed: " + str(err)
+                    data = answer.encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
                 origin = self.headers.get("Origin", "")
                 if self.path != "/tab" or not origin.startswith("chrome-extension://"):
                     self.send_response(403)

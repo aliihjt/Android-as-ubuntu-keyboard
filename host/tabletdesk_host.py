@@ -80,6 +80,7 @@ import webcam as webcam_module  # noqa: E402
 import pad_extras  # noqa: E402
 import gamepad  # noqa: E402
 import hub as hub_mod  # noqa: E402
+import pc_notifs  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -1520,6 +1521,7 @@ def main():
     hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify)
     hub.watch_pc_clipboard()
     pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
+    pc_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device
     unlocker = pad_extras.Unlocker(CONF_DIR)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()

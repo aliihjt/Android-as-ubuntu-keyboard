@@ -87,6 +87,7 @@ The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple
 | 📲 | **Handoff** | 📲 in the reader and on a poem: continue on another device. Free (Gutenberg) books download there; other books are sent as a file. From the iPad: Get Books › *To the tablet*. |
 | 📖 | **Reading everywhere** | The tablet's library, progress, highlights and Words, kept on the PC: the iPhone / iPad **Reading** page shows them; *Read here* or *Get it from the tablet*. |
 | 🔔 | **Notifications everywhere** | Devices › *Show notifications on other devices* (Android asks to allow it once): the tablet's messages and alerts appear on the iPhone (banner + Notifications page) and the laptop. **Reply** to Telegram, WhatsApp and other messages from the iPhone. |
+| 💻 | **The laptop's notifications** | Chrome, Telegram, mail and other alerts on Fedora also appear on the tablet (as a notification) and on the iPhone (as a banner while the web app is open). Devices › *Show the laptop's notifications here* turns it off on that device. |
 | 📝 | **Notes everywhere** | One set of notes: a change on the tablet, the iPhone or the PC shows on the others right away. |
 | 📷 | **iPhone camera for the tablet** | Scanner and Handwriting on the iPhone › **📲 To the tablet**: the picture lands in the tablet's Downloads › Fedora Pad with a notification. |
 | 📖 | **Continue reading** | Close a book on the tablet and the iPhone's home shows *Continue reading* with the part you were on: **Read** (free books) or **Get** it from the tablet. |

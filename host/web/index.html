@@ -1529,6 +1529,10 @@ function hubMessage(m) {  // true when handled here, whatever page is open
   if (m.t === "notifs") { link.notifs = m.list || []; const h = link.handlers.notifs; if (h) h(); return true; }
   if (m.t === "notifgone") { link.notifs = (link.notifs || []).filter(n => n.key !== m.key); const h = link.handlers.notifs; if (h) h(); return true; }
   if (m.t === "pcevent") { banner(m.icon || "💻", m.title + (m.pc ? " · " + m.pc : ""), m.text); return true; }
+  if (m.t === "pcnotif") {  // a notification shown on the laptop
+    if (store.get("pcnotifs", true)) banner("💻", (m.app || m.pc || "Laptop") + (m.title ? " · " + m.title : ""), m.text);
+    return true;
+  }
   if (m.t === "unlockres") { toast(m.ok ? (m.what === "lock" ? "🔒 Locked" : "🔓 Unlocked") : "⚠️ " + (m.error || "Didn't work")); return true; }
   if (m.t === "unlockinfo") { link.unlock = m; return true; }
   return false;
@@ -1606,6 +1610,7 @@ PAGES.devices = () => {
   page("Devices");
   const list = el("div", {class: "group"});
   const uToggle = el("div", {class: "toggle" + (link.uclip !== false ? " on" : "")});
+  const nToggle = el("div", {class: "toggle" + (store.get("pcnotifs", true) ? " on" : "")});
   const name = el("input", {class: "search", value: myName(), placeholder: "This device's name", style: "margin:0"});
   name.addEventListener("change", () => { store.set("devname", name.value.trim()); send({t: "iam", name: myName(), kind: myKind()}); toast("Renamed"); });
   app.append(el("p", {class: "sub", style: "margin:0 4px 12px"}, "Everything connected to " + (link.host || "the PC")
@@ -1617,6 +1622,11 @@ PAGES.devices = () => {
       actionRow("📤", "blue", "Send this device's clipboard", async () => {
         try { const t = await navigator.clipboard.readText(); if (!t) return toast("The clipboard is empty"); send({t: "uclip", s: t}); toast("Shared with every device"); }
         catch (e) { toast("Allow Paste to share it"); } }, "Safari asks once each time")),
+    el("div", {class: "h"}, "Notifications"),
+    el("div", {class: "group"},
+      el("button", {class: "row", onclick: () => { const on = !nToggle.classList.contains("on"); nToggle.classList.toggle("on", on); store.set("pcnotifs", on); }},
+        chip("💻", "indigo"), el("div", {class: "grow"}, "Show the laptop's notifications here",
+          el("small", {}, "Chrome, Telegram, mail and other alerts on the PC, while this page is open")), nToggle)),
     el("div", {class: "h"}, "This device"), name);
   const draw = () => {
     list.innerHTML = "";

@@ -39,6 +39,8 @@ import java.util.UUID;
 final class Devices {
     /** SecretStore name of the laptop's unlock PIN. */
     static final String UNLOCK_PIN = "unlock_pin";
+    /** Show the laptop's notifications on this tablet (on unless switched off in Devices). */
+    static final String PC_NOTIFS = "pc_notifs";
 
     static final class Device {
         final String id, name, kind;
@@ -158,6 +160,12 @@ final class Devices {
         } else if (t.equals("pcevent")) {
             remember(m.optString("icon"), m.optString("title"), m.optString("text"));
             Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
+        } else if (t.equals("pcnotif")) {  // a notification shown on the laptop
+            if (prefs(c).getBoolean(PC_NOTIFS, true)) {
+                String app = m.optString("app"), title = m.optString("title");
+                Inbox.notify(c, "💻 " + (app.isEmpty() ? m.optString("pc", "Laptop") : app)
+                        + (title.isEmpty() ? "" : " · " + title), m.optString("text"), null);
+            }
         } else if (t.equals("unlockres")) {
             // a saved PIN that the laptop refuses is forgotten, so the next try asks again
             if (!m.optBoolean("ok") && "unlock".equals(m.optString("what"))

@@ -75,8 +75,13 @@ public class DevicesActivity extends Page {
                 startActivity(new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
             }
         });
+        android.content.SharedPreferences prefs = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+        android.widget.Switch fromPc = th.toggle(prefs.getBoolean(Devices.PC_NOTIFS, true),
+                on -> prefs.edit().putBoolean(Devices.PC_NOTIFS, on).apply());
         add(th.group(th.row("🔔", Theme.RED, "Show notifications on other devices",
-                "Messages and alerts from this tablet appear on the iPhone and the laptop; reply from the iPhone", mirror)));
+                "Messages and alerts from this tablet appear on the iPhone and the laptop; reply from the iPhone", mirror),
+                th.row("💻", Theme.INDIGO, "Show the laptop's notifications here",
+                        "Chrome, Telegram, mail and other alerts on Fedora also appear on this tablet", fromPc)));
         add(th.caption("Only devices paired with your PC get them. Off by default; Android asks you to allow it once."), 6);
 
         section("This tablet");

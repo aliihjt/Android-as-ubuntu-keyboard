@@ -15,6 +15,7 @@ its reply function; the hub then
                                       devices and the PC's screen; {"t":"notifs?"} lists them
   - keeps notes the same everywhere   a device's {"t":"setnotes"} goes to the others too
   - tells devices about the PC        event(): download finished, battery low, long task done
+  - shows the PC's notifications       pc_notification(): {"t":"pcnotif","app","title","text"}
 
 A device says who it is with {"t":"iam","name":"Ali's iPad","kind":"ipad"}.
 Only devices already allowed to control the PC (cable, paired Wi-Fi, paired
@@ -212,6 +213,11 @@ class Hub:
                 self.notify(n["app"] + " · " + sender["name"], (n["title"] + "\n" + n["text"]).strip())
             except Exception:  # noqa: BLE001
                 pass
+
+    def pc_notification(self, app, title, text):
+        """A notification shown on the PC: every device shows it too (each can turn it off)."""
+        for r, _ in self._snapshot():
+            self._send(r, {"t": "pcnotif", "app": app, "title": title, "text": text, "pc": self.pc_name})
 
     def event(self, icon, title, text=""):
         """Something on the PC every device should know: download finished, battery low..."""

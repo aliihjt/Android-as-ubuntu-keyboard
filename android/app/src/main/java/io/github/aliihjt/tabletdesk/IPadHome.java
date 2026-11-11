@@ -162,9 +162,9 @@ final class IPadHome {
     }
 
     private View grabber(String symbol, Runnable open) {
-        TextView t = th.text(symbol, 13, Color.WHITE, true);
+        TextView t = th.text(symbol, 13, th.onWall, true);
         t.setGravity(Gravity.CENTER);
-        t.setShadowLayer(th.dp(3), 0, th.dp(1), 0x99000000);
+        t.setShadowLayer(th.dp(3), 0, th.dp(1), th.wallShadow);
         th.click(t, v -> open.run());
         return t;
     }
@@ -178,9 +178,9 @@ final class IPadHome {
         LinearLayout pages = new LinearLayout(a);
         List<Item> apps = mainApps();
         List<View> icons = new ArrayList<>();
-        for (Item it : apps) icons.add(icon(it, 62, Color.WHITE));
+        for (Item it : apps) icons.add(icon(it, 62, th.onWall));
         for (TabletApps.App app : TabletApps.pinnedApps(a)) {
-            icons.add(TabletApps.icon(a, th, app, 62, Color.WHITE, () -> new android.app.AlertDialog.Builder(a)
+            icons.add(TabletApps.icon(a, th, app, 62, th.onWall, () -> new android.app.AlertDialog.Builder(a)
                     .setTitle(app.label).setItems(new String[]{"Remove from Home Screen"}, (d, which) -> {
                         TabletApps.setPinned(a, app, false);
                         resume();
@@ -240,8 +240,8 @@ final class IPadHome {
         LinearLayout head = new LinearLayout(a);
         head.setGravity(Gravity.CENTER_VERTICAL);
         Date now = new Date();
-        TextView day = th.text(new SimpleDateFormat("EEEE d MMMM", Locale.getDefault()).format(now), 24, Color.WHITE, true);
-        day.setShadowLayer(th.dp(4), 0, th.dp(1), 0x99000000);
+        TextView day = th.text(new SimpleDateFormat("EEEE d MMMM", Locale.getDefault()).format(now), 24, th.onWall, true);
+        day.setShadowLayer(th.dp(4), 0, th.dp(1), th.wallShadow);
         head.addView(day, new LinearLayout.LayoutParams(0, -2, 1f));
         List<BooksActivity.Book> books = BooksActivity.library(a);
         if (!books.isEmpty()) {
@@ -275,7 +275,7 @@ final class IPadHome {
         }
         cell.addView(chip);
         TextView name = th.text(it.name, 12.5f, labelColor, true);
-        name.setShadowLayer(th.dp(3), 0, th.dp(1), labelColor == Color.WHITE ? 0x99000000 : 0);
+        name.setShadowLayer(th.dp(3), 0, th.dp(1), labelColor == th.onWall ? th.wallShadow : 0);
         name.setGravity(Gravity.CENTER);
         name.setSingleLine(true);
         cell.addView(name, th.fullWidth(6));
@@ -334,7 +334,7 @@ final class IPadHome {
         if (pager.count < 2) return;
         for (int i = 0; i < pager.count; i++) {
             View dot = new View(a);
-            dot.setBackground(Theme.round(i == page ? Color.WHITE : 0x80FFFFFF, th.dp(4)));
+            dot.setBackground(Theme.round(i == page ? th.onWall : (th.onWall & 0x00FFFFFF) | 0x66000000, th.dp(4)));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(th.dp(7), th.dp(7));
             lp.setMargins(th.dp(4), 0, th.dp(4), 0);
             dots.addView(dot, lp);
@@ -421,7 +421,7 @@ final class IPadHome {
             cell.setGravity(Gravity.CENTER_HORIZONTAL);
             TextView c = th.text((String) b[0], 22, th.text, false);
             c.setGravity(Gravity.CENTER);
-            c.setBackground(Theme.round(th.dark ? 0xFF3A3A3C : 0xFFFFFFFF, th.dp(26)));
+            c.setBackground(th.mono ? th.surface(th.card, th.dp(26)) : Theme.round(th.dark ? 0xFF3A3A3C : 0xFFFFFFFF, th.dp(26)));
             cell.addView(c, new LinearLayout.LayoutParams(th.dp(52), th.dp(52)));
             TextView l = th.caption((String) b[1]);
             l.setGravity(Gravity.CENTER);
@@ -493,7 +493,7 @@ final class IPadHome {
 
     private View notice(String icon, String title, String text, long time, Runnable tap) {
         LinearLayout c = new LinearLayout(a);
-        c.setBackground(Theme.round(th.dark ? 0xFF2C2C2E : 0xFFFFFFFF, th.dp(18)));
+        c.setBackground(th.mono ? th.surface(th.card, th.dp(18)) : Theme.round(th.dark ? 0xFF2C2C2E : 0xFFFFFFFF, th.dp(18)));
         c.setPadding(th.dp(14), th.dp(12), th.dp(14), th.dp(12));
         c.addView(th.text(icon, 22, th.text, false));
         LinearLayout texts = new LinearLayout(a);

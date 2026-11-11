@@ -73,6 +73,16 @@ public class SettingsActivity extends Page {
                     recreate();
                 }));
 
+        section("Black & white screen");
+        add(th.segmented(new String[][]{{"auto", "Automatic"}, {"on", "On"}, {"off", "Off"}},
+                prefs.getString(Theme.BW, "auto"), v -> {
+                    prefs.edit().putString(Theme.BW, v).apply();
+                    recreate();
+                }));
+        add(th.caption("For a tablet set to greyscale: plain pages, black outlines and black icons, "
+                + "so nothing depends on colour. Automatic follows Android's greyscale setting"
+                + (Theme.systemGrayscale(this) ? " (on now)." : "; if it doesn't switch by itself, choose On.")), 6);
+
         section("Trackpad");
         add(th.group(
                 th.sliderRow("🖱", Theme.PURPLE, "Speed",

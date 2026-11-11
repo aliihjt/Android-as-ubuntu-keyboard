@@ -351,7 +351,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
                 pinnedBox.addView(row, th.fullWidth(20));
             }
             TabletApps.App a = pinned.get(i);
-            row.addView(TabletApps.icon(this, th, a, 64, 0xFFFFFFFF, () -> new android.app.AlertDialog.Builder(this)
+            row.addView(TabletApps.icon(this, th, a, 64, th.onWall, () -> new android.app.AlertDialog.Builder(this)
                     .setTitle(a.label).setItems(new String[]{"Unpin from home screen"}, (d, w) -> {
                         TabletApps.setPinned(this, a, false);
                         showPinned();
@@ -362,9 +362,9 @@ public class MainActivity extends Page implements HostLink.StateListener {
     }
 
     private TextView header(String text) {
-        TextView t = th.text(text.toUpperCase(java.util.Locale.ROOT), 13, 0xE6FFFFFF, true);
+        TextView t = th.text(text.toUpperCase(java.util.Locale.ROOT), 13, th.onWall, true);
         t.setLetterSpacing(0.08f);
-        t.setShadowLayer(th.dp(3), 0, th.dp(1), 0x99000000);
+        t.setShadowLayer(th.dp(3), 0, th.dp(1), th.wallShadow);
         return t;
     }
 
@@ -376,8 +376,8 @@ public class MainActivity extends Page implements HostLink.StateListener {
         TextView icon = th.iconChip(symbol, color, sizeDp);
         icon.setElevation(th.dp(4));
         cell.addView(icon);
-        TextView name = th.text(label, 13, 0xFFFFFFFF, true);
-        name.setShadowLayer(th.dp(3), 0, th.dp(1), 0x99000000);
+        TextView name = th.text(label, 13, th.onWall, true);
+        name.setShadowLayer(th.dp(3), 0, th.dp(1), th.wallShadow);
         name.setGravity(Gravity.CENTER);
         name.setSingleLine(true);
         cell.addView(name, th.fullWidth(8));
@@ -435,7 +435,9 @@ public class MainActivity extends Page implements HostLink.StateListener {
     @Override
     protected void onResume() {
         super.onResume();
-        if (!prefs.getString("home_style", "ipad").equals(style)) {
+        // home style, light / dark or black & white changed in Settings (or Android's greyscale switched)
+        if (!prefs.getString("home_style", "ipad").equals(style)
+                || th.dark != Ui.isDark(this) || th.mono != Theme.blackAndWhite(this)) {
             recreate();
             return;
         }
@@ -627,7 +629,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         for (java.util.Map.Entry<String, TextView> e : toggleViews.entrySet()) {
             boolean on = st.optBoolean(e.getKey(), false);
             e.getValue().setBackground(Theme.round(on ? th.accent : (th.dark ? 0x40FFFFFF : 0xB3FFFFFF), th.dp(26)));
-            e.getValue().setTextColor(on ? 0xFFFFFFFF : th.text);
+            e.getValue().setTextColor(on ? th.onAccent : th.text);
         }
     }
 

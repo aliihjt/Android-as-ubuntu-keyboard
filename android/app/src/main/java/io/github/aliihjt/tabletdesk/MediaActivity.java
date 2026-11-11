@@ -72,8 +72,8 @@ public class MediaActivity extends Page {
             artist.setText(a.isEmpty() ? pl : (pl.isEmpty() ? a : a + "  ·  " + pl));
             boolean playing = "Playing".equals(m.optString("status"));
             play.setText(playing ? "⏸" : "▶");
-            play.setTextColor(0xFFFFFFFF);
-            play.setBackground(th.pressable(Theme.PINK, th.dp(48)));
+            play.setTextColor(th.mono ? th.onAccent : 0xFFFFFFFF);
+            play.setBackground(th.pressable(th.mono ? th.accent : Theme.PINK, th.dp(48)));
         });
         poll.post(tick);
     }

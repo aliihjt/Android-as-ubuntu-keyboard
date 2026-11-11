@@ -99,8 +99,8 @@ final class ReaderHome {
     }
 
     private TextView shadowed(String s, float sp, boolean bold) {
-        TextView t = th.text(s, sp, Color.WHITE, bold);
-        t.setShadowLayer(th.dp(4), 0, th.dp(1), 0x99000000);
+        TextView t = th.text(s, sp, th.onWall, bold);
+        t.setShadowLayer(th.dp(4), 0, th.dp(1), th.wallShadow);
         return t;
     }
 
@@ -124,7 +124,7 @@ final class ReaderHome {
     }
 
     private View roundButton(String symbol, Runnable r) {
-        TextView b = th.text(symbol, 20, Color.WHITE, false);
+        TextView b = th.text(symbol, 20, th.onWall, false);
         b.setGravity(Gravity.CENTER);
         b.setBackground(th.frosted(th.dp(22)));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(th.dp(44), th.dp(44));
@@ -154,10 +154,10 @@ final class ReaderHome {
         LinearLayout row = new LinearLayout(a);
         FrameLayout cover = new FrameLayout(a);
         int color = book.type.equals("pdf") ? Theme.RED : book.type.equals("epub") ? Theme.INDIGO : Theme.GRAY;
-        cover.setBackground(Theme.round(color, th.dp(8)));
+        cover.setBackground(th.mono ? th.surface(th.card, th.dp(8)) : Theme.round(color, th.dp(8)));
         cover.setClipToOutline(true);
         cover.setElevation(th.dp(3));
-        TextView name = th.text(book.title, 12, Color.WHITE, true);
+        TextView name = th.text(book.title, 12, th.mono ? th.text : Color.WHITE, true);
         name.setPadding(th.dp(8), th.dp(8), th.dp(8), th.dp(8));
         name.setMaxLines(5);
         cover.addView(name);
@@ -322,7 +322,7 @@ final class ReaderHome {
                 box.addView(row, th.fullWidth(12));
             }
             TabletApps.App app = apps.get(i);
-            row.addView(TabletApps.icon(a, th, app, 58, Color.WHITE, () -> new AlertDialog.Builder(a)
+            row.addView(TabletApps.icon(a, th, app, 58, th.onWall, () -> new AlertDialog.Builder(a)
                     .setTitle(app.label).setItems(new String[]{"Unpin from home screen"}, (d, w) -> {
                         TabletApps.setPinned(a, app, false);
                         resume();

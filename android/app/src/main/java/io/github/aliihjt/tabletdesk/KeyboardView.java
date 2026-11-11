@@ -270,7 +270,7 @@ final class KeyboardView extends LinearLayout {
 
     private void paint(TextView t, boolean on) {
         t.setBackground(th.pressable(on ? th.accent : (th.dark ? 0xFF2C2C2E : 0xFFD1D3D9), th.dp(9)));
-        t.setTextColor(on ? 0xFFFFFFFF : th.text);
+        t.setTextColor(on ? th.onAccent : th.text);
     }
 
     @Override

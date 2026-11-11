@@ -17,6 +17,11 @@ import android.widget.TextView;
  * Fedora Pad's look, modelled on iPadOS: grouped grey background, white (or
  * dark) rounded cards, coloured icon squares, blue accent, green switches.
  * Every screen builds its views through these helpers so they all match.
+ *
+ * Black & white screen (Settings › Black & white screen, or Android's own
+ * grayscale): colours turn into greys that look alike there, so this mode uses
+ * contrast instead of colour: plain white (or black) pages, black outlines,
+ * black text and icons, filled-black for "on" and the main button.
  */
 final class Theme {
     // iOS system colours
@@ -40,17 +45,62 @@ final class Theme {
     final int separator;
     final int fill;         // subtle fill for keys and chips
     final int accent;
+    final int onAccent;     // text on the accent colour
+    final boolean mono;     // black & white screen
+    final int onWall;       // text straight on the home screen's wallpaper
+    final int wallShadow;   // its shadow (none in black & white)
+    final int outline;      // border of cards and icons in black & white (0 = none)
 
     Theme(Context ctx) {
         this.ctx = ctx;
         dark = Ui.isDark(ctx);
-        background = dark ? 0xFF000000 : 0xFFF2F2F7;
-        card = dark ? 0xFF1C1C1E : 0xFFFFFFFF;
-        text = dark ? 0xFFFFFFFF : 0xFF000000;
-        secondary = dark ? 0x99EBEBF5 : 0x993C3C43;
-        separator = dark ? 0xFF38383A : 0xFFC6C6C8;
-        fill = dark ? 0xFF2C2C2E : 0xFFE5E5EA;
-        accent = dark ? 0xFF0A84FF : BLUE;
+        mono = blackAndWhite(ctx);
+        if (mono) {
+            background = dark ? 0xFF000000 : 0xFFFFFFFF;
+            card = dark ? 0xFF000000 : 0xFFFFFFFF;
+            text = dark ? 0xFFFFFFFF : 0xFF000000;
+            secondary = dark ? 0xFFD0D0D0 : 0xFF303030;  // dark enough to read on a grey screen
+            separator = dark ? 0xFF808080 : 0xFF7A7A7A;
+            fill = dark ? 0xFF262626 : 0xFFE8E8E8;
+            accent = text;
+            onAccent = background;
+            onWall = text;
+            wallShadow = 0;
+            outline = dark ? 0xFFBDBDBD : 0xFF000000;
+        } else {
+            background = dark ? 0xFF000000 : 0xFFF2F2F7;
+            card = dark ? 0xFF1C1C1E : 0xFFFFFFFF;
+            text = dark ? 0xFFFFFFFF : 0xFF000000;
+            secondary = dark ? 0x99EBEBF5 : 0x993C3C43;
+            separator = dark ? 0xFF38383A : 0xFFC6C6C8;
+            fill = dark ? 0xFF2C2C2E : 0xFFE5E5EA;
+            accent = dark ? 0xFF0A84FF : BLUE;
+            onAccent = 0xFFFFFFFF;
+            onWall = 0xFFFFFFFF;
+            wallShadow = 0x99000000;
+            outline = 0;
+        }
+    }
+
+    static final String BW = "bw_screen";  // "auto" (follow Android's grayscale), "on" or "off"
+
+    /** Black & white look: switched on in Settings, or "auto" and Android's grayscale is on. */
+    static boolean blackAndWhite(Context c) {
+        String mode = c.getSharedPreferences(OverlayService.PREFS, Context.MODE_PRIVATE).getString(BW, "auto");
+        if ("on".equals(mode)) return true;
+        if ("off".equals(mode)) return false;
+        return systemGrayscale(c);
+    }
+
+    /** Android's (and Samsung's) "Greyscale" colour adjustment: the daltonizer set to monochromacy (0). */
+    static boolean systemGrayscale(Context c) {
+        try {
+            android.content.ContentResolver r = c.getContentResolver();
+            return android.provider.Settings.Secure.getInt(r, "accessibility_display_daltonizer_enabled", 0) == 1
+                    && android.provider.Settings.Secure.getInt(r, "accessibility_display_daltonizer", -1) == 0;
+        } catch (RuntimeException e) {  // some Android versions don't let apps read it: use the setting
+            return false;
+        }
     }
 
     int dp(float v) {
@@ -107,16 +157,32 @@ final class Theme {
                 round(color, radius), round(0xFFFFFFFF, radius));
     }
 
+    /** A rounded surface; outlined instead of shadowed on a black & white screen. */
+    GradientDrawable surface(int color, float radius) {
+        GradientDrawable d = round(color, radius);
+        if (mono) d.setStroke(Math.max(1, dp(1.25f)), outline);
+        return d;
+    }
+
     LinearLayout card() {
         LinearLayout c = new LinearLayout(ctx);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(round(card, dp(18)));
-        if (!dark) c.setElevation(dp(1));
+        c.setBackground(surface(card, dp(18)));
+        if (!dark && !mono) c.setElevation(dp(1));
         return c;
     }
 
     /** Coloured rounded square with a white symbol, as in iPad Settings. */
     TextView iconChip(String symbol, int color, int sizeDp) {
+        if (mono) {  // white square, black outline and symbol: colours would all be the same grey
+            TextView t = text(symbol, sizeDp * 0.45f, text, true);
+            t.setGravity(Gravity.CENTER);
+            GradientDrawable g = round(card, dp(sizeDp * 0.24f));
+            g.setStroke(Math.max(1, dp(sizeDp >= 40 ? 1.75f : 1f)), outline);
+            t.setBackground(g);
+            t.setLayoutParams(new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)));
+            return t;
+        }
         TextView t = text(symbol, sizeDp * 0.45f, 0xFFFFFFFF, false);
         t.setGravity(Gravity.CENTER);
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -138,6 +204,7 @@ final class Theme {
 
     /** macOS-style wallpaper (Sonoma-like colours), light or dark. */
     android.graphics.drawable.Drawable wallpaper() {
+        if (mono) return new android.graphics.drawable.ColorDrawable(background);  // plain: easy to read
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR, dark
                 ? new int[]{0xFF0F1B3D, 0xFF3A1F6B, 0xFF8A2E6E, 0xFFD0565C}
                 : new int[]{0xFF7FB3F5, 0xFFB9A6F2, 0xFFF1A7C8, 0xFFFBD3A6});
@@ -145,6 +212,7 @@ final class Theme {
 
     /** Frosted panel for the menu bar, widgets and the Dock (on the wallpaper). */
     GradientDrawable frosted(float radius) {
+        if (mono) return surface(card, radius);
         GradientDrawable d = round(dark ? 0x8C1E1E1E : 0xA6FFFFFF, radius);
         d.setStroke(Math.max(1, dp(0.75f)), dark ? 0x33FFFFFF : 0x80FFFFFF);
         return d;
@@ -175,7 +243,7 @@ final class Theme {
 
     /** Big filled button (the main action of a screen). */
     TextView primaryButton(String label, View.OnClickListener l) {
-        TextView b = text(label, 17, 0xFFFFFFFF, true);
+        TextView b = text(label, 17, onAccent, true);
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(dp(52));
         b.setBackground(pressable(accent, dp(14)));
@@ -189,7 +257,12 @@ final class Theme {
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(dp(48));
         b.setPadding(dp(14), 0, dp(14), 0);
-        b.setBackground(pressable((accent & 0x00FFFFFF) | 0x1F000000, dp(14)));
+        if (mono) {
+            b.setBackground(new RippleDrawable(ColorStateList.valueOf(dark ? 0x33FFFFFF : 0x1F000000),
+                    surface(card, dp(14)), round(0xFFFFFFFF, dp(14))));
+        } else {
+            b.setBackground(pressable((accent & 0x00FFFFFF) | 0x1F000000, dp(14)));
+        }
         click(b, l);
         return b;
     }
@@ -198,8 +271,13 @@ final class Theme {
     TextView key(String label, float sp) {
         TextView k = text(label, sp, text, false);
         k.setGravity(Gravity.CENTER);
-        k.setBackground(pressable(dark ? 0xFF3A3A3C : 0xFFFFFFFF, dp(9)));
-        k.setElevation(dark ? 0 : dp(1));
+        if (mono) {
+            k.setBackground(new RippleDrawable(ColorStateList.valueOf(dark ? 0x55FFFFFF : 0x40000000),
+                    surface(card, dp(9)), round(0xFFFFFFFF, dp(9))));
+        } else {
+            k.setBackground(pressable(dark ? 0xFF3A3A3C : 0xFFFFFFFF, dp(9)));
+            k.setElevation(dark ? 0 : dp(1));
+        }
         return k;
     }
 
@@ -272,8 +350,13 @@ final class Theme {
         Switch s = new Switch(ctx);
         s.setChecked(on);
         int[][] states = {{android.R.attr.state_checked}, {}};
-        s.setThumbTintList(new ColorStateList(states, new int[]{0xFFFFFFFF, 0xFFFFFFFF}));
-        s.setTrackTintList(new ColorStateList(states, new int[]{GREEN, dark ? 0xFF39393D : 0xFFE9E9EA}));
+        if (mono) {  // on = filled with the text colour, off = pale: clear without colour
+            s.setThumbTintList(new ColorStateList(states, new int[]{background, dark ? 0xFF9E9E9E : 0xFF6E6E6E}));
+            s.setTrackTintList(new ColorStateList(states, new int[]{text, fill}));
+        } else {
+            s.setThumbTintList(new ColorStateList(states, new int[]{0xFFFFFFFF, 0xFFFFFFFF}));
+            s.setTrackTintList(new ColorStateList(states, new int[]{GREEN, dark ? 0xFF39393D : 0xFFE9E9EA}));
+        }
         s.setOnCheckedChangeListener((v, checked) -> {
             Ui.haptic(v);
             change.accept(checked);
@@ -290,7 +373,7 @@ final class Theme {
         b.setMax(max);
         b.setProgress(value);
         b.setProgressTintList(ColorStateList.valueOf(accent));
-        b.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        b.setThumbTintList(ColorStateList.valueOf(mono ? text : 0xFFFFFFFF));
         b.setProgressBackgroundTintList(ColorStateList.valueOf(fill));
         b.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -321,6 +404,11 @@ final class Theme {
         Runnable paint = () -> {
             for (int i = 0; i < cells.length; i++) {
                 boolean on = options[i][0].equals(selected[0]);
+                if (mono) {  // the chosen one inverted: black with white text
+                    cells[i].setBackground(on ? round(text, dp(8)) : null);
+                    cells[i].setTextColor(on ? background : text);
+                    continue;
+                }
                 cells[i].setBackground(on ? round(dark ? 0xFF636366 : 0xFFFFFFFF, dp(8)) : null);
                 cells[i].setElevation(on && !dark ? dp(1) : 0);
             }

@@ -94,6 +94,7 @@ The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple
 | 📷 | **iPhone camera for the tablet** | Scanner and Handwriting on the iPhone › **📲 To the tablet**: the picture lands in the tablet's Downloads › Fedora Pad with a notification. |
 | 📖 | **Continue reading** | Close a book on the tablet and the iPhone's home shows *Continue reading* with the part you were on: **Read** (free books) or **Get** it from the tablet. |
 | 💻 | **The laptop tells you** | A notification on the tablet and iPhone when a download finishes, the battery is low or full, or a long terminal command ends (`./host/status-setup.sh` once). |
+| 🚶 | **Lock when you walk away** | The laptop locks about a minute after your iPhone leaves (a few steps, the room, or out of reach: you choose). It never unlocks by itself. Pair the iPhone with the laptop in Bluetooth settings once, then `./host/walkaway-setup.sh` (tests the iPhone's signal first). Off: `--off`. Fedora. |
 | 🔓 | **Unlock the laptop from the phone** | `./host/unlock-setup.sh` once (choose a PIN). Then Devices › your PC › **Unlock** (the tablet asks for its own fingerprint/PIN first; the iPhone asks for the PIN) or **Lock**. Fedora only; 5 wrong PINs block it for 5 minutes. |
 | 📍 | **Remote control each other** | Ring a lost device, send a message, open StandBy / Focus / فال حافظ / Books / Home on it, and play, pause, skip or change the volume of the tablet's music from the iPad. |
 
@@ -185,6 +186,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
 | `./host/chrome-safari.sh` | Makes Google Chrome look and feel like Safari: Safari Light / Dark themes (with the macOS wallpaper on new tabs), two-finger swipe for back / forward, and a short list of Safari-like settings. `--undo` puts Chrome back. |
 | `./host/handoff-setup.sh` | Chrome Handoff: adds the Fedora Pad Handoff extension to Chrome (shows what to click). |
+| `./host/walkaway-setup.sh` | Lock the laptop when your iPhone walks away (Bluetooth): pick the iPhone, test its signal, choose the distance. `--off` turns it off. |
 | `./host/tablet-clean.sh` | Removes the tablet maker's extra apps and makes Fedora Pad the home screen (see *Make the tablet just Fedora Pad*). `--undo` puts them back. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 

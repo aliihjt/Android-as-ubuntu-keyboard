@@ -82,6 +82,7 @@ import gamepad  # noqa: E402
 import hub as hub_mod  # noqa: E402
 import pc_notifs  # noqa: E402
 import pen as pen_mod  # noqa: E402
+import walkaway  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -1557,6 +1558,7 @@ def main():
     pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
     pc_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device
     pad_extras.TabServer(hub.set_tab).start()  # Chrome Handoff: the page open in Chrome -> every device
+    walkaway.Watcher(lambda: lock_or_unlock({"t": "lock"}, lambda r: None)).start()  # iPhone away -> lock
     unlocker = pad_extras.Unlocker(CONF_DIR)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()

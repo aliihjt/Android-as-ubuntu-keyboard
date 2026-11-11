@@ -552,6 +552,7 @@ public final class HostLink {
                     requestState();
                     send("{\"t\":\"wake?\"}");  // remember how to wake this PC later
                     Devices.hello(appContext);  // say who we are, share the library
+                    UniversalService.announce();  // Universal Control: the helper is on
                 } else if ("clip".equals(t)) {
                     ClipListener l = clipListener;
                     clipListener = null;

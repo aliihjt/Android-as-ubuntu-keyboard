@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="uc_description">Universal Control: when you push the laptop\'s mouse past its screen edge, Fedora Pad moves a pointer here and turns the laptop\'s mouse, touchpad and keyboard into taps, drags, scrolling and typing on this tablet. It only acts while the pointer is on the tablet, and only for your own laptop running Fedora Pad. Nothing is read from the screen.</string>
+    <string name="uc_summary">Use the laptop\'s mouse and keyboard on this tablet</string>
+</resources>

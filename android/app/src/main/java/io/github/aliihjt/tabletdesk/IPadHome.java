@@ -111,7 +111,7 @@ final class IPadHome {
     }
 
     private List<Item> laptopFolder() {
-        return tools("pen", "media", "controls", "shortcuts", "apps", "windows", "text", "files", "cliphistory",
+        return tools("universal", "pen", "media", "controls", "shortcuts", "apps", "windows", "text", "files", "cliphistory",
                 "presenter", "streamdeck", "webcam", "controller", "wake", "stats", "terminal", "ambient");
     }
 

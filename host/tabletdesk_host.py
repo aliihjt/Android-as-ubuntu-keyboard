@@ -83,6 +83,7 @@ import hub as hub_mod  # noqa: E402
 import pc_notifs  # noqa: E402
 import pen as pen_mod  # noqa: E402
 import walkaway  # noqa: E402
+import universal as universal_mod  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -529,6 +530,7 @@ gamepads = None     # game controllers from the tablet (host/gamepad.py), set in
 hub = None          # devices talking to each other through this PC (host/hub.py), set in main()
 unlocker = None     # unlock the laptop from a device with a PIN (host/unlock-setup.sh), set in main()
 pen = None          # Pen Tablet: a virtual drawing tablet (host/pen.py), set in main()
+universal = None    # Universal Control: the laptop's mouse and keyboard on the tablet (host/universal.py)
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -697,11 +699,11 @@ def follow_pointer(clients, fps=30):
 _screens = {"at": 0.0, "value": None}
 
 
-def screens():
-    """The laptop screen inside the desktop, from the GNOME extension (kept 3 s), or None:
+def screens(max_age=3.0):
+    """The laptop screen inside the desktop, from the GNOME extension (kept max_age s), or None:
     {"sw","sh"} desktop size, {"x","y","w","h"} the laptop's own screen, "monitors", "px","py" pointer."""
     now = time.time()
-    if now - _screens["at"] < 3:
+    if now - _screens["at"] < max_age:
         return _screens["value"]
     value = None
     if Gio is not None:
@@ -1216,6 +1218,8 @@ def save_mode(mode):
 def handle(inj, msg, reply=None):
     if hub and reply and hub.handle(msg, reply):  # device to device: lists, relay, clipboard, shared data
         return
+    if universal and reply and universal.handle(msg, reply):  # the laptop's mouse and keyboard on the tablet
+        return
     t = msg.get("t")
     if t == "pad" or (t in ("padadd", "padrm") and reply):  # game controller (host/gamepad.py)
         if gamepads:
@@ -1482,6 +1486,8 @@ def make_handler(inj, clients, lan=False):
                 inj.release_all()
                 if pen:
                     pen.release()
+                if universal:
+                    universal.gone(reply)
                 if gamepads:
                     gamepads.drop(reply)  # unplug this tablet's controllers
                 print("tablet disconnected", flush=True)
@@ -1549,9 +1555,11 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd, gamepads, hub, unlocker, pen
+    global laptop_kbd, gamepads, hub, unlocker, pen, universal
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     pen = pen_mod.Pen(dry_run=args.dry_run, screen=screens)
+    universal = universal_mod.Universal(screens, CONF_DIR, dry_run=args.dry_run)
+    universal.start()
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
     hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify)
     hub.watch_pc_clipboard()

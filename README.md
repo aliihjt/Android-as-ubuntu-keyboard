@@ -26,6 +26,7 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | 🖥 | **Show Fedora Screen** | Fedora on the tablet as a **second screen** (drag windows across) or the **same picture**. The laptop's mouse pointer shows on the tablet too. |
 | ⌨ | **Keyboard** | Full laptop keyboard: number row, Ctrl / Alt / ⌘, arrows, a **123 number pad**, a **فا** key for the Persian layout (Fedora switches with it and gets the Persian layout added by itself), and 🌐 for the tablet's own keyboard. |
 | 🖱 | **Trackpad** | Big trackpad with click buttons; show the keyboard under it for a laptop layout. Tap, drag, 2-finger scroll / right-click / pinch zoom, 3 and 4-finger swipes. |
+| ✏️ | **Pen Tablet** | The tablet (or iPad / iPhone) as a drawing tablet for the laptop, like Apple's Sidecar: Fedora sees a real pen, so it works in Krita, GIMP, Xournal++ and Inkscape. The pad has the laptop screen's shape. One finger draws; two-finger tap = right-click; Eraser and Undo buttons. A stylus or Apple Pencil gives pressure and hover. Fedora; after updating, log out and in once. |
 | 🎵 | **Media** | Play / pause, next, previous and volume for whatever plays on the PC. |
 | 🎛 | **Controls** | Brightness, volume, dark mode, Night Light, Do Not Disturb, Wi-Fi, Bluetooth, mic, keep awake, power mode, lock / log out / restart / shut down. |
 | ⚡ | **Shortcuts** | One-tap copy, paste, undo, windows, screenshots, recording, emoji, plus shortcuts for the app you're using (browser, terminal, VS Code). |

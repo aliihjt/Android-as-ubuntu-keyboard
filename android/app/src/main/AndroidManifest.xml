@@ -78,6 +78,7 @@
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity android:name=".TrackpadActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity android:name=".PenActivity" android:exported="false" />
         <activity android:name=".MediaActivity" android:exported="false" />
         <activity android:name=".StatsActivity" android:exported="false" />
         <activity android:name=".ControlsActivity" android:exported="false" />

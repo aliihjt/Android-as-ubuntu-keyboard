@@ -294,6 +294,7 @@ const PHONE_TILES = [
 ];
 const TILES = [
   ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["talk", "🎙", "Push to Talk", "red"],
+  ["pen", "✏️", "Pen Tablet", "orange"],
   ["media", "🎵", "Media", "pink"],
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "PC Apps", "teal"],
   ["text", "📝", "Type Text", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
@@ -636,6 +637,60 @@ function trackpad(height) {
 PAGES.trackpad = () => {
   page("Trackpad", el("button", {class: "back", style: "text-align:right", onclick: () => show("keyboard")}, "⌨️"));
   app.append(...trackpad());
+};
+
+// ---- Pen Tablet: this screen as a drawing tablet for the laptop (host/pen.py)
+PAGES.pen = () => {
+  let eraser = false, ratio = 16 / 9;
+  page("Pen Tablet");
+  const penB = el("button", {class: "btn2"}, "✏️ Pen"), rubB = el("button", {class: "btn2"}, "🧽 Eraser");
+  const paint = () => { penB.style.opacity = eraser ? .45 : 1; rubB.style.opacity = eraser ? 1 : .45; };
+  penB.onclick = () => { eraser = false; paint(); }; rubB.onclick = () => { eraser = true; paint(); }; paint();
+  const holder = el("div", {style: "flex:1;display:flex;align-items:center;justify-content:center;min-height:240px"});
+  const pad = el("canvas", {style: "background:var(--card);border-radius:12px;touch-action:none;max-width:100%"});
+  holder.append(pad);
+  app.append(el("div", {class: "btns"}, penB, rubB,
+      el("button", {class: "btn2", onclick: () => combo("ctrl+z")}, "↶ Undo"),
+      el("button", {class: "btn2", onclick: () => { ctx.clearRect(0, 0, pad.width, pad.height); }}, "Clear")),
+    el("p", {class: "sub", style: "margin:8px 4px"}, "Draw with a finger or Apple Pencil (with pressure). Two-finger tap: right-click. "
+      + "Works in Krita, GIMP, Xournal++ and Inkscape on the laptop."), holder);
+  app.style.display = "flex"; app.style.flexDirection = "column"; app.style.minHeight = "100dvh";
+  const ctx = pad.getContext("2d");
+  const fit = () => {
+    const w = holder.clientWidth, h = Math.max(240, holder.clientHeight);
+    let pw = w, ph = w / ratio; if (ph > h) { ph = h; pw = h * ratio; }
+    const dpr = window.devicePixelRatio || 1;
+    pad.style.width = pw + "px"; pad.style.height = ph + "px"; pad.width = pw * dpr; pad.height = ph * dpr;
+    ctx.scale(dpr, dpr); ctx.lineCap = ctx.lineJoin = "round"; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = getComputedStyle(document.body).color; ctx.globalAlpha = .55;
+  };
+  setTimeout(fit, 0); addEventListener("resize", fit);
+  on("penarea", m => { if (m.w > 0 && m.h > 0) { ratio = m.w / m.h; fit(); } }); send({t: "pen?"});
+  const pts = new Map(); let twoAt = 0, twoMoved = false, last = 0;
+  const pos = e => { const r = pad.getBoundingClientRect();
+    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+  const out = (s, e, p) => { const [x, y] = e ? pos(e) : [0, 0];
+    const m = {t: "pen", s, x: +x.toFixed(4), y: +y.toFixed(4), p: +(p || 0).toFixed(3)}; if (eraser) m.tool = "eraser"; send(m); };
+  const pressure = e => e.pointerType === "pen" ? Math.max(.05, e.pressure || .5) : .6;  // Apple Pencil: real pressure
+  pad.addEventListener("pointerdown", e => { pad.setPointerCapture(e.pointerId); pts.set(e.pointerId, e);
+    if (pts.size === 2) { out("up", e); twoAt = Date.now(); twoMoved = false; return; }
+    if (pts.size > 2) return;
+    twoAt = 0; const r = pad.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+    out("down", e, pressure(e)); });
+  pad.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) { if (e.pointerType === "pen") out("hover", e, 0); return; }  // Pencil above the glass
+    if (twoAt) { twoMoved = true; return; }
+    const now = performance.now(); if (now - last < 8) return; last = now;  // ~120 a second is plenty
+    const r = pad.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    ctx.lineTo(x, y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y);  // each piece drawn once (even shade)
+    out("move", e, pressure(e)); });
+  const up = e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+    if (twoAt > 0 && pts.size === 1) { if (Date.now() - twoAt < 300 && !twoMoved) out("right", e); twoAt = -1; return; }
+    if (pts.size === 0) { if (twoAt === 0) out("up", e); twoAt = 0; } };
+  pad.addEventListener("pointerup", up); pad.addEventListener("pointercancel", up);
+  pad.addEventListener("pointerleave", e => { if (e.pointerType === "pen" && !pts.size) out("out", e); });
+  cleanup.push(() => { on("penarea", null); removeEventListener("resize", fit); out("out");
+    app.style.display = app.style.flexDirection = app.style.minHeight = ""; });
 };
 
 // ---- media

@@ -19,6 +19,9 @@ const IFACE = `
     <method name="Pointer">
       <arg type="s" direction="out" name="json"/>
     </method>
+    <method name="Screens">
+      <arg type="s" direction="out" name="json"/>
+    </method>
     <method name="Windows">
       <arg type="s" direction="out" name="json"/>
     </method>
@@ -242,6 +245,20 @@ export default class TabletDeskExtension extends Extension {
         const pick = sources.find(s => (id === 'fa' ? persian(s) : !persian(s)));
         if (pick && manager.currentSource !== pick)
             pick.activate(false);
+    }
+
+    // The whole desktop, the laptop's own screen in it, every monitor and the
+    // pointer, in desktop pixels: the Pen Tablet's shape and Universal Control's edges.
+    Screens() {
+        const lm = Main.layoutManager;
+        const p = lm.primaryMonitor;
+        const [x, y] = global.get_pointer();
+        return JSON.stringify({
+            sw: global.stage.width, sh: global.stage.height,
+            x: p.x, y: p.y, w: p.width, h: p.height,
+            monitors: lm.monitors.map(m => ({x: m.x, y: m.y, w: m.width, h: m.height})),
+            primary: lm.primaryIndex, px: x, py: y,
+        });
     }
 
     // Where the pointer is on the tablet's screen (the non-primary monitor),

@@ -81,6 +81,7 @@ import pad_extras  # noqa: E402
 import gamepad  # noqa: E402
 import hub as hub_mod  # noqa: E402
 import pc_notifs  # noqa: E402
+import pen as pen_mod  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -526,6 +527,7 @@ mirror_proc = None   # the tablet's screen on the PC (scrcpy), set in main()
 gamepads = None     # game controllers from the tablet (host/gamepad.py), set in main()
 hub = None          # devices talking to each other through this PC (host/hub.py), set in main()
 unlocker = None     # unlock the laptop from a device with a PIN (host/unlock-setup.sh), set in main()
+pen = None          # Pen Tablet: a virtual drawing tablet (host/pen.py), set in main()
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -689,6 +691,28 @@ def follow_pointer(clients, fps=30):
                 msg.update(x=round(p["x"], 4), y=round(p["y"], 4))
             clients.broadcast(msg)
         time.sleep(1 / fps)
+
+
+_screens = {"at": 0.0, "value": None}
+
+
+def screens():
+    """The laptop screen inside the desktop, from the GNOME extension (kept 3 s), or None:
+    {"sw","sh"} desktop size, {"x","y","w","h"} the laptop's own screen, "monitors", "px","py" pointer."""
+    now = time.time()
+    if now - _screens["at"] < 3:
+        return _screens["value"]
+    value = None
+    if Gio is not None:
+        try:
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            res = bus.call_sync("org.gnome.Shell", "/io/github/aliihjt/TabletDesk", "io.github.aliihjt.TabletDesk",
+                                "Screens", None, GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE, 300, None)
+            value = json.loads(res.unpack()[0])
+        except (GLib.Error, ValueError):  # extension not updated yet (log out and in once)
+            value = None
+    _screens.update(at=now, value=value)
+    return value
 
 
 def run_command(name):
@@ -1207,6 +1231,11 @@ def handle(inj, msg, reply=None):
         inj.key(str(msg.get("k", "")), msg.get("s", "click"))
     elif t == "text":
         inj.text(str(msg.get("s", "")))
+    elif t == "pen" and pen:
+        pen.handle(msg)
+    elif t == "pen?" and reply:
+        sc = screens() or {}
+        reply({"t": "penarea", "w": sc.get("w") or 1920, "h": sc.get("h") or 1080})
     elif t == "cmd":
         run_command(str(msg.get("name", "")))
     elif t == "mode":
@@ -1354,6 +1383,8 @@ def start_web_app(inj, clients):
 
     def closed(ws):
         clients.remove(ws)
+        if pen:
+            pen.release()
         if hub:
             hub.leave(ws.send)
         if webcam.source == "web":  # the phone that was the webcam went away
@@ -1448,6 +1479,8 @@ def make_handler(inj, clients, lan=False):
                     hub.leave(reply)
                 clients.remove(self.wfile)
                 inj.release_all()
+                if pen:
+                    pen.release()
                 if gamepads:
                     gamepads.drop(reply)  # unplug this tablet's controllers
                 print("tablet disconnected", flush=True)
@@ -1515,8 +1548,9 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd, gamepads, hub, unlocker
+    global laptop_kbd, gamepads, hub, unlocker, pen
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
+    pen = pen_mod.Pen(dry_run=args.dry_run, screen=screens)
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
     hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify)
     hub.watch_pc_clipboard()

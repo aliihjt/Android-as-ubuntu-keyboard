@@ -44,6 +44,7 @@ final class Tools {
         add("trackpad", "🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class, "mouse touchpad");
         add("mirror", "🖥", Theme.INDIGO, "Show on PC", MirrorActivity.class, "mirror screen scrcpy AirPlay");
         add("ptt", "🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class, "voice typing speak dictate");
+        add("pen", "✏️", Theme.ORANGE, "Pen Tablet", PenActivity.class, "draw drawing Krita GIMP Xournal stylus Sidecar");
         add("media", "🎵", Theme.PINK, "Media", MediaActivity.class, "music play pause volume");
         add("controls", "🎛", Theme.ORANGE, "Controls", ControlsActivity.class, "brightness volume dark mode Wi-Fi Bluetooth shut down");
         add("shortcuts", "⚡", Theme.INDIGO, "Shortcuts", ShortcutsActivity.class, "copy paste undo screenshot");

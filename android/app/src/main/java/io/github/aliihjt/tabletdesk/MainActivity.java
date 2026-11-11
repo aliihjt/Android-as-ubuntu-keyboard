@@ -296,7 +296,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
         tablet[6] = new Object[]{"📱", Theme.BLUE, "iPad Home", (Runnable) () -> setStyle("ipad")};
         tablet[7] = new Object[]{"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")};
         System.arraycopy(tools, 6, tablet, 8, tools.length - 6);
-        Object[][] fedora = Tools.rows(this, "keyboard", "trackpad", "mirror", "ptt", "media", "controls",
+        Object[][] fedora = Tools.rows(this, "keyboard", "trackpad", "mirror", "ptt", "pen", "media", "controls",
                 "shortcuts", "apps", "windows", "text", "files", "cliphistory", "presenter", "streamdeck",
                 "controller", "webcam", "wake", "stats", "terminal", "ambient");
         LinearLayout all = new LinearLayout(this);

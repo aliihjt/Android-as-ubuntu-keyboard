@@ -32,4 +32,11 @@ One Apple-style ecosystem made from the owner's own devices, with the laptop in 
 ## Where things are
 - `android/` — the tablet app. `host/` — Fedora host (`tabletdesk_host.py`), web app (`webapp.py`, `web/index.html`),
   hub between devices (`hub.py`), shared helpers (`pad_extras.py`). `windows/` — Windows host and setup.
+- `android/.../Tools.java` is the one list of tools (symbol, colour, name): every home screen and Search
+  read it. The web app's tiles (`host/web/index.html`, `PHONE_TILES` / `TILES`) use the same names and symbols.
+- Code both hosts need goes in `host/pad_extras.py` or `host/hub.py`, not copied into the Fedora and Windows hosts.
+- `tests/` (run `python3 -m unittest discover -s tests`); CI also runs ruff, Android Lint and syntax checks.
+- Only pushes to `main` publish the APK that tablets install; other branches only build and test.
+- `host/tablet-clean.txt` is the tablet's bloatware list (the owner's tablet is a Samsung), used by
+  `host/tablet-clean.sh` and `windows/TabletClean.bat`.
 - README.md explains every feature and the setup steps.

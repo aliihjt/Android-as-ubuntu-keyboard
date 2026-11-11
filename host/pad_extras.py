@@ -438,11 +438,16 @@ class PcEvents:
 
 class Unlocker:
     """Checks the unlock PIN set with host/unlock-setup.sh (only a salted hash is kept),
-    and stops guessing: 5 wrong tries lock it for 5 minutes."""
+    and stops guessing: 5 wrong tries lock it for 5 minutes, and each new block after
+    that lasts twice as long (up to a day), until the right PIN is given."""
+
+    TRIES = 5
+    FIRST_BLOCK = 300
+    LONGEST_BLOCK = 24 * 3600
 
     def __init__(self, conf_dir):
         self.file = os.path.join(conf_dir, "unlock.json")
-        self.fails, self.until = 0, 0.0
+        self.fails, self.until, self.blocks = 0, 0.0, 0
         self.lock = threading.Lock()
 
     def enabled(self):
@@ -461,11 +466,12 @@ class Unlocker:
             except (OSError, ValueError, KeyError, TypeError):
                 return "Unlock isn't set up: run ./host/unlock-setup.sh on the laptop."
             if hmac.compare_digest(want, str(d.get("hash", ""))):
-                self.fails = 0
+                self.fails, self.blocks = 0, 0
                 return True
             self.fails += 1
-            if self.fails >= 5:
-                self.fails, self.until = 0, time.time() + 300
+            if self.fails >= self.TRIES:
+                wait = min(self.FIRST_BLOCK * 2 ** self.blocks, self.LONGEST_BLOCK)
+                self.fails, self.until, self.blocks = 0, time.time() + wait, self.blocks + 1
             return "Wrong PIN."
 
 

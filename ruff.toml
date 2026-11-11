@@ -1,0 +1,7 @@
+# Lint rules CI checks (only ones that find real bugs, not style)
+line-length = 130
+target-version = "py39"
+
+[lint]
+select = ["E9", "F", "B", "PLE"]
+ignore = ["B905"]  # zip(strict=) needs Python 3.10; hosts still run on 3.9

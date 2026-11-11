@@ -18,7 +18,7 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    # one publishing build at a time: two branches publishing the same release at
+    # one publishing build at a time: two pushes publishing the same release at
     # once collide. Pull-request builds publish nothing, so they get their own
     # group: otherwise one waiting PR build replaces (cancels) a waiting publish.
     concurrency:
@@ -34,7 +34,20 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
+      # Optional private signing key (README › Private signing key). Without the
+      # secret the public debug.keystore is used, as before.
+      - name: Private signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.FEDORAPAD_KEYSTORE }}
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fedorapad.jks"
+          echo "FEDORAPAD_KEYSTORE_FILE=$RUNNER_TEMP/fedorapad.jks" >> "$GITHUB_ENV"
       - name: Build debug APK
+        env:
+          FEDORAPAD_KEYSTORE_PASSWORD: ${{ secrets.FEDORAPAD_KEYSTORE_PASSWORD }}
+          FEDORAPAD_KEY_ALIAS: ${{ secrets.FEDORAPAD_KEY_ALIAS }}
+          FEDORAPAD_KEY_PASSWORD: ${{ secrets.FEDORAPAD_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
@@ -43,7 +56,7 @@ jobs:
       # A copy of Google's adb for Windows next to the app, for PCs that can't
       # reach Google's servers (windows/setup.ps1 downloads it from here)
       - name: Mirror Android platform-tools and scrcpy for Windows
-        if: github.event_name == 'push' && github.ref_type == 'branch'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           curl -fsSL -o ../platform-tools-windows.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
           unzip -tq ../platform-tools-windows.zip
@@ -57,11 +70,12 @@ jobs:
         with:
           name: TabletDesk-apk
           path: TabletDesk.apk
-      # Fixed download link for the newest app, used by host/connect.sh to
-      # update the tablet automatically:
+      # Fixed download link for the newest app, used by host/connect.sh and the
+      # app's own updater to update the tablet automatically:
       # releases/download/latest-apk/TabletDesk.apk (+ version.txt)
+      # Only main publishes: work on other branches never reaches the tablet.
       - name: Publish newest APK
-        if: github.event_name == 'push' && github.ref_type == 'branch'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk
@@ -100,7 +114,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check host scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check scripts
         run: |
-          bash -n host/connect.sh host/setup.sh
-          python3 -m py_compile host/tabletdesk_host.py
+          for f in host/*.sh; do bash -n "$f"; done
+          python3 -m py_compile host/*.py windows/*.py
+          pip install --quiet ruff
+          ruff check .
+          node --check host/gnome-extension/extension.js
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v

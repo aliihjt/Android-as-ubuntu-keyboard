@@ -60,6 +60,7 @@ class WebApp:
         self.openssl = openssl
         self.lock = threading.Lock()
         self.pair = {"code": None, "until": 0.0, "tries": 0, "last_request": 0.0}
+        self.wrong = []  # times of wrong pairing codes: a few per code, and only so many an hour
         os.makedirs(conf_dir, exist_ok=True)
         self.ca_crt = os.path.join(conf_dir, "web-ca.crt")
         self.ca_key = os.path.join(conf_dir, "web-ca.key")
@@ -127,6 +128,8 @@ class WebApp:
             now = time.time()
             if now - self.pair["last_request"] < 10:  # no notification spam from the network
                 return False
+            if self._too_many_wrong(now):  # someone is guessing: no new codes for a while
+                return False
             self.pair = {"code": "%06d" % secrets.randbelow(1_000_000), "until": now + 120,
                          "tries": 0, "last_request": now}
             code = self.pair["code"]
@@ -134,13 +137,21 @@ class WebApp:
         print("web app pairing code:", code, flush=True)
         return True
 
+    WRONG_PER_HOUR = 20
+
+    def _too_many_wrong(self, now):
+        self.wrong = [t for t in self.wrong if now - t < 3600]
+        return len(self.wrong) >= self.WRONG_PER_HOUR
+
     def confirm_code(self, code, name):
         with self.lock:
             p = self.pair
-            if not p["code"] or time.time() > p["until"] or p["tries"] >= 5:
+            now = time.time()
+            if not p["code"] or now > p["until"] or p["tries"] >= 5 or self._too_many_wrong(now):
                 return None
             p["tries"] += 1
             if not hmac.compare_digest(str(code).strip(), p["code"]):
+                self.wrong.append(now)
                 return None
             p["code"] = None
             token = secrets.token_urlsafe(32)

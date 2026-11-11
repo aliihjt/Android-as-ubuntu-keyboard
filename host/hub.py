@@ -34,6 +34,14 @@ MAX_SHARED = 2 * 1024 * 1024
 KINDS = {"android", "ipad", "iphone", "phone", "browser"}
 
 
+def _millis(value):
+    """A device's time stamp (ms), or now when it is missing or not a number."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(time.time() * 1000)
+
+
 class Hub:
     def __init__(self, conf_dir, pc_name, set_clip=None, latest_clip=None, notify=None):
         self.lock = threading.RLock()
@@ -140,7 +148,7 @@ class Hub:
             self._notif(msg, reply)
             return True
         if t == "notifgone":
-            key = str(msg.get("key", ""))
+            key = str(msg.get("key", ""))[:200]  # as stored by _notif
             with self.lock:
                 for n in list(self.notifs):
                     if n["key"] == key:
@@ -192,7 +200,7 @@ class Hub:
                 return
             n = {"key": str(msg.get("key", ""))[:200], "app": str(msg.get("app", ""))[:60],
                  "title": str(msg.get("title", ""))[:200], "text": str(msg.get("text", ""))[:1000],
-                 "reply": bool(msg.get("reply")), "time": int(msg.get("time") or time.time() * 1000),
+                 "reply": bool(msg.get("reply")), "time": _millis(msg.get("time")),
                  "from": sender["name"], "fromid": sender["id"]}
             for old in list(self.notifs):  # an update of the same notification replaces it
                 if old["key"] == n["key"]:
@@ -260,7 +268,9 @@ class Hub:
             return
         with self.lock:
             sender = self.devices.get(reply)
-            self.shared[key] = {"value": value, "from": sender["name"] if sender else "", "time": int(time.time() * 1000)}
+            if not sender:  # only devices that joined the hub
+                return
+            self.shared[key] = {"value": value, "from": sender["name"], "time": int(time.time() * 1000)}
             entry = self.shared[key]
             try:
                 tmp = self.file + ".tmp"

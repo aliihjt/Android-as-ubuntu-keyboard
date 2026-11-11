@@ -238,8 +238,17 @@ public class DevicesActivity extends Page {
     }
 
     private void sendPin() {
+        // an older version kept the PIN as plain text: move it into the encrypted store
         android.content.SharedPreferences p = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
-        String saved = p.getString("unlock_pin", "");
+        String old = p.getString("unlock_pin", "");
+        if (!old.isEmpty()) {
+            SecretStore.put(this, Devices.UNLOCK_PIN, old);
+            p.edit().remove("unlock_pin").apply();
+        }
+        android.app.KeyguardManager km = getSystemService(android.app.KeyguardManager.class);
+        boolean locked = km != null && km.isDeviceSecure();
+        // a saved PIN is only used behind the tablet's own screen lock
+        String saved = locked ? SecretStore.get(this, Devices.UNLOCK_PIN) : "";
         if (!saved.isEmpty()) {
             link.send(obj("t", "unlock", "pin", saved));
             return;
@@ -248,7 +257,9 @@ public class DevicesActivity extends Page {
         field.setHint("Unlock PIN (from ./host/unlock-setup.sh)");
         field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         android.widget.CheckBox keep = new android.widget.CheckBox(this);
-        keep.setText("Remember it (the tablet's screen lock still asks each time)");
+        keep.setText(locked ? "Remember it (the tablet's screen lock still asks each time)"
+                : "Set a screen lock on the tablet to remember the PIN");
+        keep.setEnabled(locked);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(th.dp(20), th.dp(8), th.dp(20), 0);
@@ -258,10 +269,9 @@ public class DevicesActivity extends Page {
                 .setPositiveButton("Unlock", (d, w) -> {
                     String pin = field.getText().toString().trim();
                     if (pin.isEmpty()) return;
-                    if (keep.isChecked()) p.edit().putString("unlock_pin", pin).apply();
+                    if (keep.isChecked()) SecretStore.put(this, Devices.UNLOCK_PIN, pin);
                     link.send(obj("t", "unlock", "pin", pin));
                 })
-                .setNeutralButton("Forget saved PIN", (d, w) -> p.edit().remove("unlock_pin").apply())
                 .setNegativeButton("Cancel", null).show();
     }
 

@@ -37,6 +37,9 @@ import java.util.UUID;
  * with them.
  */
 final class Devices {
+    /** SecretStore name of the laptop's unlock PIN. */
+    static final String UNLOCK_PIN = "unlock_pin";
+
     static final class Device {
         final String id, name, kind;
 
@@ -156,6 +159,9 @@ final class Devices {
             remember(m.optString("icon"), m.optString("title"), m.optString("text"));
             Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
         } else if (t.equals("unlockres")) {
+            // a saved PIN that the laptop refuses is forgotten, so the next try asks again
+            if (!m.optBoolean("ok") && "unlock".equals(m.optString("what"))
+                    && m.optString("error").startsWith("Wrong PIN")) SecretStore.remove(c, UNLOCK_PIN);
             String text = m.optBoolean("ok") ? ("lock".equals(m.optString("what")) ? "🔒 Laptop locked" : "🔓 Laptop unlocked")
                     : "⚠️ " + m.optString("error", "Didn't work");
             main.post(() -> Toast.makeText(c, text, Toast.LENGTH_LONG).show());

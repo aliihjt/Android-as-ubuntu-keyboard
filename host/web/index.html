@@ -59,7 +59,7 @@ body.ios #app{padding-bottom:calc(env(safe-area-inset-bottom) + 120px)}
 .ios .tile b{font-size:11.5px;font-weight:500;color:#fff;text-shadow:0 1px 3px #0008;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* page dots and the Search pill sit just above the Dock, as on iOS (they used to scroll under it) */
 .homefoot{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 102px);z-index:4;pointer-events:none}
-.homefoot>*{pointer-events:auto}.homespace{height:170px}
+.homefoot>*{pointer-events:auto}.spill.handoff{max-width:86%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px}.homespace{height:220px}
 .pdots{display:flex;justify-content:center;gap:8px;margin:0 0 4px}.pdots i{width:7px;height:7px;border-radius:4px;background:#fff8}.pdots i.on{background:#fff}
 .spill{display:block;margin:10px auto 0;padding:7px 16px;border-radius:16px;color:#fff;font-size:14px;font-weight:600;background:rgba(255,255,255,.25);
  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
@@ -190,7 +190,7 @@ function connect() {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.t === "pong") { link.rtt = Date.now() - (link.pingAt || Date.now()); return; }
     if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus();
-      send({t: "iam", name: myName(), kind: myKind()}); send({t: "shared?"}); }
+      send({t: "iam", name: myName(), kind: myKind()}); send({t: "shared?"}); send({t: "pctab?"}); }
     if (hubMessage(m)) return;
     if (m.t === "app") { link.app = m.name || ""; refreshStatus(); }
     if (m.t === "pushfile") return receiveFile(m);   // AirDrop from the PC
@@ -360,8 +360,18 @@ PAGES.home = () => {
   cleanup.push(() => ["shared", "stats", "media"].forEach(t => on(t, null)));
 
   const search = el("button", {class: "spill", onclick: searchSheet}, "🔍 Search");
+  // Handoff, as on an iPhone: the page open in Chrome on the laptop, one tap to continue here
+  const handoff = el("button", {class: "spill handoff", style: "display:none"});
+  const paintHandoff = () => {
+    const t = link.tab, fresh = t && Date.now() - t.at < 30 * 60000;
+    handoff.style.display = fresh ? "" : "none";
+    if (fresh) handoff.textContent = "💻 Continue: " + (t.title || t.url).slice(0, 40);
+  };
+  handoff.onclick = () => { if (link.tab) window.open(link.tab.url, "_blank"); };
+  link.handlers.pctab = paintHandoff; paintHandoff(); send({t: "pctab?"});
+  cleanup.push(() => { link.handlers.pctab = null; });
   app.append(top, cont, el("div", {class: "widgets"}, wLaptop, wMusic), pages, el("div", {class: "homespace"}),
-    el("div", {class: "homefoot"}, pdots, search));
+    el("div", {class: "homefoot"}, pdots, handoff, search));
   const dock = el("div", {class: "dock frost"}, DOCK.map(id => byId[id]).filter(Boolean).map(([id, sym, label, color, arg]) =>
     el("button", {"aria-label": label, onclick: () => openTile(id, arg)}, chip(sym, color))));
   document.body.append(dock);
@@ -1529,6 +1539,11 @@ function hubMessage(m) {  // true when handled here, whatever page is open
   if (m.t === "notifs") { link.notifs = m.list || []; const h = link.handlers.notifs; if (h) h(); return true; }
   if (m.t === "notifgone") { link.notifs = (link.notifs || []).filter(n => n.key !== m.key); const h = link.handlers.notifs; if (h) h(); return true; }
   if (m.t === "pcevent") { banner(m.icon || "💻", m.title + (m.pc ? " · " + m.pc : ""), m.text); return true; }
+  if (m.t === "pctab") {  // Handoff: the page open in Chrome on the laptop
+    link.tab = Object.assign({}, m, {at: Date.now()});
+    const h = link.handlers.pctab; if (h) h();
+    return true;
+  }
   if (m.t === "pcnotif") {  // a notification shown on the laptop
     if (store.get("pcnotifs", true)) banner("💻", (m.app || m.pc || "Laptop") + (m.title ? " · " + m.title : ""), m.text);
     return true;
@@ -1677,6 +1692,9 @@ function pcSheet() {
       el("button", {class: "btn", onclick: () => { if (!pin.value) return toast("Type the PIN"); send({t: "unlock", pin: pin.value}); pin.value = ""; close(); }}, "🔓 Unlock"),
       el("button", {class: "btn2", onclick: () => { send({t: "lock"}); close(); }}, "🔒 Lock")),
     el("div", {class: "group", style: "margin-top:12px"},
+      actionRow("🌐", "blue", "Open a link on the laptop", () => { const u = prompt("Link to open in Chrome on " + (link.host || "the PC"));
+        if (!u) return; if (!/^https?:\/\//.test(u.trim())) return toast("Use a link that starts with https://");
+        send({t: "url", u: u.trim()}); toast("Opening on " + (link.host || "the PC")); close(); }),
       actionRow("🔔", "red", "The tablet's notifications", () => { close(); show("notifs"); }),
       actionRow("💤", "indigo", "Sleep timers", () => { close(); show("sleep"); }),
       actionRow("📊", "green", "Battery, CPU, memory", () => { close(); show("stats"); })),

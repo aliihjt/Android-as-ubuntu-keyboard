@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Fedora Pad Handoff",
+  "version": "1.0",
+  "description": "Continue the page open in Chrome on the tablet or iPhone (Fedora Pad). Talks only to Fedora Pad on this computer.",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://127.0.0.1:7783/*"],
+  "background": {"service_worker": "background.js"},
+  "icons": {"128": "icon.png"}
+}

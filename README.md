@@ -88,6 +88,7 @@ The tablet, the iPad and iPhone (web app) and the PC work as one set, like Apple
 | 📖 | **Reading everywhere** | The tablet's library, progress, highlights and Words, kept on the PC: the iPhone / iPad **Reading** page shows them; *Read here* or *Get it from the tablet*. |
 | 🔔 | **Notifications everywhere** | Devices › *Show notifications on other devices* (Android asks to allow it once): the tablet's messages and alerts appear on the iPhone (banner + Notifications page) and the laptop. **Reply** to Telegram, WhatsApp and other messages from the iPhone. |
 | 💻 | **The laptop's notifications** | Chrome, Telegram, mail and other alerts on Fedora also appear on the tablet (as a notification) and on the iPhone (as a banner while the web app is open). Devices › *Show the laptop's notifications here* turns it off on that device. |
+| 🌐 | **Chrome Handoff** | The page open in Chrome on the laptop shows as 🌐 at the end of the tablet's Dock and as *💻 Continue: …* on the iPhone's home: one tap opens it there. The other way: Share › Fedora Pad › *Open on the laptop* on the tablet, or Devices › your PC › *Open a link on the laptop* on the iPhone. Once: `./host/handoff-setup.sh` (adds the small *Fedora Pad Handoff* extension to Chrome; it only talks to Fedora Pad on the same computer, never in private windows). |
 | 📝 | **Notes everywhere** | One set of notes: a change on the tablet, the iPhone or the PC shows on the others right away. |
 | 📷 | **iPhone camera for the tablet** | Scanner and Handwriting on the iPhone › **📲 To the tablet**: the picture lands in the tablet's Downloads › Fedora Pad with a notification. |
 | 📖 | **Continue reading** | Close a book on the tablet and the iPhone's home shows *Continue reading* with the part you were on: **Read** (free books) or **Get** it from the tablet. |
@@ -182,6 +183,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
 | `./host/chrome-safari.sh` | Makes Google Chrome look and feel like Safari: Safari Light / Dark themes (with the macOS wallpaper on new tabs), two-finger swipe for back / forward, and a short list of Safari-like settings. `--undo` puts Chrome back. |
+| `./host/handoff-setup.sh` | Chrome Handoff: adds the Fedora Pad Handoff extension to Chrome (shows what to click). |
 | `./host/tablet-clean.sh` | Removes the tablet maker's extra apps and makes Fedora Pad the home screen (see *Make the tablet just Fedora Pad*). `--undo` puts them back. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 

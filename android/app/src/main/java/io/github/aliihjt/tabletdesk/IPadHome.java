@@ -72,10 +72,13 @@ final class IPadHome {
     void resume() {
         build();
         widgets.resume();
+        Devices.tabListener = this::paintHandoff;
+        Devices.askHandoff();
     }
 
     void pause() {
         if (widgets != null) widgets.pause();
+        Devices.tabListener = null;
     }
 
     /** Back closes an open folder or panel first. */
@@ -326,7 +329,30 @@ final class IPadHome {
         TextView search = th.iconChip("🔍", Theme.GRAY, 56);
         th.click(search, v -> a.startActivity(new Intent(a, SpotlightActivity.class)));
         d.addView(search);
+        // Handoff, as on an iPad: the page open in Chrome on the laptop, at the end of the Dock
+        handoff = th.iconChip("🌐", Theme.BLUE, 56);
+        LinearLayout.LayoutParams hp = (LinearLayout.LayoutParams) handoff.getLayoutParams();
+        hp.setMargins(th.dp(12), 0, 0, 0);
+        th.click(handoff, v -> bounce(handoff, () -> Devices.openHandoff(a)));
+        handoff.setOnLongClickListener(v -> {
+            org.json.JSONObject t = Devices.handoff();
+            if (t != null) android.widget.Toast.makeText(a, "💻 " + t.optString("title", t.optString("url")),
+                    android.widget.Toast.LENGTH_LONG).show();
+            return true;
+        });
+        d.addView(handoff);
+        paintHandoff();
         return d;
+    }
+
+    private TextView handoff;
+
+    /** Shows the Handoff icon only while the laptop has a page open (from the last 30 minutes). */
+    private void paintHandoff() {
+        if (handoff == null) return;
+        org.json.JSONObject t = Devices.handoff();
+        handoff.setVisibility(t == null ? View.GONE : View.VISIBLE);
+        if (t != null) handoff.setContentDescription("Continue from the laptop: " + t.optString("title"));
     }
 
     private void paintDots(int page) {

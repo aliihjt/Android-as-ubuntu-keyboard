@@ -16,6 +16,7 @@ its reply function; the hub then
   - keeps notes the same everywhere   a device's {"t":"setnotes"} goes to the others too
   - tells devices about the PC        event(): download finished, battery low, long task done
   - shows the PC's notifications       pc_notification(): {"t":"pcnotif","app","title","text"}
+  - Handoff from Chrome                set_tab(): {"t":"pctab","url","title","time"}; {"t":"pctab?"}
 
 A device says who it is with {"t":"iam","name":"Ali's iPad","kind":"ipad"}.
 Only devices already allowed to control the PC (cable, paired Wi-Fi, paired
@@ -55,6 +56,7 @@ class Hub:
         self.file = os.path.join(conf_dir, "shared.json")
         self.settings_file = os.path.join(conf_dir, "hub.json")
         self.clip = ""                      # the last text that went round
+        self.tab = None                     # the page open in Chrome on the PC (Handoff)
         try:
             with open(self.file, encoding="utf-8") as f:
                 self.shared = json.load(f)
@@ -164,6 +166,12 @@ class Hub:
         if t == "setnotes" and isinstance(msg.get("list"), list):
             self._others(reply, {"t": "notes", "list": msg["list"]})
             return False  # the host saves them
+        if t == "pctab?":
+            with self.lock:
+                tab = dict(self.tab) if self.tab else None
+            if tab:
+                self._send(reply, tab)
+            return True
         if t == "shared?":
             with self.lock:
                 data = dict(self.shared)
@@ -213,6 +221,14 @@ class Hub:
                 self.notify(n["app"] + " · " + sender["name"], (n["title"] + "\n" + n["text"]).strip())
             except Exception:  # noqa: BLE001
                 pass
+
+    def set_tab(self, url, title):
+        """The page open in Chrome on the PC: devices offer to continue it."""
+        with self.lock:
+            self.tab = {"t": "pctab", "url": url, "title": title, "time": int(time.time() * 1000), "pc": self.pc_name}
+            tab = dict(self.tab)
+        for r, _ in self._snapshot():
+            self._send(r, tab)
 
     def pc_notification(self, app, title, text):
         """A notification shown on the PC: every device shows it too (each can turn it off)."""

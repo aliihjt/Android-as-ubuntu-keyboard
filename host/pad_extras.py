@@ -9,6 +9,7 @@
   Notes      the sticky notes, saved as JSON plus a readable Markdown copy
   Inbox      files sent from a device, saved to Downloads › Fedora Pad
   Terminal   Terminal Pad: the saved commands, one running at a time
+  TabServer  Chrome Handoff: the Fedora Pad Handoff extension says which page is open
 """
 import base64
 import glob
@@ -687,3 +688,62 @@ class Terminal:
                 self.kill(proc)
             except OSError:
                 pass
+
+
+# ---------------------------------------------------------------- Chrome Handoff
+
+HANDOFF_PORT = 7783
+
+
+def handoff_tab(data):
+    """{"url","title"} from the Chrome extension -> (url, title), or None when it isn't a web page."""
+    if not isinstance(data, dict):
+        return None
+    url, title = str(data.get("url") or "").strip(), str(data.get("title") or "").strip()
+    if not url.startswith(("https://", "http://")) or len(url) > 4000 or any(c.isspace() for c in url):
+        return None
+    return url, title[:200]
+
+
+class TabServer:
+    """Listens on 127.0.0.1 only, for the Chrome extension (host/chrome-handoff).
+    Only a Chrome extension may report: a web page can't send an extension's Origin,
+    so sites can't push a fake "continue this page" to your devices."""
+
+    def __init__(self, on_tab, port=HANDOFF_PORT):
+        self.on_tab, self.port = on_tab, port
+
+    def start(self):
+        import http.server
+        outer = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                origin = self.headers.get("Origin", "")
+                if self.path != "/tab" or not origin.startswith("chrome-extension://"):
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                try:
+                    size = min(int(self.headers.get("Content-Length") or 0), 16384)
+                    tab = handoff_tab(json.loads(self.rfile.read(size) or b"{}"))
+                except (ValueError, OSError):
+                    tab = None
+                if tab:
+                    try:
+                        outer.on_tab(*tab)
+                    except Exception as err:  # noqa: BLE001 - a device that went away
+                        print("handoff:", err, file=sys.stderr)
+                self.send_response(204)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        try:
+            srv = http.server.ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
+        except OSError as err:
+            print("Chrome Handoff off:", err, file=sys.stderr)
+            return None
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv

@@ -338,14 +338,24 @@ public class DevicesActivity extends Page {
         }
         String text = i.getStringExtra(Intent.EXTRA_TEXT);
         List<Devices.Device> others = Devices.others();
-        if (!link.isConnected() || others.isEmpty()) {
+        // Handoff the other way: a link opens in Chrome on the laptop
+        java.util.regex.Matcher web = java.util.regex.Pattern.compile("https?://\\S+").matcher(text == null ? "" : text);
+        String url = uris.isEmpty() && web.find() ? web.group() : null;
+        int first = url != null ? 1 : 0;
+        if (!link.isConnected() || (others.isEmpty() && url == null)) {
             toast(link.isConnected() ? "No other device is connected" : "Not connected to the PC");
             return;
         }
-        String[] names = new String[others.size()];
-        for (int k = 0; k < names.length; k++) names[k] = others.get(k).icon() + "  " + others.get(k).name;
+        String[] names = new String[others.size() + first];
+        if (url != null) names[0] = "💻  Open on " + link.host();
+        for (int k = 0; k < others.size(); k++) names[k + first] = others.get(k).icon() + "  " + others.get(k).name;
         new AlertDialog.Builder(this).setTitle("Send to…").setItems(names, (dlg, w) -> {
-            Devices.Device d = others.get(w);
+            if (url != null && w == 0) {
+                link.send(obj("t", "url", "u", url));
+                toast("Opening on " + link.host());
+                return;
+            }
+            Devices.Device d = others.get(w - first);
             if (!uris.isEmpty()) send(d, uris);
             else if (text != null && !text.isEmpty()) {
                 Devices.sendText(d.id, text);

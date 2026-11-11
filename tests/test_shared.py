@@ -108,3 +108,35 @@ class TerminalTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HandoffTest(unittest.TestCase):
+    def test_only_web_pages(self):
+        self.assertEqual(pad_extras.handoff_tab({"url": "https://ganjoor.net/hafez", "title": "حافظ"}),
+                         ("https://ganjoor.net/hafez", "حافظ"))
+        for bad in ({"url": "chrome://settings"}, {"url": "file:///etc/passwd"}, {"url": "javascript:alert(1)"},
+                    {"url": "https://a b"}, "not a dict", {}):
+            self.assertIsNone(pad_extras.handoff_tab(bad))
+
+    def test_server_accepts_only_the_extension(self):
+        import urllib.error
+        import urllib.request
+        got = []
+        srv = pad_extras.TabServer(lambda url, title: got.append((url, title)), port=0).start()
+        port = srv.server_address[1]
+        try:
+            def post(origin):
+                req = urllib.request.Request(f"http://127.0.0.1:{port}/tab", method="POST",
+                                             data=json.dumps({"url": "https://example.com/", "title": "Example"}).encode(),
+                                             headers={"Content-Type": "application/json", "Origin": origin})
+                try:
+                    return urllib.request.urlopen(req, timeout=5).status
+                except urllib.error.HTTPError as e:
+                    return e.code
+            self.assertEqual(post("https://evil.example"), 403)  # a web page can't fake a tab
+            self.assertEqual(got, [])
+            self.assertEqual(post("chrome-extension://abcdef"), 204)
+            self.assertEqual(got, [("https://example.com/", "Example")])
+        finally:
+            srv.shutdown()
+            srv.server_close()

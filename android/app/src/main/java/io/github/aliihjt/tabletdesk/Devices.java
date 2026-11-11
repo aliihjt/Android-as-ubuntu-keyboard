@@ -42,6 +42,36 @@ final class Devices {
     /** Show the laptop's notifications on this tablet (on unless switched off in Devices). */
     static final String PC_NOTIFS = "pc_notifs";
 
+    // ---- Handoff: the page open in Chrome on the laptop (host/chrome-handoff)
+    private static volatile JSONObject pcTab;
+    private static volatile long pcTabAt;
+    /** Runs on the main thread when the laptop's page changes (the iPad home's Dock). */
+    static Runnable tabListener;
+
+    /** {url, title} of the laptop's page from the last 30 minutes, or null. */
+    static JSONObject handoff() {
+        JSONObject t = pcTab;
+        return t == null || System.currentTimeMillis() - pcTabAt > 30 * 60_000L ? null : t;
+    }
+
+    static void askHandoff() {
+        try {
+            HostLink.get().send(new JSONObject().put("t", "pctab?"));
+        } catch (JSONException ignored) {
+        }
+    }
+
+    static void openHandoff(Context c) {
+        JSONObject t = handoff();
+        if (t == null) return;
+        try {
+            c.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(t.optString("url"))).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (RuntimeException e) {
+            Toast.makeText(c, "No browser on the tablet", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     static final class Device {
         final String id, name, kind;
 
@@ -160,6 +190,12 @@ final class Devices {
         } else if (t.equals("pcevent")) {
             remember(m.optString("icon"), m.optString("title"), m.optString("text"));
             Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
+        } else if (t.equals("pctab")) {  // Handoff: the page open in Chrome on the laptop
+            pcTab = m;
+            pcTabAt = System.currentTimeMillis();
+            main.post(() -> {
+                if (tabListener != null) tabListener.run();
+            });
         } else if (t.equals("pcnotif")) {  // a notification shown on the laptop
             if (prefs(c).getBoolean(PC_NOTIFS, true)) {
                 String app = m.optString("app"), title = m.optString("title");

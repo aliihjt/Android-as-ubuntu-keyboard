@@ -1522,6 +1522,7 @@ def main():
     hub.watch_pc_clipboard()
     pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
     pc_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device
+    pad_extras.TabServer(hub.set_tab).start()  # Chrome Handoff: the page open in Chrome -> every device
     unlocker = pad_extras.Unlocker(CONF_DIR)
     clients = Clients()
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()

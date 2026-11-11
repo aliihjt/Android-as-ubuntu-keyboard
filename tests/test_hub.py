@@ -98,3 +98,17 @@ class HubTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HandoffHubTest(unittest.TestCase):
+    def test_tab_goes_to_devices_and_is_remembered(self):
+        with tempfile.TemporaryDirectory() as d:
+            h = hub.Hub(d, "pc")
+            tablet = Device()
+            h.join(tablet, "Tablet", "android")
+            h.set_tab("https://example.com/", "Example")
+            self.assertEqual(tablet.last("pctab")["url"], "https://example.com/")
+            phone = Device()
+            h.join(phone, "Phone", "iphone")
+            h.handle({"t": "pctab?"}, phone)  # a device that comes later asks
+            self.assertEqual(phone.last("pctab")["title"], "Example")

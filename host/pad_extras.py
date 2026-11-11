@@ -6,7 +6,11 @@
              minute's warning that can be cancelled
   ClipList   clipboard history kept in memory (the Windows host fills it)
   wake_info  this PC's network cards, for waking it from the tablet
+  Notes      the sticky notes, saved as JSON plus a readable Markdown copy
+  Inbox      files sent from a device, saved to Downloads › Fedora Pad
+  Terminal   Terminal Pad: the saved commands, one running at a time
 """
+import base64
 import glob
 import json
 import os
@@ -506,3 +510,180 @@ def beacon(port, fingerprint, name):
                 pass
             time.sleep(3)
     threading.Thread(target=loop, daemon=True).start()
+
+
+# ---------------------------------------------------------------- notes, files, Terminal Pad
+
+class Notes:
+    """The sticky notes: JSON for the apps and the sticky window, plus a readable copy."""
+
+    def __init__(self, path, markdown):
+        self.path, self.markdown = path, markdown
+        self.lock = threading.Lock()
+
+    def load(self):
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                notes = json.load(f)
+            return notes if isinstance(notes, list) else []
+        except (OSError, ValueError):
+            return []
+
+    def save(self, notes):
+        clean = [{"id": str(n.get("id", ""))[:40], "text": str(n.get("text", ""))[:5000],
+                  "color": str(n.get("color", "yellow"))[:16]}
+                 for n in (notes if isinstance(notes, list) else [])[:200] if isinstance(n, dict)]
+        with self.lock:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(clean, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, self.path)
+            try:
+                os.makedirs(os.path.dirname(self.markdown), exist_ok=True)
+                with open(self.markdown, "w", encoding="utf-8") as f:
+                    f.write("# Fedora Pad Notes\n\n" + "\n\n---\n\n".join(n["text"] for n in clean) + "\n")
+            except OSError:
+                pass
+        return clean
+
+
+def safe_name(name):
+    """A file name from a device, safe on Fedora and Windows: no folders, no hidden files."""
+    name = os.path.basename(str(name or "").replace("\\", "/")).strip().lstrip(".")
+    name = "".join(c for c in name if c not in '<>:"|?*' and ord(c) >= 32)
+    return name[:120].strip() or "file"
+
+
+class Inbox:
+    """Files sent from a device in base64 pieces, saved in folder (never overwriting:
+    "photo (1).jpg"). on_done(name) runs when a file is complete."""
+
+    STALE = 600  # a transfer with no new piece for 10 minutes is dropped
+
+    def __init__(self, folder, on_done=None):
+        self.folder, self.on_done = folder, on_done
+        self.transfers = {}  # id -> [final path, open .part file, time of the last piece]
+        self.lock = threading.Lock()
+
+    def receive(self, msg, reply=None):
+        tid = str(msg.get("id", ""))[:64]
+        if not tid:
+            return
+        with self.lock:
+            self._drop_stale()
+            if tid not in self.transfers:
+                name = safe_name(msg.get("name"))
+                os.makedirs(self.folder, exist_ok=True)
+                base, ext = os.path.splitext(name)
+                path, n = os.path.join(self.folder, name), 1
+                while os.path.exists(path) or os.path.exists(path + ".part"):
+                    path = os.path.join(self.folder, f"{base} ({n}){ext}")
+                    n += 1
+                try:
+                    self.transfers[tid] = [path, open(path + ".part", "wb"), time.time()]
+                except OSError as err:
+                    print("can't save the file:", err, file=sys.stderr)
+                    return
+            t = self.transfers[tid]
+            t[2] = time.time()
+            try:
+                t[1].write(base64.b64decode(str(msg.get("data", ""))))
+            except (ValueError, OSError) as err:
+                print("file piece failed:", err, file=sys.stderr)
+            if not msg.get("last"):
+                return
+            path, f, _ = self.transfers.pop(tid)
+            f.close()
+            os.replace(path + ".part", path)
+        if reply:
+            reply({"t": "filedone", "id": tid, "name": os.path.basename(path)})
+        if self.on_done:
+            try:
+                self.on_done(os.path.basename(path))
+            except Exception:  # noqa: BLE001 - a notification mustn't lose the file
+                pass
+
+    def _drop_stale(self):
+        now = time.time()
+        for tid, (path, f, last) in list(self.transfers.items()):
+            if now - last > self.STALE:
+                f.close()
+                try:
+                    os.remove(path + ".part")
+                except OSError:
+                    pass
+                del self.transfers[tid]
+
+
+class Terminal:
+    """Terminal Pad: the commands saved in path, run one at a time.
+    argv(cmd) gives the program to run a command; kill(proc) stops it."""
+
+    def __init__(self, path, defaults, argv, kill, popen_extra=None):
+        self.path, self.defaults = path, defaults
+        self.argv, self.kill, self.popen_extra = argv, kill, popen_extra or {}
+        self.proc = None
+        self.busy = False
+        self.lock = threading.Lock()
+
+    def commands(self):
+        """The saved commands. The first time, the defaults are written; a file with
+        a mistake in it is never overwritten (the user fixes it), the defaults are used."""
+        if not os.path.exists(self.path):
+            try:
+                os.makedirs(os.path.dirname(self.path), exist_ok=True)
+                with open(self.path, "w", encoding="utf-8") as f:
+                    json.dump(self.defaults, f, ensure_ascii=False, indent=2)
+            except OSError:
+                return list(self.defaults)
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                cmds = json.load(f)
+        except (OSError, ValueError) as err:
+            print("commands.json has a mistake:", err, file=sys.stderr)
+            return list(self.defaults)
+        if not isinstance(cmds, list):
+            return list(self.defaults)
+        return [c for c in cmds if isinstance(c, dict) and c.get("name") and c.get("cmd")]
+
+    def run(self, name, reply):
+        """Runs one saved command and streams its output to the device."""
+        cmd = next((c["cmd"] for c in self.commands() if c["name"] == name), None)
+        with self.lock:
+            busy = self.busy
+            if cmd is not None and not busy:
+                self.busy = True
+        if cmd is None or busy:
+            reply({"t": "termout", "line": "Another command is still running." if cmd else "Unknown command."})
+            reply({"t": "termdone", "code": -1})
+            return
+
+        def worker():
+            try:
+                try:
+                    proc = subprocess.Popen(self.argv(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                            stdin=subprocess.DEVNULL, text=True, encoding="utf-8",
+                                            errors="replace", **self.popen_extra)
+                except OSError as err:
+                    reply({"t": "termout", "line": str(err)})
+                    reply({"t": "termdone", "code": -1})
+                    return
+                self.proc = proc
+                for line in proc.stdout:
+                    reply({"t": "termout", "line": line.rstrip("\r\n")[:2000]})
+                reply({"t": "termdone", "code": proc.wait()})
+            except Exception as err:  # noqa: BLE001 - the device went away
+                print("terminal:", err, file=sys.stderr)
+            finally:
+                self.busy = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def stop(self):
+        proc = self.proc
+        if proc and proc.poll() is None:
+            try:
+                self.kill(proc)
+            except OSError:
+                pass

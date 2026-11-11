@@ -1055,35 +1055,6 @@ NOTES_FILE = os.path.expanduser("~/.config/tabletdesk/notes.json")
 NOTES_MD = os.path.expanduser("~/Documents/Fedora Pad Notes.md")
 
 
-def load_notes():
-    try:
-        with open(NOTES_FILE) as f:
-            notes = json.load(f)
-        return notes if isinstance(notes, list) else []
-    except (OSError, ValueError):
-        return []
-
-
-def save_notes(notes):
-    """Notes from the tablet: kept as JSON for the sticky window, plus a readable copy."""
-    clean = []
-    for n in notes[:200]:
-        if isinstance(n, dict):
-            clean.append({"id": str(n.get("id", ""))[:40], "text": str(n.get("text", ""))[:5000],
-                          "color": str(n.get("color", "yellow"))[:16]})
-    os.makedirs(os.path.dirname(NOTES_FILE), exist_ok=True)
-    tmp = NOTES_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(clean, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, NOTES_FILE)
-    try:
-        os.makedirs(os.path.dirname(NOTES_MD), exist_ok=True)
-        with open(NOTES_MD, "w") as f:
-            f.write("# Fedora Pad Notes\n\n" + "\n\n---\n\n".join(n["text"] for n in clean) + "\n")
-    except OSError:
-        pass
-
-
 # Terminal Pad: the commands live on Fedora; the tablet can only run them by name.
 COMMANDS_FILE = os.path.expanduser("~/.config/tabletdesk/commands.json")
 DEFAULT_COMMANDS = [
@@ -1097,54 +1068,6 @@ DEFAULT_COMMANDS = [
     {"name": "Update Fedora Pad", "icon": "\U0001F504",
      "cmd": "git -C " + os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + " pull --ff-only"},
 ]
-_term = {"proc": None}
-
-
-def load_commands():
-    if not os.path.exists(COMMANDS_FILE):
-        os.makedirs(os.path.dirname(COMMANDS_FILE), exist_ok=True)
-        with open(COMMANDS_FILE, "w") as f:
-            json.dump(DEFAULT_COMMANDS, f, ensure_ascii=False, indent=2)
-    try:
-        with open(COMMANDS_FILE) as f:
-            cmds = json.load(f)
-        return [c for c in cmds if isinstance(c, dict) and c.get("name") and c.get("cmd")]
-    except (OSError, ValueError):
-        return []
-
-
-def run_terminal(name, reply):
-    """Runs one saved command and streams its output to the tablet."""
-    cmd = next((c["cmd"] for c in load_commands() if c["name"] == name), None)
-    if cmd is None or (_term["proc"] and _term["proc"].poll() is None):
-        reply({"t": "termout", "line": "Another command is still running." if cmd else "Unknown command."})
-        reply({"t": "termdone", "code": -1})
-        return
-
-    def worker():
-        try:
-            proc = subprocess.Popen(["bash", "-lc", cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL, text=True, errors="replace",
-                                    start_new_session=True)
-        except OSError as err:
-            reply({"t": "termout", "line": str(err)})
-            reply({"t": "termdone", "code": -1})
-            return
-        _term["proc"] = proc
-        for line in proc.stdout:
-            reply({"t": "termout", "line": line.rstrip("\n")[:2000]})
-        reply({"t": "termdone", "code": proc.wait()})
-
-    threading.Thread(target=worker, daemon=True).start()
-
-
-def stop_terminal():
-    proc = _term["proc"]
-    if proc and proc.poll() is None:
-        try:
-            os.killpg(proc.pid, 15)
-        except OSError:
-            pass
 
 
 _ptt = {"pcm": bytearray(), "rate": 48000}
@@ -1246,37 +1169,10 @@ def windows_list():
 
 
 INBOX = os.path.expanduser("~/Downloads/Fedora Pad")
-_transfers = {}  # transfer id -> [final path, open file]
-
-
-def receive_file(msg, reply):
-    """Files sent from the tablet, in base64 chunks, saved to ~/Downloads/Fedora Pad."""
-    tid = str(msg.get("id", ""))[:64]
-    if not tid:
-        return
-    if tid not in _transfers:
-        name = os.path.basename(str(msg.get("name", "file"))).strip().lstrip(".") or "file"
-        os.makedirs(INBOX, exist_ok=True)
-        base, ext = os.path.splitext(name)
-        path, n = os.path.join(INBOX, name), 1
-        while os.path.exists(path):  # never overwrite: "photo (1).jpg"
-            path = os.path.join(INBOX, f"{base} ({n}){ext}")
-            n += 1
-        _transfers[tid] = [path, open(path + ".part", "wb")]
-    path, f = _transfers[tid]
-    try:
-        f.write(base64.b64decode(str(msg.get("data", ""))))
-    except (ValueError, OSError) as err:
-        print("file chunk failed:", err, file=sys.stderr)
-    if msg.get("last"):
-        f.close()
-        os.replace(path + ".part", path)
-        del _transfers[tid]
-        if reply:
-            reply({"t": "filedone", "id": tid, "name": os.path.basename(path)})
-        if shutil.which("notify-send"):
-            subprocess.Popen(["notify-send", "-a", "Fedora Pad", "File received",
-                              os.path.basename(path) + " is in Downloads › Fedora Pad"])
+notes = pad_extras.Notes(NOTES_FILE, NOTES_MD)
+inbox = pad_extras.Inbox(INBOX, lambda name: desktop_notify("File received", name + " is in Downloads › Fedora Pad"))
+terminal = pad_extras.Terminal(COMMANDS_FILE, DEFAULT_COMMANDS, lambda cmd: ["bash", "-lc", cmd],
+                               lambda proc: os.killpg(proc.pid, 15), {"start_new_session": True})
 
 
 MODE_FILE = os.path.expanduser("~/.config/tabletdesk/mode")
@@ -1320,7 +1216,7 @@ def handle(inj, msg, reply=None):
         # several helper programs: don't hold up keys and mouse meanwhile
         threading.Thread(target=lambda: reply(read_state()), daemon=True).start()
     elif t == "file":
-        receive_file(msg, reply)
+        inbox.receive(msg, reply)
     elif t == "media?" and reply:
         reply(media_state())
     elif t == "mediactl":
@@ -1349,15 +1245,15 @@ def handle(inj, msg, reply=None):
             shell_call({"winfocus": "Activate", "winclose": "Close", "wintablet": "MoveToTablet",
                         "winlaptop": "MoveToLaptop"}[t], wid)
     elif t == "notes?" and reply:
-        reply({"t": "notes", "list": load_notes()})
+        reply({"t": "notes", "list": notes.load()})
     elif t == "setnotes":
-        save_notes(msg.get("list", []) if isinstance(msg.get("list"), list) else [])
+        notes.save(msg.get("list"))
     elif t == "termlist?" and reply:
-        reply({"t": "termlist", "list": load_commands(), "file": COMMANDS_FILE})
+        reply({"t": "termlist", "list": terminal.commands(), "file": COMMANDS_FILE})
     elif t == "termrun" and reply:
-        run_terminal(str(msg.get("name", "")), reply)
+        terminal.run(str(msg.get("name", "")), reply)
     elif t == "termstop":
-        stop_terminal()
+        terminal.stop()
     elif t == "webcam":  # phone / tablet as the PC's webcam and mic
         def go():
             r = webcam.start(str(msg.get("src", "android")), str(msg.get("facing", "front")),

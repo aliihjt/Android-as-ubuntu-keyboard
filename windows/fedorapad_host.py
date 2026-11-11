@@ -11,7 +11,6 @@ used; pycaw (optional) gives exact volume levels.
     python  fedorapad_host.py --dry-run  print instead of typing
 """
 import argparse
-import base64
 import ctypes
 import json
 import os
@@ -43,6 +42,9 @@ REPO = os.path.dirname(HERE)
 CONF_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "FedoraPad")
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "FedoraPad")
 HOME = os.path.expanduser("~")
+sys.path.insert(0, os.path.join(REPO, "host"))  # the code shared with the Fedora host
+import pad_extras  # noqa: E402
+import hub as hub_mod  # noqa: E402
 
 # ---------------------------------------------------------------- input
 
@@ -738,33 +740,6 @@ def move_window(wid, to_tablet):
 
 # ---------------------------------------------------------------- notes, Terminal Pad, files
 
-def load_notes():
-    try:
-        with open(NOTES_FILE, encoding="utf-8") as f:
-            notes = json.load(f)
-        return notes if isinstance(notes, list) else []
-    except (OSError, ValueError):
-        return []
-
-
-def save_notes(notes):
-    clean = []
-    for n in notes[:200]:
-        if isinstance(n, dict):
-            clean.append({"id": str(n.get("id", ""))[:40], "text": str(n.get("text", ""))[:5000],
-                          "color": str(n.get("color", "yellow"))[:16]})
-    os.makedirs(CONF_DIR, exist_ok=True)
-    tmp = NOTES_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(clean, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, NOTES_FILE)
-    try:
-        os.makedirs(os.path.dirname(NOTES_MD), exist_ok=True)
-        with open(NOTES_MD, "w", encoding="utf-8") as f:
-            f.write("# Fedora Pad Notes\n\n" + "\n\n---\n\n".join(n["text"] for n in clean) + "\n")
-    except OSError:
-        pass
-
 
 DEFAULT_COMMANDS = [
     {"name": "System info", "icon": "\U0001F4BB",
@@ -784,85 +759,13 @@ DEFAULT_COMMANDS = [
 ]
 
 
-def load_commands():
-    try:
-        with open(COMMANDS_FILE, encoding="utf-8") as f:
-            cmds = json.load(f)
-        if isinstance(cmds, list):
-            return [c for c in cmds if isinstance(c, dict) and c.get("name") and c.get("cmd")]
-    except (OSError, ValueError):
-        pass
-    os.makedirs(CONF_DIR, exist_ok=True)
-    with open(COMMANDS_FILE, "w", encoding="utf-8") as f:
-        json.dump(DEFAULT_COMMANDS, f, ensure_ascii=False, indent=1)
-    return DEFAULT_COMMANDS
-
-
-_term = {"proc": None}
-
-
-def run_terminal(name, reply):
-    """Runs one saved PowerShell command and streams its output to the tablet."""
-    cmd = next((c["cmd"] for c in load_commands() if c["name"] == name), None)
-    if cmd is None or (_term["proc"] and _term["proc"].poll() is None):
-        reply({"t": "termout", "line": "Another command is still running." if cmd else "Unknown command."})
-        reply({"t": "termdone", "code": -1})
-        return
-
-    def worker():
-        try:
-            proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command",
-                 "[Console]::OutputEncoding=[Text.Encoding]::UTF8;" + cmd],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
-        except OSError as err:
-            reply({"t": "termout", "line": str(err)})
-            reply({"t": "termdone", "code": -1})
-            return
-        _term["proc"] = proc
-        for line in proc.stdout:
-            reply({"t": "termout", "line": line.rstrip("\r\n")[:2000]})
-        reply({"t": "termdone", "code": proc.wait()})
-
-    threading.Thread(target=worker, daemon=True).start()
-
-
-def stop_terminal():
-    proc = _term["proc"]
-    if proc and proc.poll() is None:
-        _run(["taskkill", "/T", "/F", "/PID", str(proc.pid)])
-
-
 INBOX = os.path.join(HOME, "Downloads", "Fedora Pad")
-_transfers = {}
-
-
-def receive_file(msg, reply):
-    tid = str(msg.get("id", ""))[:64]
-    if not tid:
-        return
-    if tid not in _transfers:
-        name = os.path.basename(str(msg.get("name", "file")).replace("\\", "/")).strip().lstrip(".") or "file"
-        name = "".join(c for c in name if c not in '<>:"|?*')[:120] or "file"
-        os.makedirs(INBOX, exist_ok=True)
-        base, ext = os.path.splitext(name)
-        path, n = os.path.join(INBOX, name), 1
-        while os.path.exists(path):
-            path = os.path.join(INBOX, f"{base} ({n}){ext}")
-            n += 1
-        _transfers[tid] = [path, open(path + ".part", "wb")]
-    path, f = _transfers[tid]
-    try:
-        f.write(base64.b64decode(str(msg.get("data", ""))))
-    except (ValueError, OSError) as err:
-        print("file chunk failed:", err, file=sys.stderr)
-    if msg.get("last"):
-        f.close()
-        os.replace(path + ".part", path)
-        del _transfers[tid]
-        if reply:
-            reply({"t": "filedone", "id": tid, "name": os.path.basename(path)})
+notes = pad_extras.Notes(NOTES_FILE, NOTES_MD)
+inbox = pad_extras.Inbox(INBOX, lambda name: _toast("File received", name + " is in Downloads > Fedora Pad"))
+terminal = pad_extras.Terminal(
+    COMMANDS_FILE, DEFAULT_COMMANDS,
+    lambda cmd: ["powershell", "-NoProfile", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8;" + cmd],
+    lambda proc: _run(["taskkill", "/T", "/F", "/PID", str(proc.pid)]), {"creationflags": NO_WINDOW})
 
 
 # ---------------------------------------------------------------- ambient light, keyboard language
@@ -920,7 +823,7 @@ def handle(inj, msg, reply=None):
     elif t == "state?" and reply:
         threading.Thread(target=lambda: reply(read_state()), daemon=True).start()
     elif t == "file":
-        receive_file(msg, reply)
+        inbox.receive(msg, reply)
     elif t == "media?" and reply:
         reply(media_state())
     elif t == "mediactl":
@@ -950,15 +853,15 @@ def handle(inj, msg, reply=None):
     elif t in ("wintablet", "winlaptop"):
         move_window(str(msg.get("id", "")), t == "wintablet")
     elif t == "notes?" and reply:
-        reply({"t": "notes", "list": load_notes()})
+        reply({"t": "notes", "list": notes.load()})
     elif t == "setnotes":
-        save_notes(msg.get("list", []) if isinstance(msg.get("list"), list) else [])
+        notes.save(msg.get("list"))
     elif t == "termlist?" and reply:
-        reply({"t": "termlist", "list": load_commands(), "file": COMMANDS_FILE})
+        reply({"t": "termlist", "list": terminal.commands(), "file": COMMANDS_FILE})
     elif t == "termrun" and reply:
-        run_terminal(str(msg.get("name", "")), reply)
+        terminal.run(str(msg.get("name", "")), reply)
     elif t == "termstop":
-        stop_terminal()
+        terminal.stop()
     elif t == "ambient?" and reply:
         reply(ambient_colors())
     elif t == "pttstop" and reply:  # phone Push to Talk with the PC's Whisper: Fedora only
@@ -1072,9 +975,6 @@ def make_handler(inj, clients):
 
 # ---------------------------------------------------------------- AirDrop, sleep timers, clipboard history
 
-sys.path.insert(0, os.path.join(REPO, "host"))
-import pad_extras  # noqa: E402
-import hub as hub_mod  # noqa: E402
 
 clip_history = pad_extras.ClipList()
 sleeper = None

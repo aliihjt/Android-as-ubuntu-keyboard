@@ -93,7 +93,7 @@ final class ReaderHome {
         View apps = pinned();
         if (apps != null) column.addView(apps, th.fullWidth(22));
         TextView ai = th.primaryButton("✨  Ask Claude", v -> askClaude());
-        ai.setBackground(th.pressable(0xFFD97757, th.dp(14)));
+        ai.setBackground(th.pressable(Tools.CLAUDE, th.dp(14)));
         ai.setTextSize(17 * Ui.scale);
         column.addView(ai, th.fullWidth(24));
     }
@@ -280,18 +280,8 @@ final class ReaderHome {
     // ---- tools and apps ----
 
     private View tiles() {
-        Object[][] items = {
-                {"📚", Theme.ORANGE, "Library", (Runnable) () -> a.startActivity(new Intent(a, BooksActivity.class))},
-                {"⬇️", Theme.GREEN, "Get Books", (Runnable) () -> a.startActivity(new Intent(a, GetBooksActivity.class))},
-                {"🖍", Theme.YELLOW, "Highlights", (Runnable) () -> a.startActivity(new Intent(a, HighlightsActivity.class))},
-                {"⭐", Theme.INDIGO, "Words", (Runnable) () -> a.startActivity(new Intent(a, VocabActivity.class))},
-                {"🎲", Theme.PINK, "فال حافظ", (Runnable) () -> a.startActivity(new Intent(a, PoemActivity.class)
-                        .putExtra("mode", "faal"))},
-                {"🗒", Theme.YELLOW, "Notes", (Runnable) () -> a.startActivity(new Intent(a, NotesActivity.class))},
-                {"✍️", Theme.BLUE, "Handwriting", (Runnable) () -> a.startActivity(new Intent(a, SketchActivity.class))},
-                {"🔗", Theme.GREEN, "Devices", (Runnable) () -> a.startActivity(new Intent(a, DevicesActivity.class))},
-                {"▦", Theme.TEAL, "All Apps", (Runnable) () -> a.startActivity(new Intent(a, TabletAppsActivity.class))},
-        };
+        Object[][] items = Tools.rows(a, "books", "getbooks", "highlights", "words", "faal", "notes", "sketch",
+                "devices", "applib");
         LinearLayout grid = new LinearLayout(a);
         grid.setOrientation(LinearLayout.VERTICAL);
         int columns = 4;

@@ -57,7 +57,10 @@ body.ios #app{padding-bottom:calc(env(safe-area-inset-bottom) + 120px)}
 .ios .tile{background:none;padding:0;min-height:0;align-items:center;gap:6px;text-align:center}
 .ios .tile .chip{width:62px;height:62px;border-radius:15px;font-size:31px;box-shadow:0 2px 6px #0003}
 .ios .tile b{font-size:11.5px;font-weight:500;color:#fff;text-shadow:0 1px 3px #0008;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.pdots{display:flex;justify-content:center;gap:8px;margin:14px 0 4px}.pdots i{width:7px;height:7px;border-radius:4px;background:#fff8}.pdots i.on{background:#fff}
+/* page dots and the Search pill sit just above the Dock, as on iOS (they used to scroll under it) */
+.homefoot{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 102px);z-index:4;pointer-events:none}
+.homefoot>*{pointer-events:auto}.homespace{height:170px}
+.pdots{display:flex;justify-content:center;gap:8px;margin:0 0 4px}.pdots i{width:7px;height:7px;border-radius:4px;background:#fff8}.pdots i.on{background:#fff}
 .spill{display:block;margin:10px auto 0;padding:7px 16px;border-radius:16px;color:#fff;font-size:14px;font-weight:600;background:rgba(255,255,255,.25);
  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
 .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 10px);display:flex;gap:16px;
@@ -285,25 +288,27 @@ function page(title, right) {
 // the phone's own tools first (as in the Android app's "This tablet"), then the PC remote
 const PHONE_TILES = [
   ["devices", "🔗", "Devices", "green"], ["reading", "📖", "Reading", "indigo"], ["notifs", "🔔", "Notifications", "red"],
-  ["books", "📚", "Get Books", "orange"], ["poem", "🎲", "فال حافظ", "pink", {faal: 1}], ["notes", "🗒", "Notes", "yellow"],
+  ["books", "⬇️", "Get Books", "green"], ["poem", "🎲", "فال حافظ", "pink", {faal: 1}], ["notes", "🗒", "Notes", "yellow"],
   ["sketch", "✍️", "Handwriting", "blue"], ["scan", "📄", "Scanner", "blue"], ["focus", "⏱", "Focus", "red"],
   ["standby", "🕰", "StandBy", "orange"], ["claude", "✨", "Claude", "#d97757"],
 ];
 const TILES = [
   ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["talk", "🎙", "Push to Talk", "red"],
   ["media", "🎵", "Media", "pink"],
-  ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "Apps", "teal"],
-  ["text", "✍️", "Text & Clipboard", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
-  ["terminal", ">_", "Terminal Pad", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
-  ["mirror", "🖥", "Show on PC", "blue"], ["clips", "📋", "Clipboard History", "teal"], ["sleep", "💤", "Sleep", "indigo"],
+  ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "PC Apps", "teal"],
+  ["text", "📝", "Type Text", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
+  ["terminal", ">_", "Terminal", "#3a3a3c"], ["presenter", "🎤", "Presenter", "red"],
+  ["mirror", "🖥", "Show on PC", "indigo"], ["clips", "📋", "Clipboard", "teal"], ["sleep", "💤", "Sleep", "indigo"],
   ["webcam", "📷", "Webcam", "red"], ["stats", "📊", "Stats", "green"], ["settings", "⚙️", "Settings", "gray"],
 ];
 const PAGES = {};
 
 // the home screen, like iOS: widgets, pages of apps you swipe, the Dock;
-// swipe down from the top right for Control Center, top left for notifications, middle for Search
-const MAIN_TILES = ["keyboard", "trackpad", "devices", "notifs", "talk", "media", "books", "poem", "notes", "reading",
-  "sketch", "scan", "focus", "standby", "claude", "settings"];
+// swipe down from the top right for Control Center, top left for notifications, middle for Search.
+// Names, symbols and colours match the Android app (Tools.java). The Dock's apps aren't repeated on
+// the first page, so it stays calm, as on an iPhone.
+const MAIN_TILES = ["talk", "media", "books", "poem", "notes", "reading", "sketch", "scan", "focus", "standby",
+  "claude", "settings"];
 const DOCK = ["keyboard", "trackpad", "devices", "notifs"];
 function allTiles() { return [...PHONE_TILES, ...TILES]; }
 function openTile(id, arg) { if (id === "claude") window.open("https://claude.ai/new", "_blank"); else show(id, true, arg); }
@@ -355,7 +360,8 @@ PAGES.home = () => {
   cleanup.push(() => ["shared", "stats", "media"].forEach(t => on(t, null)));
 
   const search = el("button", {class: "spill", onclick: searchSheet}, "🔍 Search");
-  app.append(top, cont, el("div", {class: "widgets"}, wLaptop, wMusic), pages, pdots, search);
+  app.append(top, cont, el("div", {class: "widgets"}, wLaptop, wMusic), pages, el("div", {class: "homespace"}),
+    el("div", {class: "homefoot"}, pdots, search));
   const dock = el("div", {class: "dock frost"}, DOCK.map(id => byId[id]).filter(Boolean).map(([id, sym, label, color, arg]) =>
     el("button", {"aria-label": label, onclick: () => openTile(id, arg)}, chip(sym, color))));
   document.body.append(dock);

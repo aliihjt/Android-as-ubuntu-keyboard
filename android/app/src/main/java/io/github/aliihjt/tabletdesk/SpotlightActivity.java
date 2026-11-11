@@ -25,7 +25,7 @@ import java.util.Locale;
  * search the web, or search Fedora itself.
  */
 public class SpotlightActivity extends Page {
-    private final List<Object[]> index = new ArrayList<>();  // {symbol, colour, title, kind, Runnable}
+    private final List<Object[]> index = new ArrayList<>();  // {symbol, colour, title, kind, Runnable[, search words]}
     private EditText field;
     private LinearLayout results;
 
@@ -93,44 +93,10 @@ public class SpotlightActivity extends Page {
     }
 
     private void buildIndex() {
-        Object[][] pages = {
-                {"⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class},
-                {"🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class},
-                {"🎵", Theme.PINK, "Media", MediaActivity.class},
-                {"🎛", Theme.ORANGE, "Controls", ControlsActivity.class},
-                {"⚡", Theme.INDIGO, "Shortcuts", ShortcutsActivity.class},
-                {"🚀", Theme.TEAL, "Apps", AppsActivity.class},
-                {"✍️", Theme.YELLOW, "Text & Clipboard", ClipboardActivity.class},
-                {"📁", Theme.BLUE, "Send Files", FilesActivity.class},
-                {"🎤", Theme.RED, "Presenter", PresenterActivity.class},
-                {"\uD83C\uDF9A", Theme.ORANGE, "Stream Deck", ButtonsActivity.class},
-                {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
-                {"📊", Theme.GREEN, "Stats", StatsActivity.class},
-                {"📚", Theme.ORANGE, "Books", BooksActivity.class},
-                {"🔗", Theme.GREEN, "Devices (iPad, iPhone, ring, send, clipboard)", DevicesActivity.class},
-                {"⬇️", Theme.GREEN, "Get Books (free classics, Persian poetry)", GetBooksActivity.class},
-                {"🖍", Theme.YELLOW, "Highlights", HighlightsActivity.class},
-                {"⭐", Theme.INDIGO, "Words (vocabulary)", VocabActivity.class},
-                {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
-                {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
-                {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
-                {"🕰", Theme.ORANGE, "StandBy", StandByActivity.class},
-                {"⏱", Theme.RED, "Focus", FocusActivity.class},
-                {"📄", Theme.BLUE, "Scanner", ScanActivity.class},
-                {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
-                {"🖥", Theme.BLUE, "Show on PC", MirrorActivity.class},
-                {"📷", Theme.RED, "Webcam", WebcamActivity.class},
-                {"📋", Theme.TEAL, "Clipboard History", ClipHistoryActivity.class},
-                {"⏰", Theme.INDIGO, "Wake & Sleep", WakeActivity.class},
-                {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
-                {">_", 0xFF3A3A3C, "Terminal Pad", TerminalActivity.class},
-                {"🌈", Theme.PINK, "Ambient Light", AmbientActivity.class},
-                {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
-        };
-        for (Object[] p : pages) {
-            Runnable go = p[3] instanceof Runnable ? (Runnable) p[3]
-                    : () -> startActivity(new Intent(this, (Class<?>) p[3]));
-            index.add(new Object[]{p[0], p[1], p[2], "Fedora Pad", go});
+        for (Tools.Tool t : Tools.all()) {
+            if ("search".equals(t.id)) continue;
+            // the extra words are found too ("vocabulary" finds Words), but only the name shows
+            index.add(new Object[]{t.symbol, t.color, t.name, "Fedora Pad", (Runnable) () -> Tools.open(this, t), t.words});
         }
         index.add(new Object[]{"🖥", Theme.INDIGO, "Mission Control", "Fedora", (Runnable) () -> link.combo("super")});
         index.add(new Object[]{"▦", Theme.TEAL, "Launchpad", "Fedora", (Runnable) () -> link.combo("super+a")});
@@ -183,14 +149,15 @@ public class SpotlightActivity extends Page {
         List<LinearLayout> rows = new ArrayList<>();
         for (Object[] it : index) {
             String title = (String) it[2];
-            if (!q.isEmpty() && !title.toLowerCase(Locale.ROOT).contains(q)) continue;
+            String found = it.length > 5 ? title + " " + it[5] : title;
+            if (!q.isEmpty() && !found.toLowerCase(Locale.ROOT).contains(q)) continue;
             if (q.isEmpty() && !"Fedora Pad".equals(it[3])) continue;  // empty search: just the pages
             rows.add(row((String) it[0], (Integer) it[1], title, (String) it[3], (Runnable) it[4]));
             if (rows.size() >= 14) break;
         }
         if (!q.isEmpty()) {
             String words = query.trim();
-            rows.add(row("✨", 0xFFD97757, "Ask Claude: “" + words + "”", "Claude app",
+            rows.add(row("✨", Tools.CLAUDE, "Ask Claude: “" + words + "”", "Claude app",
                     () -> ClaudeApp.ask(this, words, null)));
             rows.add(row("🌐", Theme.TEAL, "Search the web for “" + words + "”", "Web",
                     () -> startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(

@@ -87,71 +87,37 @@ final class IPadHome {
 
     // ---- what's on the home screen
 
-    private Item page(String sym, int color, String name, Class<?> c) {
-        return new Item(sym, color, name, c);
+    private Item tool(String id) {
+        Tools.Tool t = Tools.get(id);
+        return new Item(t.symbol, t.color, t.name, (Runnable) () -> Tools.open(a, t));
     }
 
-    private List<Item> mainApps() {
+    private List<Item> tools(String... ids) {
         List<Item> l = new ArrayList<>();
-        l.add(page("⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class));
-        l.add(page("🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class));
-        l.add(page("🔗", Theme.GREEN, "Devices", DevicesActivity.class));
-        l.add(page("📚", Theme.ORANGE, "Books", BooksActivity.class));
-        l.add(page("🗒", Theme.YELLOW, "Notes", NotesActivity.class));
-        l.add(new Item("✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(a)));
-        l.add(page("✍️", Theme.BLUE, "Handwriting", SketchActivity.class));
-        l.add(page("📄", Theme.BLUE, "Scanner", ScanActivity.class));
-        l.add(page("⏱", Theme.RED, "Focus", FocusActivity.class));
-        l.add(page("🕰", Theme.ORANGE, "StandBy", StandByActivity.class));
-        l.add(page("🖥", Theme.INDIGO, "Show on PC", MirrorActivity.class));
-        l.add(page("🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class));
+        for (String id : ids) l.add(tool(id));
+        return l;
+    }
+
+    /** The first page: what isn't in the Dock, with the rest in two folders, so it stays calm. */
+    private List<Item> mainApps() {
+        List<Item> l = tools("mirror", "ptt", "sketch", "scanner", "focus", "standby");
         l.add(new Item("💻", Theme.INDIGO, "Laptop", laptopFolder()));
         l.add(new Item("📖", Theme.ORANGE, "Reading", readingFolder()));
-        l.add(page("⚙️", Theme.GRAY, "Settings", SettingsActivity.class));
-        l.add(page("▦", Theme.TEAL, "App Library", TabletAppsActivity.class));
+        l.addAll(tools("settings", "applib"));
         return l;
     }
 
     private List<Item> laptopFolder() {
-        List<Item> l = new ArrayList<>();
-        l.add(page("🎵", Theme.PINK, "Media", MediaActivity.class));
-        l.add(page("🎛", Theme.ORANGE, "Controls", ControlsActivity.class));
-        l.add(page("⚡", Theme.INDIGO, "Shortcuts", ShortcutsActivity.class));
-        l.add(page("🚀", Theme.TEAL, "Apps", AppsActivity.class));
-        l.add(page("🗂", Theme.INDIGO, "Windows", WindowsActivity.class));
-        l.add(page("✍️", Theme.YELLOW, "Text", ClipboardActivity.class));
-        l.add(page("📁", Theme.BLUE, "Send Files", FilesActivity.class));
-        l.add(page("📋", Theme.TEAL, "Clipboard", ClipHistoryActivity.class));
-        l.add(page("🎤", Theme.RED, "Presenter", PresenterActivity.class));
-        l.add(page("🎚", Theme.ORANGE, "Stream Deck", ButtonsActivity.class));
-        l.add(page("📷", Theme.RED, "Webcam", WebcamActivity.class));
-        l.add(page("🎮", Theme.GREEN, "Controller", ControllerActivity.class));
-        l.add(page("⏰", Theme.INDIGO, "Wake & Sleep", WakeActivity.class));
-        l.add(page("📊", Theme.GREEN, "Stats", StatsActivity.class));
-        l.add(page(">_", 0xFF3A3A3C, "Terminal", TerminalActivity.class));
-        l.add(page("🌈", Theme.PINK, "Ambient", AmbientActivity.class));
-        return l;
+        return tools("media", "controls", "shortcuts", "apps", "windows", "text", "files", "cliphistory",
+                "presenter", "streamdeck", "webcam", "controller", "wake", "stats", "terminal", "ambient");
     }
 
     private List<Item> readingFolder() {
-        List<Item> l = new ArrayList<>();
-        l.add(page("⬇️", Theme.GREEN, "Get Books", GetBooksActivity.class));
-        l.add(page("🖍", Theme.YELLOW, "Highlights", HighlightsActivity.class));
-        l.add(page("⭐", Theme.INDIGO, "Words", VocabActivity.class));
-        l.add(new Item("🎲", Theme.PINK, "فال حافظ", (Runnable) () -> a.startActivity(new Intent(a, PoemActivity.class)
-                .putExtra("mode", "faal"))));
-        return l;
+        return tools("getbooks", "highlights", "words", "faal");
     }
 
     private List<Item> dockApps() {
-        List<Item> l = new ArrayList<>();
-        l.add(page("⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class));
-        l.add(page("🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class));
-        l.add(page("📚", Theme.ORANGE, "Books", BooksActivity.class));
-        l.add(page("🗒", Theme.YELLOW, "Notes", NotesActivity.class));
-        l.add(new Item("✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(a)));
-        l.add(page("🔗", Theme.GREEN, "Devices", DevicesActivity.class));
-        return l;
+        return tools("keyboard", "trackpad", "books", "notes", "claude", "devices");
     }
 
     @SuppressWarnings("unchecked")

@@ -289,44 +289,16 @@ public class MainActivity extends Page implements HostLink.StateListener {
     private LinearLayout pinnedBox;
 
     private View launchpad() {
-        Object[][] tablet = {
-                {"📚", Theme.ORANGE, "Books", BooksActivity.class},
-                {"\uD83D\uDDD2", Theme.YELLOW, "Notes", NotesActivity.class},
-                {"✍️", Theme.BLUE, "Handwriting", SketchActivity.class},
-                {"✨", 0xFFD97757, "Claude", (Runnable) () -> ClaudeApp.open(this)},
-                {"🔍", Theme.GRAY, "Search", SpotlightActivity.class},
-                {"🔗", Theme.GREEN, "Devices", DevicesActivity.class},
-                {"📱", Theme.BLUE, "iPad Home", (Runnable) () -> setStyle("ipad")},
-                {"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")},
-                {"⬇️", Theme.GREEN, "Get Books", GetBooksActivity.class},
-                {"▦", Theme.TEAL, "Tablet Apps", TabletAppsActivity.class},
-                {"🕰", Theme.ORANGE, "StandBy", StandByActivity.class},
-                {"⏱", Theme.RED, "Focus", FocusActivity.class},
-                {"📄", Theme.BLUE, "Scanner", ScanActivity.class},
-                {"⚙️", Theme.GRAY, "Settings", SettingsActivity.class},
-        };
-        Object[][] fedora = {
-                {"⌨️", Theme.BLUE, "Keyboard", KeyboardActivity.class},
-                {"🖱", Theme.PURPLE, "Trackpad", TrackpadActivity.class},
-                {"🎵", Theme.PINK, "Media", MediaActivity.class},
-                {"🎛", Theme.ORANGE, "Controls", ControlsActivity.class},
-                {"⚡", Theme.INDIGO, "Shortcuts", ShortcutsActivity.class},
-                {"🚀", Theme.TEAL, "Apps", AppsActivity.class},
-                {"✍️", Theme.YELLOW, "Text", ClipboardActivity.class},
-                {"📁", Theme.BLUE, "Send Files", FilesActivity.class},
-                {"🎤", Theme.RED, "Presenter", PresenterActivity.class},
-                {"\uD83C\uDF9A", Theme.ORANGE, "Stream Deck", ButtonsActivity.class},
-                {"\uD83D\uDDC2", Theme.INDIGO, "Windows", WindowsActivity.class},
-                {"📊", Theme.GREEN, "Stats", StatsActivity.class},
-                {"🎙", Theme.RED, "Push to Talk", PushToTalkActivity.class},
-                {"🖥", Theme.BLUE, "Show on PC", MirrorActivity.class},
-                {"🎮", Theme.GREEN, "Controller", ControllerActivity.class},
-                {"📷", Theme.RED, "Webcam", WebcamActivity.class},
-                {"📋", Theme.TEAL, "Clipboard History", ClipHistoryActivity.class},
-                {"⏰", Theme.INDIGO, "Wake & Sleep", WakeActivity.class},
-                {">_", 0xFF3A3A3C, "Terminal Pad", TerminalActivity.class},
-                {"🌈", Theme.PINK, "Ambient Light", AmbientActivity.class},
-        };
+        Object[][] tools = Tools.rows(this, "books", "notes", "sketch", "claude", "search", "devices",
+                "getbooks", "highlights", "words", "faal", "applib", "standby", "focus", "scanner", "settings");
+        Object[][] tablet = new Object[tools.length + 2][];
+        System.arraycopy(tools, 0, tablet, 0, 6);
+        tablet[6] = new Object[]{"📱", Theme.BLUE, "iPad Home", (Runnable) () -> setStyle("ipad")};
+        tablet[7] = new Object[]{"📖", Theme.GREEN, "Reader Home", (Runnable) () -> setStyle("reader")};
+        System.arraycopy(tools, 6, tablet, 8, tools.length - 6);
+        Object[][] fedora = Tools.rows(this, "keyboard", "trackpad", "mirror", "ptt", "media", "controls",
+                "shortcuts", "apps", "windows", "text", "files", "cliphistory", "presenter", "streamdeck",
+                "controller", "webcam", "wake", "stats", "terminal", "ambient");
         LinearLayout all = new LinearLayout(this);
         all.setOrientation(LinearLayout.VERTICAL);
         all.addView(header("This tablet"));
@@ -422,15 +394,11 @@ public class MainActivity extends Page implements HostLink.StateListener {
         int p = th.dp(8);
         d.setPadding(p, p, p, p);
         Object[][] items = {
-                {"📚", Theme.ORANGE, (Runnable) () -> startActivity(new Intent(this, BooksActivity.class))},
-                {"\uD83D\uDDD2", Theme.YELLOW, (Runnable) () -> startActivity(new Intent(this, NotesActivity.class))},
-                {"✨", 0xFFD97757, (Runnable) () -> ClaudeApp.open(this)},
-                {"▦", Theme.TEAL, (Runnable) () -> startActivity(new Intent(this, TabletAppsActivity.class))},
+                Tools.row(this, "books"), Tools.row(this, "notes"), Tools.row(this, "claude"), Tools.row(this, "applib"),
                 null,
-                {"⌨️", Theme.BLUE, (Runnable) () -> startActivity(new Intent(this, KeyboardActivity.class))},
-                {"🖱", Theme.PURPLE, (Runnable) () -> startActivity(new Intent(this, TrackpadActivity.class))},
-                {"🖥", Theme.INDIGO, (Runnable) () -> link.combo("super")},       // Mission Control on Fedora
-                {"🔍", Theme.GRAY, (Runnable) () -> startActivity(new Intent(this, SpotlightActivity.class))},
+                Tools.row(this, "keyboard"), Tools.row(this, "trackpad"),
+                {"🖥", Theme.INDIGO, "Mission Control", (Runnable) () -> link.combo("super")},  // on Fedora
+                Tools.row(this, "search"),
         };
         for (Object[] it : items) {
             if (it == null) {  // divider between apps and system items, as in the macOS Dock
@@ -444,7 +412,7 @@ public class MainActivity extends Page implements HostLink.StateListener {
             TextView icon = th.iconChip((String) it[0], (Integer) it[1], 50);
             LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) icon.getLayoutParams();
             lp.setMargins(th.dp(4), 0, th.dp(4), 0);
-            Runnable open = (Runnable) it[2];
+            Runnable open = (Runnable) it[3];
             th.click(icon, v -> bounce(icon, open));
             d.addView(icon);
         }

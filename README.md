@@ -29,16 +29,16 @@ Your Android tablet as a **second screen, keyboard and trackpad** for your **Fed
 | 🎵 | **Media** | Play / pause, next, previous and volume for whatever plays on the PC. |
 | 🎛 | **Controls** | Brightness, volume, dark mode, Night Light, Do Not Disturb, Wi-Fi, Bluetooth, mic, keep awake, power mode, lock / log out / restart / shut down. |
 | ⚡ | **Shortcuts** | One-tap copy, paste, undo, windows, screenshots, recording, emoji, plus shortcuts for the app you're using (browser, terminal, VS Code). |
-| 🚀 | **Apps** | Opens the apps pinned in Fedora's dash, plus search, all apps and AI. |
+| 🚀 | **PC Apps** | Opens the apps pinned in Fedora's dash, plus search, all apps and AI. |
 | 📊 | **Stats** | Live CPU, memory, temperature, disk, battery and network speed. |
-| ✍️ | **Text & Clipboard** | Write on the tablet (any language) and type it on Fedora in one tap; clipboard both ways. |
+| 📝 | **Type Text** | Write on the tablet (any language) and type it on Fedora in one tap; clipboard both ways. |
 | 📁 | **Send Files** | Photos and files from the tablet to Fedora's Downloads › Fedora Pad, over the cable. |
 | 🎤 | **Presenter** | Slide remote with huge ◀ ▶ buttons, start / end, black screen and a timer. |
 | 🎚 | **Stream Deck** | Big buttons you make yourself; each runs several steps: open an app, open a website, press keys, type text, wait. |
 | 🗂 | **Windows** | Every open Fedora window as a card: tap to jump to it, ✕ to close it, **📱 To tablet** to put just that window full size on the tablet (Second screen mode). |
 | 🎙 | **Push to Talk** | Hold the mic (or the volume-down key), speak, let go: the words are typed where the cursor is on Fedora. Tablet mic shows the words live (English, فارسی or automatic); Laptop mic is fully offline. Also as a floating mic over the Fedora screen. |
 | 🗒 | **Notes** | Sticky notes written on the tablet. **Show on Fedora** opens them as coloured cards on the Fedora desktop, and they update live. Also saved as `~/Documents/Fedora Pad Notes.md`. |
-| >_ | **Terminal Pad** | Your saved Fedora commands as big buttons: one tap runs it, the output shows on the tablet. Edit the list in `~/.config/tabletdesk/commands.json`. |
+| >_ | **Terminal** | Your saved Fedora commands as big buttons: one tap runs it, the output shows on the tablet. Edit the list in `~/.config/tabletdesk/commands.json`. |
 | 🌈 | **Ambient Light** | The tablet glows in the colours of the Fedora screen, like a bias light behind a TV. |
 | 🎮 | **Controller** | A **PS4 DualShock 4**, Xbox, 8BitDo or any controller paired with the tablet becomes a real controller on Fedora for Steam, emulators and games, with **rumble**. Fedora sees it as an Xbox controller (works everywhere) or a PlayStation one (✕ ○ □ △). Up to 4 players, over the cable or Wi-Fi; a live picture shows every button. Keep the page open while you play. **When a controller connects:** open the **iiSU** game launcher to play on the tablet, or this page to play on Fedora (*Smart* picks Fedora while connected, iiSU otherwise). **Steam Big Picture** can open on Fedora whenever a controller connects to the laptop, even without the tablet (`python3 host/gamepad.py --steam on`). |
 | ⚙️ | **Settings** | Screen mode, floating button, text size, light / dark, trackpad speed and scrolling. |
@@ -71,9 +71,9 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | 🖥 | **Show on PC** | The tablet's screen in a window on Fedora or Windows (scrcpy over the cable): use it with the PC's mouse and keyboard, with its sound. An iPhone / iPad shows on Fedora with AirPlay (UxPlay): start it from the tablet or the web app, then Control Center › Screen Mirroring. Fedora: `./host/mirror-setup.sh` once; Windows: Setup.bat adds Tablet Mirroring. |
 | 📷 | **Webcam** | The tablet's camera and mic become “Fedora Pad Camera” and “Fedora Pad Microphone” on Fedora for Zoom, Meet and OBS (USB cable, Android 12+). The iPhone web app has a Webcam page too (Wi-Fi). Run `./host/webcam-setup.sh` once. |
 | 📤 | **AirDrop from the PC** | Fedora: Files › right-click › **Scripts › Send to Fedora Pad**. Windows: right-click › **Send to › Fedora Pad**. Files (folders as a zip) and links appear on the tablet (Downloads › Fedora Pad, with a notification) and on the iPhone web app (Save to Photos / Files). |
-| 📋 | **Clipboard History** | The last 50 things copied on the PC; tap one to paste it again, long-press to copy it to the tablet or keep it as a note. Password managers' copies are skipped. Also in the iPhone web app. |
+| 📋 | **Clipboard** | The last 50 things copied on the PC; tap one to paste it again, long-press to copy it to the tablet or keep it as a note. Password managers' copies are skipped. Also in the iPhone web app. |
 | ⏰ | **Wake & Sleep** | Wake the sleeping PC from the tablet (run `./host/wake-setup.sh` once), and sleep it now, in 30–90 minutes, or every night, with a minute's warning you can cancel. The iPhone web app has the sleep timers. |
-| ▦ | **Tablet Apps** | All the tablet's apps with search; long-press to pin one to the home screen. |
+| ▦ | **App Library** | All the tablet's apps with search; long-press to pin one to the home screen. |
 
 ## 🔗 All your devices, connected
 

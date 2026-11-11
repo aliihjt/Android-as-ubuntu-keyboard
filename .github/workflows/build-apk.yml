@@ -124,5 +124,6 @@ jobs:
           pip install --quiet ruff
           ruff check .
           node --check host/gnome-extension/extension.js
+          python3 tests/web_js.py > /tmp/web.js && node --check /tmp/web.js  # the web app's script
       - name: Tests
         run: python3 -m unittest discover -s tests -v

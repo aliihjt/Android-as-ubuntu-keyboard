@@ -40,6 +40,7 @@ final class HomeWidgets {
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
+            if (laptop == null) return;  // not drawn yet: view() starts it
             if (link.isConnected()) {
                 link.ask("stats");
                 if (music) link.ask("media");
@@ -51,6 +52,8 @@ final class HomeWidgets {
         }
     };
 
+    private boolean active;  // between resume() and pause()
+
     HomeWidgets(Activity a, Theme th, boolean music) {
         this.a = a;
         this.th = th;
@@ -60,6 +63,7 @@ final class HomeWidgets {
 
     HorizontalScrollView view() {
         LinearLayout row = new LinearLayout(a);
+        row.setBaselineAligned(false);  // else cards with 2-3 lines sit lower and get cut off
         weather = card(row, "☁️ Weather", v -> askCity());
         event = card(row, "📅 Calendar", v -> calendarTap());
         laptop = card(row, "💻 Laptop", v -> a.startActivity(new Intent(a, StatsActivity.class)));
@@ -67,6 +71,11 @@ final class HomeWidgets {
         HorizontalScrollView scroll = new HorizontalScrollView(a);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.addView(row);
+        if (active) {  // resume() came first (the iPad home draws its pages a moment later)
+            showEvent();
+            ui.removeCallbacks(tick);
+            ui.post(tick);
+        }
         return scroll;
     }
 
@@ -75,7 +84,7 @@ final class HomeWidgets {
         t.setGravity(Gravity.CENTER_VERTICAL);
         t.setMaxLines(3);
         t.setPadding(th.dp(14), th.dp(10), th.dp(14), th.dp(10));
-        t.setBackground(Theme.round(th.card, th.dp(16)));
+        t.setBackground(th.surface(th.card, th.dp(16)));
         t.setMinHeight(th.dp(64));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(th.dp(170), LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = th.dp(10);
@@ -85,13 +94,16 @@ final class HomeWidgets {
     }
 
     void resume() {
+        active = true;
         link.on("stats", s -> {
+            if (laptop == null) return;
             StringBuilder b = new StringBuilder("💻 ").append(link.host());
             if (s.has("battery")) b.append("\n").append(s.optBoolean("charging") ? "⚡ " : "🔋 ").append(s.optInt("battery")).append(" %");
             if (s.has("cpu")) b.append("  ·  CPU ").append(s.optInt("cpu")).append(" %");
             laptop.setText(b);
         });
         if (music) link.on("media", m -> {
+            if (song == null) return;
             String title = m.optString("title");
             boolean none = title.isEmpty() || "Missing".equals(m.optString("status")) || "Stopped".equals(m.optString("status"));
             song.setText(none ? "🎵 Nothing playing" : ("Playing".equals(m.optString("status")) ? "⏸ " : "▶ ") + title
@@ -103,6 +115,7 @@ final class HomeWidgets {
     }
 
     void pause() {
+        active = false;
         ui.removeCallbacks(tick);
         link.on("stats", null);
         if (music) link.on("media", null);
@@ -178,6 +191,7 @@ final class HomeWidgets {
     }
 
     void showEvent() {
+        if (event == null) return;  // not drawn yet
         if (!calendarAllowed()) {
             event.setText("📅 Calendar\nTap to show your events");
             return;

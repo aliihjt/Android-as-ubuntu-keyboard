@@ -350,9 +350,9 @@ final class Theme {
         Switch s = new Switch(ctx);
         s.setChecked(on);
         int[][] states = {{android.R.attr.state_checked}, {}};
-        if (mono) {  // on = filled with the text colour, off = pale: clear without colour
-            s.setThumbTintList(new ColorStateList(states, new int[]{background, dark ? 0xFF9E9E9E : 0xFF6E6E6E}));
-            s.setTrackTintList(new ColorStateList(states, new int[]{text, fill}));
+        if (mono) {  // on = dark knob on a dark track, off = pale knob on a pale track (Android dims the track)
+            s.setThumbTintList(new ColorStateList(states, new int[]{text, dark ? 0xFF5A5A5A : 0xFFC4C4C4}));
+            s.setTrackTintList(new ColorStateList(states, new int[]{text, dark ? 0xFF3A3A3A : 0xFFB0B0B0}));
         } else {
             s.setThumbTintList(new ColorStateList(states, new int[]{0xFFFFFFFF, 0xFFFFFFFF}));
             s.setTrackTintList(new ColorStateList(states, new int[]{GREEN, dark ? 0xFF39393D : 0xFFE9E9EA}));

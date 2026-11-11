@@ -129,7 +129,7 @@ final class KeyboardView extends LinearLayout {
         TextView t = th.key(shown, special ? 14 : fa != null && shown.length() > 2 ? 11 : 19);
         if (fa != null) letterKeys.put(t, label);
         if (special || key.equals("shift") || key.equals("super")) {
-            t.setBackground(th.pressable(th.dark ? 0xFF2C2C2E : 0xFFD1D3D9, th.dp(9)));
+            t.setBackground(specialKey(false));
         }
         if (key.equals("shift")) shiftKey = t;
         boolean repeat = REPEATING.contains(" " + key + " ");
@@ -269,8 +269,17 @@ final class KeyboardView extends LinearLayout {
     }
 
     private void paint(TextView t, boolean on) {
-        t.setBackground(th.pressable(on ? th.accent : (th.dark ? 0xFF2C2C2E : 0xFFD1D3D9), th.dp(9)));
+        t.setBackground(specialKey(on));
         t.setTextColor(on ? th.onAccent : th.text);
+    }
+
+    /** esc, tab, shift, ctrl…: darker than letters; outlined on a black & white screen so their edges show. */
+    private android.graphics.drawable.Drawable specialKey(boolean on) {
+        int color = on ? th.accent : (th.dark ? 0xFF2C2C2E : 0xFFD1D3D9);
+        if (!th.mono) return th.pressable(color, th.dp(9));
+        return new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(th.dark ? 0x55FFFFFF : 0x40000000),
+                th.surface(on ? th.accent : th.fill, th.dp(9)), Theme.round(0xFFFFFFFF, th.dp(9)));
     }
 
     @Override

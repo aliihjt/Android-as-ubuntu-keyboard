@@ -12,14 +12,18 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
- * Base for every Fedora Pad screen: "‹ Fedora Pad" back button, large title,
- * and a centred column (max ~820dp wide) that scrolls. Subclasses fill
+ * Base for every Fedora Pad screen, in one of two looks that follow the home
+ * screen: like an iPad app (full screen, "‹ Home" and a large title; the iPad
+ * and Reader homes) or like a Mac window on the wallpaper (the Mac desktop).
+ * Content is a centred column (max ~820dp wide) that scrolls. Subclasses fill
  * {@link #content} in {@link #build()}.
  */
 abstract class Page extends Activity implements HostLink.Listener {
     protected Theme th;
     protected LinearLayout content;
     protected HostLink link = HostLink.get();
+    /** The iPad look (not the Mac desktop's windows). */
+    protected boolean ios;
     private TextView statusDot;
 
     /** Page title, or null for no title bar (the home screen draws its own). */
@@ -36,6 +40,7 @@ abstract class Page extends Activity implements HostLink.Listener {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui.loadScale(this);
+        ios = !"desktop".equals(getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE).getString("home_style", "ipad"));
         link.attach(this);
         link.start();
         th = new Theme(this);
@@ -49,6 +54,11 @@ abstract class Page extends Activity implements HostLink.Listener {
         column.addView(content, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 fullScreen() ? 0 : LinearLayout.LayoutParams.WRAP_CONTENT, fullScreen() ? 1f : 0f));
         build();
+        if (ios && title() != null && !fullScreen()) {  // iOS: the large title scrolls with the page
+            TextView big = th.largeTitle(title());
+            big.setPadding(th.dp(4), 0, 0, th.dp(10));
+            column.addView(big, 0);
+        }
 
         // centred, not stretched across a wide tablet
         FrameLayout center = new FrameLayout(this);
@@ -72,6 +82,21 @@ abstract class Page extends Activity implements HostLink.Listener {
         if (title() == null) {  // the home screen draws its own desktop
             desktop.addView(body);
             top = body;
+        } else if (ios) {  // like an iPad app: full screen, navigation bar, no window
+            desktop.setBackgroundColor(th.background);
+            LinearLayout screen = new LinearLayout(this);
+            screen.setOrientation(LinearLayout.VERTICAL);
+            screen.addView(navBar());
+            if (fullScreen()) {
+                View hairline = new View(this);
+                hairline.setBackgroundColor(th.separator);
+                screen.addView(hairline, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        Math.max(1, th.dp(0.5f))));
+            }
+            screen.addView(body, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            desktop.addView(screen, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT));
+            top = screen;
         } else {
             LinearLayout window = new LinearLayout(this);
             window.setOrientation(LinearLayout.VERTICAL);
@@ -98,8 +123,10 @@ abstract class Page extends Activity implements HostLink.Listener {
         // draw under transparent system bars, but keep everything clear of them
         getWindow().setStatusBarColor(0);
         getWindow().setNavigationBarColor(0);
+        int light = ios && title() != null && !th.dark
+                ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;  // dark icons on a light page
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | light);
         View target = top;
         desktop.setOnApplyWindowInsetsListener((v, insets) -> {
             int t, b;
@@ -114,6 +141,30 @@ abstract class Page extends Activity implements HostLink.Listener {
             v.setPadding(0, t, 0, b);
             return insets;
         });
+    }
+
+    /** iOS navigation bar: "‹ Home" on the left, the title (full-screen pages only), connection status. */
+    private View navBar() {
+        FrameLayout bar = new FrameLayout(this);
+        bar.setMinimumHeight(th.dp(48));
+        TextView back = th.text("‹ " + (this instanceof MainActivity ? "" : "Home"), 17, th.accent, false);
+        back.setTextSize(17 * Ui.scale);
+        back.setGravity(Gravity.CENTER_VERTICAL);
+        back.setPadding(th.dp(14), 0, th.dp(14), 0);
+        back.setMinHeight(th.dp(48));
+        th.click(back, v -> finish());
+        bar.addView(back, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                th.dp(48), Gravity.START | Gravity.CENTER_VERTICAL));
+        if (fullScreen()) {
+            TextView name = th.text(title(), 17, th.text, true);
+            bar.addView(name, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        }
+        statusDot = th.caption("");
+        statusDot.setPadding(0, 0, th.dp(16), 0);
+        bar.addView(statusDot, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL));
+        return bar;
     }
 
     /** macOS title bar: traffic lights, centred title, connection status. */

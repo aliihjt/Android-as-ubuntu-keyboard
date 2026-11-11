@@ -1,0 +1,77 @@
+# Apps that host/tablet-clean.sh (Fedora) and windows/TabletClean.bat remove
+# from the tablet, so it is just Fedora Pad. One app per line:
+#   group | package | what it is
+# group "junk"     = removed when you say yes once
+# group "optional" = asked one by one (you may use some of them)
+# Removing is only "for this user": the app stays in the tablet's system
+# partition, a factory reset or the --undo option brings it back. No root.
+# Never listed here: Google Play, Play Services, keyboards, text-to-speech
+# voices, the camera, the phone's settings, or anything Fedora Pad uses.
+
+# ---- Samsung
+junk | com.samsung.android.bixby.agent | Bixby voice assistant
+junk | com.samsung.android.bixby.wakeup | Bixby wake word ("Hi Bixby")
+junk | com.samsung.android.bixbyvision.framework | Bixby Vision
+junk | com.samsung.android.visionintelligence | Bixby Vision helper
+junk | com.samsung.systemui.bixby2 | Bixby in the quick panel
+junk | com.samsung.android.app.spage | Samsung Free / Samsung Daily (news feed on the home screen)
+junk | com.samsung.android.app.tips | Samsung Tips
+junk | com.samsung.android.game.gamehome | Game Launcher (Fedora Pad's Controller page replaces it)
+junk | com.samsung.android.game.gametools | Game Booster overlay
+junk | com.samsung.android.arzone | AR Zone
+junk | com.samsung.android.aremoji | AR Emoji
+junk | com.samsung.android.aremojieditor | AR Emoji editor
+junk | com.samsung.android.ardrawing | AR Doodle
+junk | com.sec.android.mimage.avatarstickers | AR Emoji stickers
+junk | com.samsung.android.app.camera.sticker.facearavatar.preload | AR Emoji camera stickers
+junk | com.samsung.android.livestickers | Live stickers
+junk | com.samsung.android.stickercenter | Sticker center
+junk | com.samsung.android.kidsinstaller | Samsung Kids installer
+junk | com.samsung.android.app.watchmanagerstub | Galaxy Wearable placeholder
+junk | com.samsung.android.mateagent | Galaxy Friends
+junk | com.samsung.android.tvplus | Samsung TV Plus
+junk | com.samsung.android.service.peoplestripe | Edge panel people
+junk | com.samsung.android.app.social | What's New
+optional | com.samsung.android.scloud | Samsung Cloud (backup and Gallery sync)
+junk | com.samsung.android.spay | Samsung Wallet / Pay
+junk | com.samsung.android.samsungpay.gear | Samsung Pay for watches
+optional | com.samsung.android.app.reminder | Samsung Reminder
+junk | com.samsung.android.voc | Samsung Members
+junk | com.samsung.android.ipsgeofence | Samsung location ads
+junk | com.samsung.android.mdx.kit | Link to Windows helper
+junk | com.samsung.android.app.updatecenter | Samsung app update nags
+optional | com.sec.android.app.sbrowser | Samsung Internet browser
+optional | com.samsung.android.app.notes | Samsung Notes (Fedora Pad has Notes and Handwriting)
+optional | com.samsung.android.calendar | Samsung Calendar (the home-screen calendar widget reads it)
+optional | com.samsung.android.email.provider | Samsung Email
+optional | com.samsung.android.app.galaxyfinder | Samsung Finder search
+optional | com.samsung.android.oneconnect | SmartThings
+optional | com.sec.android.app.samsungapps | Galaxy Store (needed for Samsung app updates)
+optional | com.samsung.android.app.sharelive | Quick Share
+optional | com.samsung.android.app.routines | Modes and Routines
+optional | com.samsung.android.forest | Digital Wellbeing (Samsung)
+
+# ---- apps other companies paid to preinstall
+junk | com.facebook.katana | Facebook
+junk | com.facebook.system | Facebook App Installer
+junk | com.facebook.appmanager | Facebook App Manager
+junk | com.facebook.services | Facebook Services
+junk | com.netflix.mediaclient | Netflix
+junk | com.netflix.partner.activation | Netflix activation
+junk | com.spotify.music | Spotify
+junk | com.linkedin.android | LinkedIn
+junk | com.microsoft.skydrive | OneDrive
+junk | com.microsoft.office.officehubrow | Microsoft 365 (Office)
+junk | com.booking | Booking.com
+junk | com.amazon.mShop.android.shopping | Amazon Shopping
+
+# ---- Google apps that can't reach Google from Iran anyway
+optional | com.google.android.youtube | YouTube
+optional | com.google.android.apps.youtube.music | YouTube Music
+optional | com.google.android.apps.tachyon | Google Meet
+optional | com.google.android.videos | Google TV
+optional | com.google.android.apps.docs | Google Drive
+optional | com.google.android.gm | Gmail
+optional | com.google.android.apps.maps | Google Maps
+optional | com.google.android.apps.photos | Google Photos
+optional | com.google.android.apps.googleassistant | Google Assistant

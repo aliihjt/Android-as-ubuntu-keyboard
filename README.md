@@ -120,6 +120,17 @@ gnome-extensions enable tabletdesk@aliihjt.github.io
 
 **From now on: unlock Fedora and plug in the tablet. That's it.**
 
+### 🧹 Make the tablet just Fedora Pad (optional)
+Removes the tablet maker's extra apps (on Samsung: Bixby, Samsung Free, Game Launcher, AR Emoji, Tips, preinstalled Facebook / Netflix / OneDrive…) and makes Fedora Pad the home screen. Over the cable, no root, and it can be undone.
+
+1. Plug in the tablet.
+2. Run it: Fedora `./host/tablet-clean.sh` · Windows double-click `windows\TabletClean.bat`.
+3. It shows the apps it found and asks once (**Enter** = yes). Then it asks about apps you may still want (Samsung Internet, Samsung Notes, YouTube, Gmail…) one by one (**Enter** = keep).
+
+✅ Done when it says *Fedora Pad is now the home screen*, and the Home button opens Fedora Pad.
+See the list first: `--list` (Windows: `TabletClean.bat list`). Put everything back: `./host/tablet-clean.sh --undo` (Windows: `TabletClean.bat undo`).
+It never touches Google Play, Play Services, keyboards, voices for read aloud, the camera or settings. The list is `host/tablet-clean.txt`.
+
 ## 📱 iPhone, iPad and other phones (web app)
 Fedora Pad also runs as a web app on any phone or tablet on your home Wi-Fi: Push to Talk, Keyboard (with فا, plus a **phone keyboard** mode that types live in any language), full-screen Trackpad, Media, Controls, Shortcuts, Apps, Windows, Notes, Terminal Pad, Text & Clipboard, Send Files, Presenter, Stats and **Webcam** (the phone's camera and mic as the PC's webcam, Fedora). Encrypted, and only for devices you pair.
 
@@ -169,6 +180,7 @@ If spacedesk is set to *USB cable* mode it brings its own adb, which can fight w
 | `./host/voice-setup.sh` | **Voice typing, offline:** press Ctrl+Super+D, speak English or Persian, press again: the words are typed where your cursor is. Also from the tablet (Spotlight › Voice typing). |
 | `./host/tailscale-setup.sh` | **Fedora Pad from anywhere:** a private encrypted link over the internet, so the tablet works away from home too. |
 | `./host/chrome-safari.sh` | Makes Google Chrome look and feel like Safari: Safari Light / Dark themes (with the macOS wallpaper on new tabs), two-finger swipe for back / forward, and a short list of Safari-like settings. `--undo` puts Chrome back. |
+| `./host/tablet-clean.sh` | Removes the tablet maker's extra apps and makes Fedora Pad the home screen (see *Make the tablet just Fedora Pad*). `--undo` puts them back. |
 | `./host/fedora-plus.sh` | Pick from 16 extras: clipboard history (Super+V), snap layouts, Persian keyboard on Alt+Shift, Jalali date, CPU temp and net speed in the top bar, phone link, auto dark mode, copy text from screen, emoji picker, Ctrl+Alt+T, New Document, Num Lock at login, auto-cleanup, backups. |
 
 ## 📶 Wi-Fi mode (no cable)
@@ -213,10 +225,18 @@ GNOME extension ──D-Bus──► tabletdesk_host.py ──► app name + poi
 | `windows/` | Fedora Pad for Windows: the same protocol with SendInput, plus setup and plug-in scripts. |
 | `android/` | The app, in plain Java with no extra libraries. |
 
-Everything listens on `127.0.0.1` only and travels over the USB cable. Nothing is exposed on your network.
+With the cable, everything listens on `127.0.0.1` only and travels over the USB cable. Wi-Fi mode and the web app listen on the home network, always encrypted and only for paired devices.
 
 ### Build the APK yourself
 ```bash
 cd android && ./gradlew assembleDebug    # Android SDK 34 + JDK 17
 ```
-GitHub Actions builds it on every push and publishes it to the [newest-build release](https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/tag/latest-apk).
+GitHub Actions builds and tests it on every push. Only pushes to `main` publish it to the [newest-build release](https://github.com/aliihjt/Android-as-ubuntu-keyboard/releases/tag/latest-apk), which tablets install automatically. Tests: `python3 -m unittest discover -s tests`.
+
+### Private signing key (optional)
+The app is signed with the public `android/debug.keystore`, so anyone could make an app that Android accepts as a Fedora Pad update. To use your own key instead:
+1. Make a key: `keytool -genkeypair -keystore fedorapad.jks -alias fedorapad -keyalg RSA -keysize 2048 -validity 10000`
+2. GitHub › the repo › Settings › Secrets and variables › Actions › add `FEDORAPAD_KEYSTORE` (the output of `base64 -w0 fedorapad.jks`), `FEDORAPAD_KEYSTORE_PASSWORD` and `FEDORAPAD_KEY_ALIAS` (`fedorapad`).
+3. The next build is signed with it. Android won't update over the old key, so **uninstall Fedora Pad on the tablet once** and plug in again (books, notes and settings on the tablet are lost; notes and reading data on the PC stay).
+
+Keep `fedorapad.jks` and its password safe: without them no update can install.

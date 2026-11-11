@@ -23,7 +23,7 @@ jobs:
     # older one, so every other build (branches, pull requests) gets a queue
     # of its own; otherwise a branch pushed together with main cancels main's.
     concurrency:
-      group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'apk-release' || format('apk-{0}', github.run_id) }}
+      group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'apk-release' || format('apk-{0}', github.run_id) }}
       cancel-in-progress: false
     defaults:
       run:
@@ -58,7 +58,7 @@ jobs:
       # A copy of Google's adb for Windows next to the app, for PCs that can't
       # reach Google's servers (windows/setup.ps1 downloads it from here)
       - name: Mirror Android platform-tools and scrcpy for Windows
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           curl -fsSL -o ../platform-tools-windows.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
           unzip -tq ../platform-tools-windows.zip
@@ -75,9 +75,10 @@ jobs:
       # Fixed download link for the newest app, used by host/connect.sh and the
       # app's own updater to update the tablet automatically:
       # releases/download/latest-apk/TabletDesk.apk (+ version.txt)
-      # Only main publishes: work on other branches never reaches the tablet.
+      # Only main publishes: work on other branches never reaches the tablet. A manual run
+      # (Actions › Build APK › Run workflow on main) publishes too, e.g. when GitHub stalls a push build.
       - name: Publish newest APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk

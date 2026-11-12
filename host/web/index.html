@@ -720,10 +720,15 @@ PAGES.screen = () => {
   });
   let url = null, zoom = 1, panX = 0, panY = 0;
   const paint = () => { img.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`; };
-  on("frame", blob => { const u = URL.createObjectURL(blob); img.onload = () => { if (url) URL.revokeObjectURL(url); url = u; };
-    img.src = u; if (note.dataset.ok !== "1") { note.dataset.ok = "1"; note.textContent =
-      "Tap: click · hold: right-click · drag: drag · two fingers: scroll · pinch: zoom the picture"; } });
-  on("screen", m => { if (!m.ok) note.textContent = "⚠️ " + (m.error || "The screen can't be shown."); });
+  const HELP = "Tap: click · hold: right-click · drag: drag · two fingers: scroll · pinch: zoom the picture";
+  on("frame", data => {  // a JPEG; typed, so Safari always shows it
+    const u = URL.createObjectURL(new Blob([data], {type: "image/jpeg"}));
+    img.onload = () => { if (url) URL.revokeObjectURL(url); url = u; };
+    img.src = u; if (note.dataset.ok !== "1") { note.dataset.ok = "1"; note.textContent = HELP; } });
+  on("screen", m => {
+    if (!m.ok) note.textContent = "⚠️ " + (m.error || "The screen can't be shown.");
+    else if (m.note !== undefined) note.textContent = m.note || HELP;  // trying another way after a black picture
+  });
   send({t: "screen", on: true, w: Math.min(1600, Math.round(innerWidth * (devicePixelRatio || 1)))});
   // touches -> the laptop: a pen for exact taps and drags (host/pen.py), the trackpad's scroll
   const at = t => { const r = img.getBoundingClientRect();

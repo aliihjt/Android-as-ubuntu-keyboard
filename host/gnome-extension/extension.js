@@ -13,6 +13,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');  // for Snapshot (GNOME does this too)
+
 const IFACE = `
 <node>
   <interface name="io.github.aliihjt.TabletDesk">
@@ -57,6 +59,9 @@ const IFACE = `
     </method>
     <method name="ClipTemp">
       <arg type="s" direction="in" name="text"/>
+    </method>
+    <method name="Snapshot">
+      <arg type="b" direction="out" name="ok"/>
     </method>
   </interface>
 </node>`;
@@ -155,6 +160,26 @@ export default class TabletDeskExtension extends Extension {
             this._ambient = [];
         } finally {
             this._sampling = false;
+        }
+    }
+
+    // Laptop Screen's last way to get pictures (host/screencast.py), only used after the laptop said
+    // yes to "Share your screen?": the main screen as a PNG in $XDG_RUNTIME_DIR, readable only by this user.
+    async SnapshotAsync(params, invocation) {
+        try {
+            const m = Main.layoutManager.primaryMonitor;
+            const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_runtime_dir(),
+                'fedorapad-screen.png']));
+            const stream = file.replace(null, false,
+                Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+            try {
+                await new Shell.Screenshot().screenshot_area(m.x, m.y, m.width, m.height, stream);
+            } finally {
+                stream.close(null);
+            }
+            invocation.return_value(new GLib.Variant('(b)', [true]));
+        } catch (e) {
+            invocation.return_value(new GLib.Variant('(b)', [false]));
         }
     }
 

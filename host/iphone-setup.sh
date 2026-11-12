@@ -77,6 +77,10 @@ echo "   ✅ Added (also in Activities as \"iPhone Control\")."
 
 echo "==> 3/3 On the iPhone, once:"
 echo "   Settings › Accessibility › Touch › AssistiveTouch: ON  (the round pointer for the mouse)."
+echo "   Settings › Bluetooth › Fedora Pad › ⓘ › Share System Notifications: ON"
+echo "     (the iPhone's notifications show on the laptop and the tablet; if the iPhone asks"
+echo "      \"Allow Fedora Pad to receive your notifications?\", tap Allow)."
+echo "   The iPhone's music then shows in the laptop's top bar, and its battery in Batteries."
 echo "   Optional: Settings › Accessibility › Pointer Control: pointer size and speed."
 echo
 echo "✅ Done. Press Super+Shift+I: the laptop's touchpad, mouse and keyboard now work on the iPhone."

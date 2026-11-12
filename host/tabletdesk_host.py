@@ -86,6 +86,7 @@ import walkaway  # noqa: E402
 import universal as universal_mod  # noqa: E402
 import iphone_hid  # noqa: E402
 import screencast  # noqa: E402
+import iphone_ble  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -732,6 +733,25 @@ def top_bar_batteries(batteries):
                       Gio.DBusCallFlags.NONE, 1000, None)
     except GLib.Error:  # extension not updated yet: log out and in once
         pass
+
+
+def iphone_ecosystem():
+    """The paired iPhone's notifications, music and battery (host/iphone_ble.py). Starts once
+    host/iphone-setup.sh has paired an iPhone; checks every 30 s until then."""
+    def run():
+        while True:
+            device = iphone_hid.load(os.path.join(CONF_DIR, "iphone.json")).get("device")
+            if device:
+                break
+            time.sleep(30)
+
+        def notified(app, title, text):
+            desktop_notify("📱 " + app + (" · " + title if title else ""), text)
+            if hub:
+                hub.iphone_notification(app, title, text)
+        iphone_ble.Ecosystem(device, notified,
+                             lambda level: hub and hub.set_battery("iPhone", "iphone", level)).start()
+    threading.Thread(target=run, daemon=True).start()
 
 
 _iphone = {"dev": None}
@@ -1619,6 +1639,7 @@ def main():
     universal = universal_mod.Universal(screens, CONF_DIR, dry_run=args.dry_run)
     universal.start()
     screen_cast = screencast.ScreenCast(CONF_DIR)
+    iphone_ecosystem()
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
     hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify,
                       pc_battery=pad_extras.battery, on_batteries=top_bar_batteries)

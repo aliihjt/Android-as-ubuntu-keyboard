@@ -204,6 +204,8 @@ class IPhone:
         self.inputs = {}                 # report id -> _Char
         self.services = []               # (path, uuid)
         self.advertising = False
+        self.app_on = False              # the keyboard + mouse registered with BlueZ (only while needed)
+        self.controlling = False
         self.pairing_until = 0.0
         self.ready = threading.Event()
 
@@ -220,15 +222,42 @@ class IPhone:
         self._notify(out)
 
     def release(self):
-        """Control ended: let go of every key and button, and stop advertising soon."""
+        """Control ended: let go of every key and button, then stop being a keyboard (the
+        iPhone hides its own keyboard while one is connected) and stop advertising."""
+        self.controlling = False
         with self.lock:
             out = self.reports.release()
         self._notify(out)
-        self._later(lambda: self._advertise(False))
+        self._after(1500, self._off)
 
     def begin(self):
-        """Control starts: advertise so the paired iPhone reconnects at once."""
-        self._later(lambda: self._advertise(True))
+        """Control starts: be a keyboard + mouse and advertise, so the paired iPhone reconnects at once."""
+        self.controlling = True
+        self._later(lambda: (self._app(True), self._advertise(True)))
+
+    def _off(self):
+        if not self.controlling and time.monotonic() >= self.pairing_until:
+            self._app(False)
+            self._advertise(False)
+        return False
+
+    def _app(self, on):
+        """Shows (or hides) the keyboard + mouse to the iPhone. Not blocking: BlueZ reads the
+        app back (GetManagedObjects) before it answers, and this thread serves those reads."""
+        if on == self.app_on or not self.adapter:
+            return
+        self.app_on = on
+
+        def done(bus, res):
+            try:
+                bus.call_finish(res)
+            except GLib.Error as err:
+                self.app_on = not on
+                print("iPhone control: Bluetooth refused:", err.message, file=sys.stderr)
+        method = "RegisterApplication" if on else "UnregisterApplication"
+        args = GLib.Variant("(oa{sv})", (APP, {})) if on else GLib.Variant("(o)", (APP,))
+        self.bus.call("org.bluez", self.adapter, "org.bluez.GattManager1", method,
+                      args, None, Gio.DBusCallFlags.NONE, 10000, None, done)
 
     def connected(self):
         return any(c.notifying for c in self.inputs.values())
@@ -246,6 +275,13 @@ class IPhone:
         if self.ctx is not None:
             self.ctx.invoke_full(GLib.PRIORITY_DEFAULT, lambda: (fn(), False)[1])
 
+    def _after(self, ms, fn):
+        """fn() once, ms from now, in the Bluetooth thread."""
+        if self.ctx is not None:
+            src = GLib.timeout_source_new(int(ms))
+            src.set_callback(lambda *a: (fn(), False)[1])
+            src.attach(self.ctx)
+
     def _run(self):
         self.ctx = GLib.MainContext()
         self.ctx.push_thread_default()
@@ -260,17 +296,7 @@ class IPhone:
         except GLib.Error as err:
             print("iPhone control: Bluetooth refused:", err.message, file=sys.stderr)
             return
-
-        # BlueZ reads the app back (GetManagedObjects) before it answers, so the call must not
-        # block this thread: it serves those reads
-        def registered(bus, res):
-            try:
-                bus.call_finish(res)
-                self.ready.set()
-            except GLib.Error as err:
-                print("iPhone control: Bluetooth refused:", err.message, file=sys.stderr)
-        self.bus.call("org.bluez", self.adapter, "org.bluez.GattManager1", "RegisterApplication",
-                      GLib.Variant("(oa{sv})", (APP, {})), None, Gio.DBusCallFlags.NONE, 10000, None, registered)
+        self.ready.set()
         GLib.MainLoop(self.ctx).run()
 
     def _find_adapter(self):
@@ -396,6 +422,7 @@ class IPhone:
         """The first device that pairs is the iPhone; the pairing window closes at once."""
         mac = device_path.rsplit("dev_", 1)[-1].replace("_", ":")
         self.pairing_until = 0.0
+        self._after(15000, self._off)  # paired: keyboard off soon
         if self.conf.get("device") != mac:
             self.conf = {"device": mac}
             try:
@@ -475,7 +502,8 @@ class IPhone:
         """The pairing window: any iPhone may pair and is remembered as *the* iPhone."""
         self.pairing_until = time.monotonic() + seconds
         self.conf = {}  # a new pairing replaces the old iPhone
-        self._later(lambda: self._advertise(True))
+        self._later(lambda: (self._app(True), self._advertise(True)))
+        self._after((seconds + 2) * 1000, self._off)
 
 
 def toggle(what="toggle"):

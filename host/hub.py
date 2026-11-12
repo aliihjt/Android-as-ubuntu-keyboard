@@ -62,6 +62,7 @@ class Hub:
         self.settings_file = os.path.join(conf_dir, "hub.json")
         self.clip = ""                      # the last text that went round
         self.tab = None                     # the page open in Chrome on the PC (Handoff)
+        self.extra_batteries = {}           # batteries the PC reads itself: the iPhone over Bluetooth
         try:
             with open(self.file, encoding="utf-8") as f:
                 self.shared = json.load(f)
@@ -262,6 +263,7 @@ class Hub:
             for d in self.devices.values():
                 if d.get("battery"):
                     out.append({"name": d["name"], "kind": d["kind"], **d["battery"]})
+            out += list(self.extra_batteries.values())
         return out
 
     def _batteries(self):
@@ -281,6 +283,25 @@ class Hub:
             tab = dict(self.tab)
         for r, _ in self._snapshot():
             self._send(r, tab)
+
+    def iphone_notification(self, app, title, text):
+        """A notification from the iPhone (host/iphone_ble.py): every device but the iPhone shows it."""
+        for r, d in self._snapshot():
+            if d["kind"] != "iphone":
+                self._send(r, {"t": "pcnotif", "app": "iPhone · " + app, "title": title, "text": text,
+                               "pc": self.pc_name})
+
+    def set_battery(self, name, kind, level):
+        """A battery the PC learns itself (the iPhone over Bluetooth); level None: gone."""
+        with self.lock:
+            if level is None:
+                changed = self.extra_batteries.pop(name, None) is not None
+            else:
+                new = {"name": name, "kind": kind, "level": max(0, min(100, int(level))), "charging": False}
+                changed = self.extra_batteries.get(name) != new
+                self.extra_batteries[name] = new
+        if changed:
+            self._batteries()
 
     def pc_notification(self, app, title, text):
         """A notification shown on the PC: every device shows it too (each can turn it off)."""

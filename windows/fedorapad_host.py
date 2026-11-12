@@ -45,6 +45,9 @@ HOME = os.path.expanduser("~")
 sys.path.insert(0, os.path.join(REPO, "host"))  # the code shared with the Fedora host
 import pad_extras  # noqa: E402
 import hub as hub_mod  # noqa: E402
+import win_notifs  # noqa: E402
+import win_pen  # noqa: E402
+import win_universal  # noqa: E402
 
 # ---------------------------------------------------------------- input
 
@@ -799,8 +802,18 @@ def set_keyboard_language(lang):
 
 # ---------------------------------------------------------------- the protocol
 
+def main_screen():
+    """The laptop's main screen (Windows puts it at 0,0), for Pen Tablet and Universal Control."""
+    if not WINDOWS:
+        return {"monitors": [0], "x": 0, "y": 0, "w": 1920, "h": 1080}
+    count = max(1, user32.GetSystemMetrics(80))  # SM_CMONITORS: more than 1 = the tablet is a second screen
+    return {"monitors": [0] * count, "x": 0, "y": 0, "w": user32.GetSystemMetrics(0), "h": user32.GetSystemMetrics(1)}
+
+
 def handle(inj, msg, reply=None):
     if hub and reply and hub.handle(msg, reply):  # device to device: lists, relay, clipboard, shared data
+        return
+    if universal and reply and universal.handle(msg, reply):  # the laptop's mouse and keyboard on the tablet
         return
     t = msg.get("t")
     if t == "move":
@@ -817,6 +830,11 @@ def handle(inj, msg, reply=None):
         inj.text(str(msg.get("s", "")))
     elif t == "cmd":
         run_command(inj, str(msg.get("name", "")))
+    elif t == "pen" and pen:  # Pen Tablet (win_pen.py)
+        pen.handle(msg)
+    elif t == "pen?" and reply:
+        sc = main_screen()
+        reply({"t": "penarea", "w": sc["w"] or 1920, "h": sc["h"] or 1080})
     elif t == "set":
         threading.Thread(target=set_value, args=(inj, str(msg.get("what", "")), msg.get("value", 0)),
                          daemon=True).start()
@@ -965,6 +983,10 @@ def make_handler(inj, clients):
             except OSError:
                 pass
             finally:
+                if pen:
+                    pen.release()
+                if universal:
+                    universal.gone(reply)
                 if hub:
                     hub.leave(reply)
                 with clients.lock:
@@ -981,6 +1003,8 @@ def make_handler(inj, clients):
 clip_history = pad_extras.ClipList()
 sleeper = None
 hub = None  # devices talking to each other through this PC, set in main()
+pen = None  # Pen Tablet: a pretend pen for drawing apps (win_pen.py), set in main()
+universal = None  # Universal Control: the laptop's mouse and keyboard on the tablet (win_universal.py)
 
 
 def newest_copied():
@@ -1148,6 +1172,8 @@ def start_web_app(inj, clients):
     def closed(ws):
         with clients.lock:
             clients.files.discard(ws)
+        if pen:
+            pen.release()
         if hub:
             hub.leave(ws.send)
 
@@ -1173,8 +1199,16 @@ def main():
     inj = Injector(dry_run=args.dry_run)
     clients = Clients()
     global hub
-    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, _toast)
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, _toast,
+                      pc_battery=pad_extras.battery)
     hub.watch_pc_clipboard()
+    global pen, universal
+    pen = win_pen.Pen(dry_run=args.dry_run, screen=lambda: (main_screen()["w"], main_screen()["h"]))
+    universal = win_universal.WinUniversal(CONF_DIR, main_screen)
+    if not args.dry_run:
+        universal.start()
+    win_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device
+    pad_extras.TabServer(hub.set_tab).start()  # Chrome Handoff: the page open in Chrome
     pad_extras.PcEvents(hub.event).start()  # downloads and battery -> every device
     threading.Thread(target=watch_focus, args=(clients,), daemon=True).start()
     if os.path.exists(WEB_FLAG):

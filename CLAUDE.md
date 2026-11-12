@@ -41,4 +41,6 @@ One Apple-style ecosystem made from the owner's own devices, with the laptop in 
   `host/tablet-clean.sh` and `windows/TabletClean.bat`.
 - The laptop's mouse/keyboard hand-over (grab, touchpad/mouse conversion) lives in `host/universal.py`, used by
   Universal Control (to the tablet) and iPhone control (`host/iphone_hid.py`, Bluetooth HID); don't duplicate it.
+  The Windows host's versions live in `windows/win_notifs.py`, `win_pen.py` and `win_universal.py`
+  (`WinUniversal` subclasses `host/universal.py`'s `Universal`, so the tablet protocol stays in one place).
 - README.md explains every feature and the setup steps.

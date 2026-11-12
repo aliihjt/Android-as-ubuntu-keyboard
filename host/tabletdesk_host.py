@@ -719,6 +719,19 @@ def screens(max_age=3.0):
     return value
 
 
+def top_bar_batteries(batteries):
+    """The tablet's battery in the GNOME top bar (the extension draws it; nothing without it)."""
+    if Gio is None:
+        return
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call_sync("org.gnome.Shell", "/io/github/aliihjt/TabletDesk", "io.github.aliihjt.TabletDesk",
+                      "SetBatteries", GLib.Variant("(s)", (json.dumps(batteries),)), None,
+                      Gio.DBusCallFlags.NONE, 1000, None)
+    except GLib.Error:  # extension not updated yet: log out and in once
+        pass
+
+
 _iphone = {"dev": None}
 
 
@@ -1592,7 +1605,8 @@ def main():
     universal = universal_mod.Universal(screens, CONF_DIR, dry_run=args.dry_run)
     universal.start()
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
-    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify)
+    hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify,
+                      pc_battery=pad_extras.battery, on_batteries=top_bar_batteries)
     hub.watch_pc_clipboard()
     pad_extras.PcEvents(hub.event).start()  # downloads, battery, long commands -> every device
     pc_notifs.Watcher(hub.pc_notification).start()  # the laptop's notifications -> every device

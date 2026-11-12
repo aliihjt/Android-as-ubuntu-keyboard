@@ -49,7 +49,7 @@ body.ios #app{padding-bottom:calc(env(safe-area-inset-bottom) + 120px)}
 @media(prefers-color-scheme:dark){.frost{background:rgba(30,30,30,.55);border-color:rgba(255,255,255,.15)}}
 .widgets{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
 .widget{border-radius:22px;padding:14px;min-height:96px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;color:var(--text)}
-.widget b{font-size:15px}.widget .big2{font-size:28px;font-weight:700}.widget small{color:var(--sub);font-size:12px}
+.widget b{font-size:15px}.widget .big2{font-size:28px;font-weight:700}.widget small{color:var(--sub);font-size:12px;white-space:pre-line}
 .pages{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .pages::-webkit-scrollbar{display:none}
 .pg{flex:0 0 100%;scroll-snap-align:start;display:grid;grid-template-columns:repeat(4,1fr);gap:18px 6px;align-content:start;padding:2px}
@@ -352,13 +352,20 @@ PAGES.home = () => {
           toast("Asked " + d.name + " to send it"); }, d => d.kind === "android")}, "📥 Get")));
   };
   on("shared", paint); paint();
-  on("stats", st => { wLaptop.lastChild.textContent = (st.battery !== undefined ? (st.charging ? "⚡ " : "🔋 ") + st.battery + " %  ·  " : "")
-    + "CPU " + (st.cpu ?? "–") + " %"; });
+  // the laptop's battery and CPU, and the tablet's battery under it (Batteries, like iOS's widget)
+  let lastStats = null, others = "";
+  const paintLaptop = () => { const st = lastStats || {};
+    wLaptop.lastChild.textContent = (st.battery !== undefined ? (st.charging ? "⚡ " : "🔋 ") + st.battery + " %  ·  " : "")
+      + "CPU " + (st.cpu ?? "–") + " %" + others; };
+  on("stats", st => { lastStats = st; paintLaptop(); });
+  on("batteries", m => { others = (m.list || []).filter(b => b.kind !== "pc")
+      .map(b => "\n📱 " + (b.charging ? "⚡" : "") + b.level + " %  " + b.name).join(""); paintLaptop(); });
+  send({t: "batteries?"});
   on("media", m => { const none = !m.title || /Missing|Stopped/.test(m.status);
     wMusic.firstChild.textContent = none ? "🎵 Music" : (m.status === "Playing" ? "⏸ " : "▶ ") + m.title;
     wMusic.lastChild.textContent = none ? "Nothing playing" : m.artist || m.player || ""; });
   every(10000, () => { if (link.connected) { send({t: "stats?"}); send({t: "media?"}); } });
-  cleanup.push(() => ["shared", "stats", "media"].forEach(t => on(t, null)));
+  cleanup.push(() => ["shared", "stats", "media", "batteries"].forEach(t => on(t, null)));
 
   const search = el("button", {class: "spill", onclick: searchSheet}, "🔍 Search");
   // Handoff, as on an iPhone: the page open in Chrome on the laptop, one tap to continue here

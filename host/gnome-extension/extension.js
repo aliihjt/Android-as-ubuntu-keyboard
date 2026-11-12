@@ -1,6 +1,7 @@
 // Exposes the focused app's name and the mouse pointer position on the session
 // bus so tabletdesk_host.py can read them on Wayland, where other programs
 // cannot see other windows or the pointer.
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
@@ -8,6 +9,8 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Keyboard from 'resource:///org/gnome/shell/ui/status/keyboard.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const IFACE = `
@@ -21,6 +24,9 @@ const IFACE = `
     </method>
     <method name="Screens">
       <arg type="s" direction="out" name="json"/>
+    </method>
+    <method name="SetBatteries">
+      <arg type="s" direction="in" name="json"/>
     </method>
     <method name="Windows">
       <arg type="s" direction="out" name="json"/>
@@ -76,6 +82,8 @@ export default class TabletDeskExtension extends Extension {
         this._clips = [];
         this._dbus?.unexport();
         this._dbus = null;
+        this._batteries?.destroy();
+        this._batteries = null;
         if (this._ambientTimer)
             GLib.source_remove(this._ambientTimer);
         this._ambientTimer = 0;
@@ -245,6 +253,34 @@ export default class TabletDeskExtension extends Extension {
         const pick = sources.find(s => (id === 'fa' ? persian(s) : !persian(s)));
         if (pick && manager.currentSource !== pick)
             pick.activate(false);
+    }
+
+    // Batteries, like the iPhone's widget: the tablet's battery in the top bar
+    // (Fedora Pad sends every device's), and all of them in its menu.
+    SetBatteries(json) {
+        let list = [];
+        try {
+            list = JSON.parse(json).filter(b => b.kind !== 'pc');
+        } catch (e) {
+            list = [];
+        }
+        if (!list.length) {
+            this._batteries?.destroy();
+            this._batteries = null;
+            return;
+        }
+        if (!this._batteries) {
+            this._batteries = new PanelMenu.Button(0.0, 'Fedora Pad batteries');
+            this._batteryLabel = new St.Label({text: '', y_align: Clutter.ActorAlign.CENTER});
+            this._batteries.add_child(this._batteryLabel);
+            Main.panel.addToStatusArea('fedorapad-batteries', this._batteries, 0, 'right');
+        }
+        const icon = b => (b.kind === 'android' ? '📱' : b.kind === 'ipad' ? '▭' : '📱');
+        const text = b => `${icon(b)} ${b.charging ? '⚡' : ''}${b.level}%`;
+        this._batteryLabel.text = text(list[0]);
+        this._batteries.menu.removeAll();
+        for (const b of list)
+            this._batteries.menu.addMenuItem(new PopupMenu.PopupMenuItem(`${text(b)}   ${b.name}`, {reactive: false}));
     }
 
     // The whole desktop, the laptop's own screen in it, every monitor and the

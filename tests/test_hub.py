@@ -112,3 +112,24 @@ class HandoffHubTest(unittest.TestCase):
             h.join(phone, "Phone", "iphone")
             h.handle({"t": "pctab?"}, phone)  # a device that comes later asks
             self.assertEqual(phone.last("pctab")["title"], "Example")
+
+
+class BatteriesTest(unittest.TestCase):
+    def test_batteries_go_round(self):
+        with tempfile.TemporaryDirectory() as d:
+            shown = []
+            h = hub.Hub(d, "laptop", pc_battery=lambda: (55, True), on_batteries=shown.append)
+            tablet, phone = Device(), Device()
+            h.join(tablet, "Tablet", "android")
+            h.join(phone, "Phone", "iphone")
+            h.handle({"t": "battery", "level": 80, "charging": False}, tablet)
+            lst = phone.last("batteries")["list"]
+            self.assertEqual(lst[0], {"name": "laptop", "kind": "pc", "level": 55, "charging": True})
+            self.assertEqual(lst[1]["level"], 80)
+            self.assertEqual(shown[-1], lst)  # the PC's top bar
+            n = len(phone.got)
+            h.handle({"t": "battery", "level": 80, "charging": False}, tablet)  # same: nothing sent
+            self.assertEqual(len(phone.got), n)
+            h.handle({"t": "battery", "level": "x"}, tablet)  # junk is ignored
+            h.leave(tablet)
+            self.assertEqual(len(shown[-1]), 1)  # only the PC is left

@@ -67,6 +67,8 @@ final class HomeWidgets {
         weather = card(row, "☁️ Weather", v -> askCity());
         event = card(row, "📅 Calendar", v -> calendarTap());
         laptop = card(row, "💻 Laptop", v -> a.startActivity(new Intent(a, StatsActivity.class)));
+        power = card(row, "🔋 Batteries", v -> a.startActivity(new Intent(a, DevicesActivity.class)));
+        showBatteries();
         if (music) song = card(row, "🎵 Nothing playing", v -> link.media("play-pause"));
         HorizontalScrollView scroll = new HorizontalScrollView(a);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -93,8 +95,22 @@ final class HomeWidgets {
         return t;
     }
 
+    private TextView power;
+
+    /** Every device's battery (from the PC), like the iPhone's Batteries widget. */
+    private void showBatteries() {
+        if (power == null) return;
+        String text = Devices.batteryText();
+        power.setText(text.isEmpty() ? "🔋 Batteries\nConnect to the laptop" : text);
+    }
+
     void resume() {
         active = true;
+        Devices.batteryListener = this::showBatteries;
+        try {
+            link.send(new org.json.JSONObject().put("t", "batteries?"));
+        } catch (org.json.JSONException ignored) {
+        }
         link.on("stats", s -> {
             if (laptop == null) return;
             StringBuilder b = new StringBuilder("💻 ").append(link.host());
@@ -116,6 +132,7 @@ final class HomeWidgets {
 
     void pause() {
         active = false;
+        Devices.batteryListener = null;
         ui.removeCallbacks(tick);
         link.on("stats", null);
         if (music) link.on("media", null);

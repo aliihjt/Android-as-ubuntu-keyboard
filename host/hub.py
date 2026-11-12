@@ -17,6 +17,8 @@ its reply function; the hub then
   - tells devices about the PC        event(): download finished, battery low, long task done
   - shows the PC's notifications       pc_notification(): {"t":"pcnotif","app","title","text"}
   - Handoff from Chrome                set_tab(): {"t":"pctab","url","title","time"}; {"t":"pctab?"}
+  - every device's battery             {"t":"battery","level":80,"charging":true} from a device;
+                                      {"t":"batteries","list":[...]} to all (the PC first); {"t":"batteries?"}
 
 A device says who it is with {"t":"iam","name":"Ali's iPad","kind":"ipad"}.
 Only devices already allowed to control the PC (cable, paired Wi-Fi, paired
@@ -45,13 +47,16 @@ def _millis(value):
 
 
 class Hub:
-    def __init__(self, conf_dir, pc_name, set_clip=None, latest_clip=None, notify=None):
+    def __init__(self, conf_dir, pc_name, set_clip=None, latest_clip=None, notify=None, pc_battery=None,
+                 on_batteries=None):
         self.lock = threading.RLock()
         self.devices = {}        # reply -> {"id", "name", "kind", "since"}
         self.pc_name = pc_name
         self.set_clip = set_clip            # (text): put text on the PC's clipboard
         self.latest_clip = latest_clip      # (): newest text copied on the PC, or None
         self.notify = notify                # (title, text): a notification on the PC's screen
+        self.pc_battery = pc_battery        # (): (percent, charging) of the PC, or None
+        self.on_batteries = on_batteries    # (list): the batteries changed (the PC's top bar shows them)
         self.notifs = collections.deque(maxlen=50)  # the tablet's latest notifications
         self.file = os.path.join(conf_dir, "shared.json")
         self.settings_file = os.path.join(conf_dir, "hub.json")
@@ -82,6 +87,8 @@ class Hub:
             gone = self.devices.pop(reply, None)
         if gone:
             self._announce()
+            if "battery" in gone:
+                self._batteries()
 
     def _list(self):
         with self.lock:
@@ -166,6 +173,24 @@ class Hub:
         if t == "setnotes" and isinstance(msg.get("list"), list):
             self._others(reply, {"t": "notes", "list": msg["list"]})
             return False  # the host saves them
+        if t == "battery":
+            try:
+                level = max(0, min(100, int(msg.get("level"))))
+            except (TypeError, ValueError):
+                return True
+            with self.lock:
+                d = self.devices.get(reply)
+                if d is None:
+                    return True
+                new = {"level": level, "charging": bool(msg.get("charging"))}
+                changed = d.get("battery") != new
+                d["battery"] = new
+            if changed:
+                self._batteries()
+            return True
+        if t == "batteries?":
+            self._send(reply, {"t": "batteries", "list": self.batteries()})
+            return True
         if t == "pctab?":
             with self.lock:
                 tab = dict(self.tab) if self.tab else None
@@ -220,6 +245,33 @@ class Hub:
             try:
                 self.notify(n["app"] + " · " + sender["name"], (n["title"] + "\n" + n["text"]).strip())
             except Exception:  # noqa: BLE001
+                pass
+
+    def batteries(self):
+        """[{name, kind, level, charging}]: the PC first, then every device that told us."""
+        out = []
+        pc = None
+        if self.pc_battery:
+            try:
+                pc = self.pc_battery()
+            except Exception:  # noqa: BLE001
+                pc = None
+        if pc:
+            out.append({"name": self.pc_name, "kind": "pc", "level": pc[0], "charging": bool(pc[1])})
+        with self.lock:
+            for d in self.devices.values():
+                if d.get("battery"):
+                    out.append({"name": d["name"], "kind": d["kind"], **d["battery"]})
+        return out
+
+    def _batteries(self):
+        lst = self.batteries()
+        for r, _ in self._snapshot():
+            self._send(r, {"t": "batteries", "list": lst})
+        if self.on_batteries:
+            try:
+                self.on_batteries(lst)
+            except Exception:  # noqa: BLE001 - the top bar is optional
                 pass
 
     def set_tab(self, url, title):

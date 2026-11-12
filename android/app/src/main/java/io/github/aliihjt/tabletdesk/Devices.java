@@ -155,6 +155,64 @@ final class Devices {
         } catch (JSONException ignored) {
         }
         syncSoon(c);
+        main.removeCallbacks(batteryTick);
+        main.post(batteryTick);
+    }
+
+    // ---- Batteries: this tablet's battery to the PC, every device's back (the home screen's widget)
+    private static String lastBattery = "";
+    private static long batterySentAt;
+    static volatile JSONArray batteries;
+    /** Runs on the main thread when the batteries change (the home screen's widget). */
+    static Runnable batteryListener;
+
+    private static final Runnable batteryTick = new Runnable() {
+        @Override
+        public void run() {
+            sendBattery();
+            main.postDelayed(this, 60_000);
+        }
+    };
+
+    private static void sendBattery() {
+        Context c = appCtx;
+        if (c == null || !HostLink.get().isConnected()) return;
+        android.content.Intent b = c.registerReceiver(null,
+                new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+        if (b == null) return;
+        int level = b.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+        int scale = b.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+        int status = b.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+        if (level < 0 || scale <= 0) return;
+        int pct = Math.round(level * 100f / scale);
+        boolean charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                || status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+        String now = pct + (charging ? "+" : "");
+        // every change, and every 5 minutes anyway (the PC may have restarted)
+        if (now.equals(lastBattery) && System.currentTimeMillis() - batterySentAt < 5 * 60_000L) return;
+        try {
+            HostLink.get().send(new JSONObject().put("t", "battery").put("level", pct).put("charging", charging));
+            lastBattery = now;
+            batterySentAt = System.currentTimeMillis();
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** "💻 55% ⚡   📱 80%": every battery the PC knows, for the home screen. */
+    static String batteryText() {
+        JSONArray a = batteries;
+        if (a == null || a.length() == 0) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject b = a.optJSONObject(i);
+            if (b == null) continue;
+            String kind = b.optString("kind");
+            String icon = "pc".equals(kind) ? "💻" : "ipad".equals(kind) ? "▭" : "📱";
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(icon).append(' ').append(b.optInt("level")).append('%')
+                    .append(b.optBoolean("charging") ? " ⚡" : "").append("  ").append(b.optString("name"));
+        }
+        return sb.toString();
     }
 
     static List<Device> others() {
@@ -190,6 +248,11 @@ final class Devices {
         } else if (t.equals("pcevent")) {
             remember(m.optString("icon"), m.optString("title"), m.optString("text"));
             Inbox.notify(c, m.optString("icon") + " " + m.optString("title"), m.optString("text"), null);
+        } else if (t.equals("batteries")) {
+            batteries = m.optJSONArray("list");
+            main.post(() -> {
+                if (batteryListener != null) batteryListener.run();
+            });
         } else if (t.equals("pctab")) {  // Handoff: the page open in Chrome on the laptop
             pcTab = m;
             pcTabAt = System.currentTimeMillis();

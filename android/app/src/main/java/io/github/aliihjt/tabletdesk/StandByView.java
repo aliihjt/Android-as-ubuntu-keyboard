@@ -168,7 +168,9 @@ final class StandByView extends FrameLayout {
             if (!attached) return;
             Calendar now = Calendar.getInstance();
             clock.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now.getTime()));
-            date.setText(new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(now.getTime()));
+            String holiday = PersianCalendar.holiday(now);
+            date.setText(new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(now.getTime())
+                    + "\n" + PersianCalendar.format(now) + (holiday.isEmpty() ? "" : " · " + holiday));
             int h = now.get(Calendar.HOUR_OF_DAY);
             setNight(h >= 22 || h < 6);
             showFocus();

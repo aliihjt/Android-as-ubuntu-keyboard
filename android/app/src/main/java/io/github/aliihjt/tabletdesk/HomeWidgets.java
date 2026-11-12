@@ -64,6 +64,9 @@ final class HomeWidgets {
     HorizontalScrollView view() {
         LinearLayout row = new LinearLayout(a);
         row.setBaselineAligned(false);  // else cards with 2-3 lines sit lower and get cut off
+        persian = card(row, "", v -> a.startActivity(new Intent(a, PoemActivity.class).putExtra("mode", "faal")), 260);
+        persian.setTextDirection(android.view.View.TEXT_DIRECTION_RTL);
+        showPersian();
         weather = card(row, "☁️ Weather", v -> askCity());
         event = card(row, "📅 Calendar", v -> calendarTap());
         laptop = card(row, "💻 Laptop", v -> a.startActivity(new Intent(a, StatsActivity.class)));
@@ -82,13 +85,51 @@ final class HomeWidgets {
     }
 
     private TextView card(LinearLayout row, String text, android.view.View.OnClickListener tap) {
+        return card(row, text, tap, 170);
+    }
+
+    // ---- the Persian calendar: today, its holiday or the next one, and a couplet of Hafez for the day
+    private TextView persian;
+
+    private void showPersian() {
+        if (persian == null) return;
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        String today = PersianCalendar.holiday(now);
+        String line2 = today.isEmpty() ? PersianCalendar.nextHoliday(now) : "تعطیل: " + today;
+        String day = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(now.getTime());
+        String bayt = day.equals(prefs.getString("hafez_day", "")) ? prefs.getString("hafez_bayt", "") : "";
+        persian.setText("📅 " + PersianCalendar.format(now) + (line2.isEmpty() ? "" : "\n" + line2)
+                + (bayt.isEmpty() ? "" : "\n" + bayt));
+        persian.setMaxLines(5);
+        if (bayt.isEmpty() && !day.equals(fetchingHafez)) loadHafez(day);
+    }
+
+    private String fetchingHafez;
+
+    /** One couplet a day from Ganjoor (Fal-e Hafez picks a ghazal), kept until tomorrow. */
+    private void loadHafez(String day) {
+        fetchingHafez = day;
+        new Thread(() -> {
+            try {
+                org.json.JSONArray verses = new org.json.JSONObject(
+                        GetBooksActivity.fetch(GetBooksActivity.GANJOOR + "hafez/faal")).optJSONArray("verses");
+                if (verses == null || verses.length() < 2) return;
+                String bayt = verses.optJSONObject(0).optString("text") + "\n" + verses.optJSONObject(1).optString("text");
+                prefs.edit().putString("hafez_day", day).putString("hafez_bayt", bayt).apply();
+                ui.post(this::showPersian);
+            } catch (Exception ignored) {  // offline: the date alone
+            }
+        }, "hafez").start();
+    }
+
+    private TextView card(LinearLayout row, String text, android.view.View.OnClickListener tap, int widthDp) {
         TextView t = th.text(text, 14, th.text, true);
         t.setGravity(Gravity.CENTER_VERTICAL);
         t.setMaxLines(3);
         t.setPadding(th.dp(14), th.dp(10), th.dp(14), th.dp(10));
         t.setBackground(th.surface(th.card, th.dp(16)));
         t.setMinHeight(th.dp(64));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(th.dp(170), LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(th.dp(widthDp), LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.rightMargin = th.dp(10);
         th.click(t, tap);
         row.addView(t, lp);
@@ -107,6 +148,7 @@ final class HomeWidgets {
     void resume() {
         active = true;
         Devices.batteryListener = this::showBatteries;
+        showPersian();  // a new day since the home screen was drawn
         try {
             link.send(new org.json.JSONObject().put("t", "batteries?"));
         } catch (org.json.JSONException ignored) {

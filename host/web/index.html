@@ -380,7 +380,10 @@ PAGES.home = () => {
   handoff.onclick = () => { if (link.tab) window.open(link.tab.url, "_blank"); };
   link.handlers.pctab = paintHandoff; paintHandoff(); send({t: "pctab?"});
   cleanup.push(() => { link.handlers.pctab = null; });
-  app.append(top, cont, el("div", {class: "widgets"}, wLaptop, wMusic), pages, el("div", {class: "homespace"}),
+  const wCal = el("button", {class: "widget frost", dir: "rtl", style: "grid-column:1/-1;min-height:0;text-align:right",
+    onclick: () => show("poem", true, {faal: 1})}, el("b", {}, persianToday()), el("small", {}, persianHolidayLine()));
+  hafezToday().then(b => { if (b) wCal.append(el("small", {style: "margin-top:6px"}, b)); });
+  app.append(top, cont, el("div", {class: "widgets"}, wCal, wLaptop, wMusic), pages, el("div", {class: "homespace"}),
     el("div", {class: "homefoot"}, pdots, handoff, search));
   const dock = el("div", {class: "dock frost"}, DOCK.map(id => byId[id]).filter(Boolean).map(([id, sym, label, color, arg]) =>
     el("button", {"aria-label": label, onclick: () => openTile(id, arg)}, chip(sym, color))));
@@ -647,6 +650,50 @@ PAGES.trackpad = () => {
   page("Trackpad", el("button", {class: "back", style: "text-align:right", onclick: () => show("keyboard")}, "⌨️"));
   app.append(...trackpad());
 };
+
+// ---- Persian calendar: today, Iran's holidays and a couplet of Hafez a day (same as the tablet's widget)
+const SOLAR_HOLIDAYS = {"1/1": "عید نوروز", "1/2": "عید نوروز", "1/3": "عید نوروز", "1/4": "عید نوروز",
+  "1/12": "روز جمهوری اسلامی", "1/13": "روز طبیعت", "3/14": "رحلت امام خمینی", "3/15": "قیام ۱۵ خرداد",
+  "11/22": "پیروزی انقلاب اسلامی", "12/29": "ملی شدن صنعت نفت"};
+const LUNAR_HOLIDAYS = {"1/9": "تاسوعا", "1/10": "عاشورا", "2/20": "اربعین", "2/28": "رحلت پیامبر و شهادت امام حسن",
+  "2/30": "شهادت امام رضا", "3/8": "شهادت امام حسن عسکری", "3/17": "میلاد پیامبر", "6/3": "شهادت حضرت فاطمه",
+  "7/13": "ولادت امام علی", "7/27": "مبعث", "8/15": "ولادت امام زمان", "9/21": "شهادت امام علی", "10/1": "عید فطر",
+  "10/2": "عید فطر", "10/25": "شهادت امام صادق", "12/10": "عید قربان", "12/18": "عید غدیر"};
+const md = (cal, d) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-u-ca-" + cal + "-nu-latn",
+  {month: "numeric", day: "numeric"}).formatToParts(d).map(x => [x.type, x.value])); return [+p.month, +p.day]; };
+function holidayOn(d) {
+  const [jm, jd] = md("persian", d);
+  if (SOLAR_HOLIDAYS[jm + "/" + jd]) return SOLAR_HOLIDAYS[jm + "/" + jd];
+  try {  // lunar ones: Iran's calendar runs a day after Umm al-Qura (Ashura, the Eids in 2025); still "≈"
+    const iran = new Date(+d - 864e5);
+    const [hm, hd] = md("islamic-umalqura", iran), [nm] = md("islamic-umalqura", d);
+    const key = hm === 2 && nm !== 2 ? "2/30" : hm + "/" + hd;  // the last day of Safar
+    return LUNAR_HOLIDAYS[key] ? "≈ " + LUNAR_HOLIDAYS[key] : "";
+  } catch (e) { return ""; }
+}
+const faDigits = s => String(s).replace(/[0-9]/g, c => "۰۱۲۳۴۵۶۷۸۹"[c]);
+function persianToday() {  // "📅 پنجشنبه ۲۲ آبان ۱۴۰۵"
+  const p = Object.fromEntries(new Intl.DateTimeFormat("fa-IR-u-ca-persian",
+    {weekday: "long", day: "numeric", month: "long", year: "numeric"}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return `📅 ${p.weekday} ${p.day} ${p.month} ${p.year}`;
+}
+function persianHolidayLine() {
+  const now = new Date(), today = holidayOn(now);
+  if (today) return "تعطیل: " + today;
+  for (let i = 1; i <= 60; i++) { const h = holidayOn(new Date(+now + i * 864e5));
+    if (h) return h + " · " + (i === 1 ? "فردا" : faDigits(i) + " روز دیگر"); }
+  return "";
+}
+async function hafezToday() {  // one couplet a day from Ganjoor (through the PC), kept until tomorrow
+  const day = new Date().toDateString();
+  if (store.get("hafezDay", "") === day) return store.get("hafezBayt", "");
+  try {
+    const p = await net(GANJOOR + "hafez/faal");
+    const v = (p.verses || []).slice(0, 2).map(x => x.text).join("\n");
+    if (v) { store.set("hafezDay", day); store.set("hafezBayt", v); }
+    return v;
+  } catch (e) { return ""; }
+}
 
 // ---- Laptop Screen: the laptop's screen live, and touch to use it (host/screencast.py)
 PAGES.screen = () => {

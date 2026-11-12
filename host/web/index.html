@@ -185,8 +185,10 @@ function connect() {
   const ws = new WebSocket("wss://" + location.host + "/ws?token=" + encodeURIComponent(token));
   link.ws = ws;
   link.heard = Date.now();
+  ws.binaryType = "blob";
   ws.onmessage = ev => {
     link.heard = Date.now();
+    if (typeof ev.data !== "string") { const f = link.handlers.frame; if (f) f(ev.data); return; }  // Laptop Screen
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.t === "pong") { link.rtt = Date.now() - (link.pingAt || Date.now()); return; }
     if (m.t === "hello") { link.connected = true; link.host = m.host || "PC"; link.os = m.os || "linux"; refreshStatus();
@@ -294,7 +296,7 @@ const PHONE_TILES = [
 ];
 const TILES = [
   ["keyboard", "⌨️", "Keyboard", "blue"], ["trackpad", "🖱", "Trackpad", "purple"], ["talk", "🎙", "Push to Talk", "red"],
-  ["pen", "✏️", "Pen Tablet", "orange"],
+  ["screen", "💻", "Laptop Screen", "indigo"], ["pen", "✏️", "Pen Tablet", "orange"],
   ["media", "🎵", "Media", "pink"],
   ["controls", "🎛", "Controls", "orange"], ["shortcuts", "⚡", "Shortcuts", "indigo"], ["apps", "🚀", "PC Apps", "teal"],
   ["text", "📝", "Type Text", "yellow"], ["files", "📁", "Send Files", "blue"], ["windows", "🗂", "Windows", "indigo"],
@@ -644,6 +646,89 @@ function trackpad(height) {
 PAGES.trackpad = () => {
   page("Trackpad", el("button", {class: "back", style: "text-align:right", onclick: () => show("keyboard")}, "⌨️"));
   app.append(...trackpad());
+};
+
+// ---- Laptop Screen: the laptop's screen live, and touch to use it (host/screencast.py)
+PAGES.screen = () => {
+  page("Laptop Screen");
+  const img = el("img", {alt: "", style: "display:block;margin:0 auto;max-width:100%;max-height:calc(100dvh - 150px);"
+    + "border-radius:10px;background:#000;"
+    + "touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transform-origin:0 0"});
+  const box = el("div", {style: "overflow:hidden;border-radius:10px;touch-action:none"}, img);
+  const note = el("p", {class: "sub", style: "margin:8px 4px"}, "Waiting for the laptop… The first time, the laptop asks "
+    + "“Share your screen?”: choose the screen and press Share (only once).");
+  const typer = el("input", {autocapitalize: "off", autocorrect: "off", spellcheck: false,
+    style: "position:absolute;opacity:0;width:1px;height:1px;left:-10px"});
+  app.append(el("div", {class: "btns", style: "margin-bottom:8px"},
+      el("button", {class: "btn2", onclick: () => typer.focus()}, "⌨️ Type"),
+      el("button", {class: "btn2", onclick: () => combo("super")}, "▦ Overview"),
+      el("button", {class: "btn2", onclick: () => { zoom = 1; panX = panY = 0; paint(); }}, "⤢ Fit")),
+    box, note, typer);
+  // typing with the iPhone keyboard goes to the laptop
+  typer.addEventListener("beforeinput", e => {
+    if (e.inputType === "deleteContentBackward") combo("backspace");
+    else if (e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") combo("enter");
+    else if (e.data) send({t: "text", s: e.data});
+    e.preventDefault();
+  });
+  let url = null, zoom = 1, panX = 0, panY = 0;
+  const paint = () => { img.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`; };
+  on("frame", blob => { const u = URL.createObjectURL(blob); img.onload = () => { if (url) URL.revokeObjectURL(url); url = u; };
+    img.src = u; if (note.dataset.ok !== "1") { note.dataset.ok = "1"; note.textContent =
+      "Tap: click · hold: right-click · drag: drag · two fingers: scroll · pinch: zoom the picture"; } });
+  on("screen", m => { if (!m.ok) note.textContent = "⚠️ " + (m.error || "The screen can't be shown."); });
+  send({t: "screen", on: true, w: Math.min(1600, Math.round(innerWidth * (devicePixelRatio || 1)))});
+  // touches -> the laptop: a pen for exact taps and drags (host/pen.py), the trackpad's scroll
+  const at = t => { const r = img.getBoundingClientRect();
+    return {x: +Math.min(1, Math.max(0, (t.clientX - r.left) / r.width)).toFixed(4),
+            y: +Math.min(1, Math.max(0, (t.clientY - r.top) / r.height)).toFixed(4)}; };
+  let start = null, dragging = false, hold = null, two = null;
+  box.addEventListener("touchstart", e => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const t = e.touches[0]; start = {x: t.clientX, y: t.clientY, at: Date.now(), p: at(t)}; dragging = false;
+      hold = setTimeout(() => { hold = null; if (!dragging && start) {  // press and hold: right click
+        send({t: "pen", s: "hover", ...start.p}); send({t: "btn", b: "right", s: "click"}); start = null; } }, 550);
+    } else if (e.touches.length === 2) {
+      clearTimeout(hold); hold = null; if (dragging) send({t: "pen", s: "up", ...at(e.touches[0])}); start = null;
+      const [a, b] = e.touches;
+      two = {d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), x: (a.clientX + b.clientX) / 2,
+             y: (a.clientY + b.clientY) / 2, zoom};
+    }
+  }, {passive: false});
+  box.addEventListener("touchmove", e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && start) {
+      const t = e.touches[0];
+      if (!dragging && Math.hypot(t.clientX - start.x, t.clientY - start.y) > 8) {
+        dragging = true; clearTimeout(hold); hold = null; send({t: "pen", s: "down", ...start.p, p: .6}); }
+      if (dragging) send({t: "pen", s: "move", ...at(t), p: .6});
+    } else if (e.touches.length === 2 && two) {
+      const [a, b] = e.touches, d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const mx = (a.clientX + b.clientX) / 2, my = (a.clientY + b.clientY) / 2;
+      if (Math.abs(d - two.d) > 24 || zoom > 1) {  // pinch: zoom the picture (and move it while zoomed)
+        zoom = Math.min(4, Math.max(1, two.zoom * d / two.d));
+        panX = Math.min(0, Math.max(box.clientWidth * (1 - zoom), panX + mx - two.x));
+        panY = Math.min(0, Math.max(box.clientHeight * (1 - zoom), panY + my - two.y));
+        paint();
+      } else {
+        send({t: "scroll", dx: (mx - two.x) * 1.4, dy: (my - two.y) * 1.4});  // two-finger scroll, as on the trackpad
+      }
+      two.x = mx; two.y = my;
+    }
+  }, {passive: false});
+  box.addEventListener("touchend", e => {
+    e.preventDefault();
+    if (e.touches.length === 0) {
+      clearTimeout(hold); hold = null;
+      if (start && dragging) send({t: "pen", s: "up", ...at(e.changedTouches[0])});
+      else if (start && Date.now() - start.at < 500) {  // a tap: click there
+        send({t: "pen", s: "down", ...start.p, p: .6}); send({t: "pen", s: "up", ...start.p}); }
+      start = null; two = null; dragging = false;
+    }
+  }, {passive: false});
+  cleanup.push(() => { send({t: "screen", on: false}); send({t: "pen", s: "out", x: 0, y: 0});
+    on("frame", null); on("screen", null); if (url) URL.revokeObjectURL(url); });
 };
 
 // ---- Pen Tablet: this screen as a drawing tablet for the laptop (host/pen.py)

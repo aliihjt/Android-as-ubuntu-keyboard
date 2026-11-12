@@ -335,6 +335,10 @@ class _WebSocket:
         except (OSError, ValueError):
             self.closed = True
 
+    def send_binary(self, data):
+        """A binary message (the Laptop Screen's JPEG pictures). Raises when the phone is gone."""
+        self._frame(0x2, data)
+
     # the hosts push focus changes as JSON lines through write()/flush()
     def write(self, data):
         for line in data.decode().splitlines():
@@ -438,7 +442,7 @@ class _Handler(socketserver.StreamRequestHandler):
         head = [f"HTTP/1.1 {status} {reason}", f"Content-Type: {ctype}", f"Content-Length: {len(data)}",
                 "Connection: close", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer",
                 "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; "
-                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss:; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss:; "
                 "frame-ancestors 'none'"]
         for k, v in (extra or {}).items():
             head.append(f"{k}: {v}")

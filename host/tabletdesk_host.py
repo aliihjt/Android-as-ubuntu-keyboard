@@ -85,6 +85,7 @@ import pen as pen_mod  # noqa: E402
 import walkaway  # noqa: E402
 import universal as universal_mod  # noqa: E402
 import iphone_hid  # noqa: E402
+import screencast  # noqa: E402
 
 webcam = webcam_module.Webcam()
 
@@ -532,6 +533,7 @@ hub = None          # devices talking to each other through this PC (host/hub.py
 unlocker = None     # unlock the laptop from a device with a PIN (host/unlock-setup.sh), set in main()
 pen = None          # Pen Tablet: a virtual drawing tablet (host/pen.py), set in main()
 universal = None    # Universal Control: the laptop's mouse and keyboard on the tablet (host/universal.py)
+screen_cast = None  # Laptop Screen: the laptop's screen in the iPhone web app (host/screencast.py)
 airplay_proc = None  # AirPlay receiver for the iPhone (uxplay), set in main()
 
 
@@ -1280,6 +1282,16 @@ def handle(inj, msg, reply=None):
         inj.key(str(msg.get("k", "")), msg.get("s", "click"))
     elif t == "text":
         inj.text(str(msg.get("s", "")))
+    elif t == "screen" and reply and screen_cast:  # Laptop Screen page on the iPhone (web app only)
+        ws = getattr(reply, "__self__", None)
+        if ws is None or not hasattr(ws, "send_binary"):
+            reply({"t": "screen", "ok": False, "error": "Only the web app can show the screen."})
+        elif msg.get("on"):
+            err = screen_cast.watch(ws, ws.send_binary, ws.send, msg.get("w") or 1280)
+            if err:
+                reply({"t": "screen", "ok": False, "error": err})
+        else:
+            screen_cast.leave(ws)
     elif t == "pen" and pen:
         pen.handle(msg)
     elif t == "pen?" and reply:
@@ -1434,6 +1446,8 @@ def start_web_app(inj, clients):
         clients.remove(ws)
         if pen:
             pen.release()
+        if screen_cast:
+            screen_cast.leave(ws)
         if hub:
             hub.leave(ws.send)
         if webcam.source == "web":  # the phone that was the webcam went away
@@ -1599,11 +1613,12 @@ def main():
     except (OSError, PermissionError) as err:
         sys.exit(f"Cannot open /dev/uinput ({err}). Run host/setup.sh "
                  "and log out/in once.")
-    global laptop_kbd, gamepads, hub, unlocker, pen, universal
+    global laptop_kbd, gamepads, hub, unlocker, pen, universal, screen_cast
     laptop_kbd = LaptopKeyboard(dry_run=args.dry_run)
     pen = pen_mod.Pen(dry_run=args.dry_run, screen=screens)
     universal = universal_mod.Universal(screens, CONF_DIR, dry_run=args.dry_run)
     universal.start()
+    screen_cast = screencast.ScreenCast(CONF_DIR)
     gamepads = gamepad.Gamepads(dry_run=args.dry_run)
     hub = hub_mod.Hub(CONF_DIR, socket.gethostname(), set_clipboard, newest_copied, desktop_notify,
                       pc_battery=pad_extras.battery, on_batteries=top_bar_batteries)

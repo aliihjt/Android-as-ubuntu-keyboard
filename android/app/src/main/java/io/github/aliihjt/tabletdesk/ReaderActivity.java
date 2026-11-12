@@ -19,6 +19,7 @@ import android.speech.tts.UtteranceProgressListener;
 import android.text.Html;
 import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.JavascriptInterface;
@@ -73,6 +74,9 @@ public class ReaderActivity extends Page {
     private TextView where;
     private FrameLayout body;
     private boolean night;
+    private boolean bold;          // Aa › Bold text: thicker letters, clearer on a black & white screen
+    private boolean vazir;         // Aa › Persian font: Vazirmatn (bundled; no download, no Google)
+    private boolean volumeKeys;    // Aa › Volume buttons turn pages
     private int zoom;  // PDF: 100..300 %, text: font size %
 
     // PDF
@@ -121,6 +125,9 @@ public class ReaderActivity extends Page {
         index = getIntent().getIntExtra("pos", 0);
         restoreScroll = BooksActivity.savedScroll(this, uri);
         night = prefs.getBoolean("reader_night", th.dark);
+        bold = prefs.getBoolean("reader_bold", th.mono);
+        vazir = prefs.getBoolean("reader_vazir", true);
+        volumeKeys = prefs.getBoolean("reader_volume_keys", true);
         zoom = "pdf".equals(type) ? 100 : prefs.getInt("reader_font", 110);
 
         content.addView(toolbar());
@@ -157,6 +164,7 @@ public class ReaderActivity extends Page {
         LinearLayout tools = new LinearLayout(this);
         tools.addView(tool("A−", v -> scale(-1)));
         tools.addView(tool("A+", v -> scale(1)));
+        tools.addView(tool("Aa", v -> textMenu()));
         tools.addView(tool("🌙", v -> toggleNight()));
         tools.addView(tool("🔊 Listen", v -> startListening()));
         tools.addView(tool("🎧 Audiobook", v -> audiobook()));
@@ -264,6 +272,7 @@ public class ReaderActivity extends Page {
         HorizontalScrollView wide = new HorizontalScrollView(this);
         wide.addView(pageView);
         pageScroll = new ScrollView(this);
+        if (th.mono) pageScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);  // no glow on a black & white screen
         pageScroll.addView(wide);
         body.addView(pageScroll);
         // swipe sideways to turn the page
@@ -417,6 +426,7 @@ public class ReaderActivity extends Page {
     @SuppressLint("SetJavaScriptEnabled")
     private void setUpWeb() {
         web = new WebView(this);
+        if (th.mono) web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.getSettings().setJavaScriptEnabled(true);  // only for text size, night mode and selection
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
@@ -426,6 +436,14 @@ public class ReaderActivity extends Page {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 String url = r.getUrl().toString();
+                if (url.startsWith(HOST + "fp-font/")) {  // the bundled Persian font (any book, text too)
+                    try {
+                        return new WebResourceResponse("font/ttf", null,
+                                getAssets().open("fonts/" + r.getUrl().getLastPathSegment()));
+                    } catch (IOException ex) {
+                        return new WebResourceResponse("text/plain", "utf-8", null);
+                    }
+                }
                 if (zip == null || !url.startsWith(HOST)) {
                     // a book may not load anything from the internet
                     return new WebResourceResponse("text/plain", "utf-8", null);
@@ -477,11 +495,75 @@ public class ReaderActivity extends Page {
         savePosition(0);
     }
 
+    /** Aa: bold text, the Persian font, and the volume buttons as page buttons. */
+    private void textMenu() {
+        String[] items = {"Bold text", "Persian font: Vazirmatn", "Volume buttons turn pages"};
+        boolean[] on = {bold, vazir, volumeKeys};
+        new android.app.AlertDialog.Builder(this).setTitle("Aa  Text")
+                .setMultiChoiceItems(items, on, (d, w, checked) -> on[w] = checked)
+                .setPositiveButton("Done", (d, w) -> {
+                    bold = on[0];
+                    vazir = on[1];
+                    volumeKeys = on[2];
+                    prefs.edit().putBoolean("reader_bold", bold).putBoolean("reader_vazir", vazir)
+                            .putBoolean("reader_volume_keys", volumeKeys).apply();
+                    applyStyle();
+                }).show();
+    }
+
+    // ---- the volume buttons (and a keyboard's Page Down / Up, space) turn the page, without animation
+
+    @Override
+    public boolean onKeyDown(int code, KeyEvent e) {
+        int dir = 0;
+        if (code == KeyEvent.KEYCODE_PAGE_DOWN || code == KeyEvent.KEYCODE_SPACE) dir = 1;
+        else if (code == KeyEvent.KEYCODE_PAGE_UP) dir = -1;
+        else if (volumeKeys && !listening && code == KeyEvent.KEYCODE_VOLUME_DOWN) dir = 1;
+        else if (volumeKeys && !listening && code == KeyEvent.KEYCODE_VOLUME_UP) dir = -1;
+        if (dir == 0) return super.onKeyDown(code, e);
+        turn(dir);
+        return true;
+    }
+
+    @Override
+    public boolean onKeyUp(int code, KeyEvent e) {  // no volume change on the way up either
+        if (volumeKeys && !listening && (code == KeyEvent.KEYCODE_VOLUME_DOWN || code == KeyEvent.KEYCODE_VOLUME_UP)) {
+            return true;
+        }
+        return super.onKeyUp(code, e);
+    }
+
+    /** One screen on (dir 1) or back (-1); at the end of the page or part, the next one. */
+    private void turn(int dir) {
+        if (web != null) {
+            web.evaluateJavascript("(function(){var h=innerHeight*0.92,y=scrollY,end=document.documentElement.scrollHeight-innerHeight;"
+                    + "if(" + dir + ">0&&y>=end-4)return 'next';if(" + dir + "<0&&y<=4)return 'prev';"
+                    + "window.scrollTo(0,y+" + dir + "*h);return 'moved';})()", r -> {
+                if ("\"next\"".equals(r)) go(index + 1);
+                else if ("\"prev\"".equals(r)) go(index - 1);
+            });
+        } else if (pageScroll != null) {  // a PDF page taller than the screen: its next part first
+            int y = pageScroll.getScrollY(), view = pageScroll.getHeight();
+            int end = pageScroll.getChildAt(0) == null ? 0 : pageScroll.getChildAt(0).getHeight() - view;
+            if (dir > 0 && y < end - 4) pageScroll.scrollTo(0, Math.min(end, y + view * 92 / 100));
+            else if (dir < 0 && y > 4) pageScroll.scrollTo(0, Math.max(0, y - view * 92 / 100));
+            else go(index + dir);
+        }
+    }
+
     private void applyStyle() {
         if (web == null) return;
-        String css = "html{font-size:" + zoom + "% !important}"
+        // Vazirmatn only for Persian / Arabic letters: Latin text keeps the tablet's own font
+        String persian = "unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF,U+200C-200D;";
+        String fonts = vazir ? "@font-face{font-family:FPVazir;font-weight:400;src:url(" + HOST + "fp-font/Vazirmatn-Regular.ttf);"
+                + persian + "}@font-face{font-family:FPVazir;font-weight:600 900;src:url(" + HOST
+                + "fp-font/Vazirmatn-Bold.ttf);" + persian + "}" : "";
+        String css = fonts + "html{font-size:" + zoom + "% !important;scroll-behavior:auto !important}"
                 + "body{max-width:44em;margin:0 auto !important;padding:1.2em 1.4em 4em !important;line-height:1.75;"
-                + "font-family:sans-serif;" + (night ? "background:#1c1c1e !important;color:#e5e5ea !important;" : "")
+                + "font-family:" + (vazir ? "FPVazir," : "") + "sans-serif !important;"
+                + (bold ? "font-weight:600 !important;" : "")
+                + (night ? "background:#1c1c1e !important;color:#e5e5ea !important;" : "")
+                + (th.mono && !night ? "color:#000 !important;" : "")
                 + "}img,svg{max-width:100% !important;height:auto !important}"
                 + (night ? "a{color:#0a84ff}*{background-color:transparent !important;color:inherit !important}" : "")
                 + ".fp-say{background-color:rgba(10,132,255,.18) !important;border-radius:6px}"

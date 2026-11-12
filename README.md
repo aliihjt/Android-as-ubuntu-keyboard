@@ -55,6 +55,7 @@ Fedora Pad can be the tablet's **home screen** (Settings › Home screen), so it
 | | Page | What it does |
 |---|---|---|
 | 📚 | **Books** | PDF, EPUB and text books with covers and reading progress. Text size, night mode, swipe to turn pages. Select text to ask Claude about it or keep it as a note; on a PDF, Claude gets a picture of the page. |
+| Aa | **Reading on black & white** | In a book, **Aa**: *Bold text* (on by default with the black & white screen), *Persian font: Vazirmatn* (built in, for Persian letters only), *Volume buttons turn pages*. Pages move a screen at a time with no scrolling animation, which reads better on a greyscale screen; at the end of a part it goes on to the next. A keyboard's Page Down / Up and Space work too. |
 | 🔊 | **Read aloud** | 🔊 Listen in a book (EPUB / text): reads paragraph by paragraph and highlights it, ⏮ ⏭, speed 0.8–2×, sleep timer (15/30/60 min or end of part), goes on to the next part. Persian books use a Persian voice (install eSpeak NG or RHVoice if Android has none). |
 | 🔎 | **Tap a word** | Double-tap any word: translate or define it with your apps (Google Translate, a dictionary…), Wiktionary, or Claude (English ↔ Persian), or ⭐ save it to **Words** with its sentence. Words has search and ✨ Quiz me. |
 | 🖍 | **Highlights** | Select text › 🖍 Highlight: 4 colours and an optional note; they stay in the book. 📑 shows a book's highlights; ⇪ Export as Markdown to Downloads, the PC, Notes or any app (Obsidian, Keep…). |
